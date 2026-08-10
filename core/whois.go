@@ -610,6 +610,7 @@ func (w *WhoisClient) parseDateTime(dateStr string) *time.Time {
 		"January 02 2006",
 		"Jan 02 2006",
 		"02/01/2006",
+		"02/01/2006 15:04:05",
 		"01/02/2006",
 		"2006.01.02",
 		"2006.1.2",

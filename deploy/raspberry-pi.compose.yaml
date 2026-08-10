@@ -14,6 +14,9 @@ services:
       DOMAINHUNTER_WHOIS_FALLBACK_URL: http://host.docker.internal:12121/api/
       DOMAINHUNTER_WHOIS_FALLBACK_TLDS: im,do
       DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT: "20"
+      DOMAINHUNTER_WHOIS_LS_URL: https://whois.ls/json/
+      DOMAINHUNTER_WHOIS_LS_TLDS: im
+      DOMAINHUNTER_WHOIS_LS_TIMEOUT: "20s"
     extra_hosts:
       - host.docker.internal:host-gateway
     cpu_shares: 512

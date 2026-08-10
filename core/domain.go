@@ -16,6 +16,7 @@ type DomainChecker struct {
 	whoisClient    *WhoisClient
 	rdapClient     *RDAPClient
 	fallbackClient *WhoisFallbackClient
+	whoisLSClient  *WhoisLSClient
 	config         *config.Config
 }
 
@@ -25,6 +26,7 @@ func NewDomainChecker(cfg *config.Config) *DomainChecker {
 		whoisClient:    NewWhoisClient(cfg.Monitor.Timeout),
 		rdapClient:     NewRDAPClient(cfg.Monitor.Timeout),
 		fallbackClient: NewWhoisFallbackClient(cfg.Monitor.Timeout),
+		whoisLSClient:  NewWhoisLSClient(cfg.Monitor.Timeout),
 		config:         cfg,
 	}
 }
@@ -42,9 +44,13 @@ func (d *DomainChecker) UpdateConfig(cfg *config.Config) {
 	d.whoisClient = NewWhoisClient(cfg.Monitor.Timeout)
 	d.rdapClient = NewRDAPClient(cfg.Monitor.Timeout)
 	fallbackClient := d.fallbackClient
+	whoisLSClient := d.whoisLSClient
 	d.mu.Unlock()
 	if fallbackClient != nil {
 		fallbackClient.UpdateTimeout(cfg.Monitor.Timeout)
+	}
+	if whoisLSClient != nil {
+		whoisLSClient.UpdateTimeout(cfg.Monitor.Timeout)
 	}
 }
 
@@ -70,35 +76,51 @@ func (d *DomainChecker) CheckDomain(domain string) *DomainInfo {
 		}
 	}
 
-	// 首先尝试RDAP查询。对已配置备用服务的后缀，即使 RDAP 返回了
+	// 对显式启用的网络源先查询，避免 .im/.do 先等待注册局 WHOIS
+	// 超时。成功的结构化或明确文本结果可以直接返回；错误则保留，
+	// 继续尝试原生 RDAP/WHOIS，最终仍以 error 进入重试。
+	fallbackValidationRequired := false
+	var fallbackError *DomainInfo
+	if d.whoisLSEnabledForTLD(tld) {
+		fallbackValidationRequired = true
+		if info := d.tryWhoisLSQuery(domain, tld); info != nil {
+			if info.Status != StatusError {
+				return info
+			}
+			fallbackError = info
+		}
+	}
+	if d.fallbackEnabledForTLD(tld) {
+		fallbackValidationRequired = true
+		if info := d.tryWhoisFallbackQuery(domain, tld); info != nil {
+			if info.Status != StatusError {
+				return info
+			}
+			if fallbackError == nil {
+				fallbackError = info
+			}
+		}
+	}
+
+	// 尝试RDAP查询。对已配置备用服务的后缀，即使 RDAP 返回了
 	// “可注册”，也要进入复核链路，避免注册局的保留策略页面被误判。
 	rdapInfo := d.tryRDAPQuery(domain, tld)
-	validateNativeAvailability := rdapInfo != nil && rdapInfo.Status == StatusAvailable &&
-		d.fallbackEnabledForTLD(tld)
-	if rdapInfo != nil && isDefinitiveStatus(rdapInfo.Status) && !validateNativeAvailability {
+	if rdapInfo != nil && isDefinitiveStatus(rdapInfo.Status) &&
+		!(rdapInfo.Status == StatusAvailable && fallbackValidationRequired) {
 		return rdapInfo
 	}
 
 	// RDAP失败，尝试WHOIS查询
 	whoisInfo := d.tryWhoisQuery(domain, tld)
-	validateNativeAvailability = validateNativeAvailability || (whoisInfo != nil && whoisInfo.Status == StatusAvailable &&
-		d.fallbackEnabledForTLD(tld))
-	if whoisInfo != nil && isDefinitiveStatus(whoisInfo.Status) && !validateNativeAvailability {
+	if whoisInfo != nil && isDefinitiveStatus(whoisInfo.Status) &&
+		!(whoisInfo.Status == StatusAvailable && fallbackValidationRequired) {
 		return whoisInfo
 	}
 
-	// 对明确配置的TLD，原生查询失败或给出“可注册”时调用外部
-	// WHOIS 服务复核。备用服务失败时不保留未经复核的 available，
-	// 避免把注册局策略页、超时或错误响应误判为可注册。
-	if fallbackInfo := d.tryWhoisFallbackQuery(domain, tld); fallbackInfo != nil {
-		// 备用源既然已明确启用，其错误应进入重试/错误路径；不能被
-		// 原生 unknown 吞掉，否则短暂的备用服务故障会被长期缓存。
-		if fallbackInfo.Status == StatusError {
-			return fallbackInfo
-		}
-		if isDefinitiveStatus(fallbackInfo.Status) || fallbackInfo.Status == StatusUnknown || validateNativeAvailability {
-			return fallbackInfo
-		}
+	// 备用源既然已明确启用，其错误应进入重试/错误路径；不能被
+	// 原生 unknown 吞掉，否则短暂的备用服务故障会被长期缓存。
+	if fallbackError != nil {
+		return fallbackError
 	}
 
 	if whoisInfo != nil && whoisInfo.Status == StatusUnknown {

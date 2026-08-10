@@ -227,10 +227,16 @@ func (d *DomainChecker) tryWhoisFallbackQuery(domain, tld string) *DomainInfo {
 		WhoisRaw:    raw,
 		LastChecked: time.Now(),
 	}
-	if containsReservedRegistrationText(raw) {
-		info.Status = StatusUnknown
-		info.ErrorMessage = "备用 WHOIS 返回保留或禁止注册信息"
-		return info
+	// Some .do responses append "| Registry Policy" to every redacted
+	// contact field. That privacy marker is not a reserved-domain result;
+	// trust an explicit registered=true flag while still honoring an explicit
+	// reserved=true flag below.
+	if data.Reserved == nil || !*data.Reserved {
+		if containsReservedRegistrationText(raw) && (data.Registered == nil || !*data.Registered) {
+			info.Status = StatusUnknown
+			info.ErrorMessage = "备用 WHOIS 返回保留或禁止注册信息"
+			return info
+		}
 	}
 
 	switch {

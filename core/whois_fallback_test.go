@@ -22,7 +22,7 @@ func TestWhoisFallbackClientClassifiesResponses(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Query().Get("domain") {
 		case "registered.im":
-			_, _ = w.Write([]byte(`{"code":0,"msg":"Query successful","data":{"registered":true,"reserved":false,"unknown":false,"registrar":"Example Registrar","creationDate":"2020-01-02T03:04:05Z","expirationDate":"2030-01-02T03:04:05Z","updatedDate":"2025-01-02T03:04:05Z","nameServers":["ns1.example.test"],"whoisData":"Domain Name: registered.im"}}`))
+			_, _ = w.Write([]byte(`{"code":0,"msg":"Query successful","data":{"registered":true,"reserved":false,"unknown":false,"registrar":"Example Registrar","creationDate":"2020-01-02T03:04:05Z","expirationDate":"2030-01-02T03:04:05Z","updatedDate":"2025-01-02T03:04:05Z","nameServers":["ns1.example.test"],"whoisData":"Domain Name: registered.im\nRegistrant Street: Redacted | Registry Policy"}}`))
 		case "available.do":
 			_, _ = w.Write([]byte(`{"code":0,"msg":"Query successful","data":{"registered":false,"reserved":false,"unknown":false,"whoisData":"No match"}}`))
 		case "reserved.do":

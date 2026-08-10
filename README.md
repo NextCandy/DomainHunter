@@ -11,6 +11,7 @@ DomainHunter 是一个面向长期监控的 Go 域名状态查询器。它保留
 - 没有可用 RDAP/WHOIS 查询源的后缀显示“已跳过”，不会把“无法查询”伪装成“可注册”。
 - 仅对当前启用的域名读写查询结果。删除域名与查询完成并发时不会重新写回孤儿结果，统计和列表使用同一数据边界。
 - 支持按 TLD 明确启用备用 WHOIS 服务；备用服务异常时保留未知/错误，不覆盖成可注册。
+- `.im` 可通过 WHOIS.LS 获取公开的到期日期；由于该注册局公开响应不提供创建/注册日期，DomainHunter 会保留创建日期为空，不会猜测或填充伪造日期。
 - 兼容原 Puff 的 `data/puff.db` 文件名和 `PUFF_WHOIS_FALLBACK_*` 环境变量，升级时无需重建域名列表。
 
 RDAP 是 ICANN 推动的结构化 WHOIS 替代协议，服务发现使用 IANA 的官方 bootstrap 数据。实现思路参考了 [ICANN RDAP](https://www.icann.org/rdap/)、[IANA RDAP bootstrap](https://data.iana.org/rdap/dns.json)、[Domain Check](https://github.com/jedarden/domain-check) 和 [who-dat](https://github.com/lissy93/who-dat) 的 RDAP-first / WHOIS fallback 分层方式。
@@ -52,11 +53,16 @@ environment:
   DOMAINHUNTER_WHOIS_FALLBACK_URL: http://host.docker.internal:12121/api/
   DOMAINHUNTER_WHOIS_FALLBACK_TLDS: im,do
   DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT: "20"
+  DOMAINHUNTER_WHOIS_LS_URL: https://whois.ls/json/
+  DOMAINHUNTER_WHOIS_LS_TLDS: im
+  DOMAINHUNTER_WHOIS_LS_TIMEOUT: "20s"
 extra_hosts:
   - host.docker.internal:host-gateway
 ```
 
 旧变量名 `PUFF_WHOIS_FALLBACK_URL`、`PUFF_WHOIS_FALLBACK_TLDS` 和 `PUFF_WHOIS_FALLBACK_TIMEOUT` 仍可使用，便于滚动升级旧部署。
+
+WHOIS.LS 的接口文档见 [WHOIS.LS API](https://whois.ls/api)。它只作为明确配置的 `.im` 网络源使用；网络错误仍显示为错误/未知，不会推断域名可注册。
 
 ## 数据与升级
 
