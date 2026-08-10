@@ -1,0 +1,24 @@
+services:
+  domainhunter:
+    image: domainhunter-go:latest
+    container_name: DomainHunter
+    restart: unless-stopped
+    ports:
+      - "22334:8080"
+    volumes:
+      - /opt/docker-migrated/puff:/app/data
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      TZ: Asia/Shanghai
+      DOMAINHUNTER_RDAP_BOOTSTRAP_URL: https://data.iana.org/rdap/dns.json
+      DOMAINHUNTER_WHOIS_FALLBACK_URL: http://host.docker.internal:12121/api/
+      DOMAINHUNTER_WHOIS_FALLBACK_TLDS: im,do
+      DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT: "20"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    cpu_shares: 512
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"

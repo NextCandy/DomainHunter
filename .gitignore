@@ -1,0 +1,13 @@
+# Runtime data and local secrets
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.log
+.env
+
+# Local build artifacts
+domainhunter
+puff
+Puff
+*.exe
+dist/

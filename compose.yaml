@@ -1,0 +1,23 @@
+services:
+  domainhunter:
+    build:
+      context: .
+      dockerfile: dockerfile
+      args:
+        VERSION: ${DOMAINHUNTER_VERSION:-v1.0.0}
+    image: domainhunter-go:latest
+    container_name: DomainHunter
+    restart: unless-stopped
+    ports:
+      - "${DOMAINHUNTER_PORT:-8080}:8080"
+    volumes:
+      - ./data:/app/data
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      DOMAINHUNTER_RDAP_BOOTSTRAP_URL: ${DOMAINHUNTER_RDAP_BOOTSTRAP_URL:-https://data.iana.org/rdap/dns.json}
+      DOMAINHUNTER_WHOIS_FALLBACK_URL: ${DOMAINHUNTER_WHOIS_FALLBACK_URL:-}
+      DOMAINHUNTER_WHOIS_FALLBACK_TLDS: ${DOMAINHUNTER_WHOIS_FALLBACK_TLDS:-im,do}
+      DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT: ${DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT:-20}
+    extra_hosts:
+      - host.docker.internal:host-gateway
