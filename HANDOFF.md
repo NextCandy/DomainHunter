@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-12 · P0–P2 与 Bark 通知精简已合并进 `main` · Pi 版本 `v2.4.1-codex-2f7669d`
+> 最后更新：2026-08-12 · P0–P2 与 P1 研究/自动化已合并 · Pi 版本 `v2.5.0-p1-db91b6c`
 
 ## 本次目标
 
@@ -31,6 +31,9 @@
 | 安全 | bcrypt + 旧密码自动迁移、Cookie 加固、CORS 收敛、CSRF、退出即撤销免登录令牌 |
 | 通知 | 邮件 / Telegram / **Bark** / **飞书机器人** / **自定义 Webhook** |
 | 前端 | React 18 + TS + Vite + Tailwind，7 个页面，文件夹/导入导出/通知规则/Token 管理，go:embed 进单容器 |
+| P1 筛选与批量 | 版本化高级筛选树、可分享智能视图、批量动作影响预览与单事务安全执行 |
+| P1 AI | DeepSeek provider、AES-GCM Key 密文、SSRF 防护、持久化 Job/租约/重试/限额/TTL 估价 |
+| P1 自动化 | 触发器/条件/白名单动作/冷却/每日上限、Dry-run、幂等运行审计 |
 | 文档 | README / ARCHITECTURE.md / MIGRATION.md / 本文件 |
 | 改名 | 仓库、镜像、树莓派部署目录与 compose 项目名统一为 DomainHunter |
 
@@ -118,9 +121,9 @@ domains.next_check_at → 每 5s 扫描 → 优先级队列(manual>retry>schedul
 ## 前端
 
 React 18 + TypeScript + Vite + Tailwind v3，运行时依赖只有 react /
-react-dom / react-router-dom，构建产物 gzip 后约 72KB，**零外部请求**。
+react-dom / react-router-dom，当前构建产物 JS gzip 后约 94KB，**零外部请求**。
 
-7 个页面：概览 / 域名 / 抢注看板 / 查询历史 / 查询源 / 通知 / 系统设置。
+8 个页面：概览 / 域名 / 抢注看板 / 查询历史 / 查询源 / 通知 / 自动化与 AI / 系统设置。
 域名详情抽屉分四个标签页：概览 / 查询证据 / 状态时间线 / 原始报文。
 
 **抢注看板**只显示处于掉落流程的域名（可注册 / 待删除 / 赎回期 / 已过期 /
@@ -141,7 +144,9 @@ react-dom / react-router-dom，构建产物 gzip 后约 72KB，**零外部请求
 
 新增：`/api/domains/{domain}/history`、`/api/domains/{domain}/attempts`、
 `/api/v2/{overview,meta,facets,domains,observations,providers,notifications,settings,backups}`、
-`/api/v2/notifications/test/{channel}`、`/api/health/providers`。
+`/api/v2/notifications/test/{channel}`、`/api/health/providers`、P1 的
+`saved-views`、`bulk-actions`、`ai/{settings,models,usage,jobs,valuations}`、
+`automation/{rules,runs,evaluate}`。
 
 ## 安全调整
 
@@ -181,20 +186,25 @@ email / Telegram / Bark 真实测试（2026-08-12）  PASS
 Bark 精简正文回归测试                            PASS
 未配置渠道给出明确提示                          PASS
 /health                                        PASS
+P1 migration 010 / 新增表与索引                         PASS
+P1 ARM64 image build / version v2.5.0-p1-db91b6c         PASS
+P1 health / schema integrity / 550 domains               PASS
+P1 未登录访问 AI/视图/高级列表接口 → 401                  PASS
+P1 前端 dist 新资产 index-BtS6xmyN.js                    PASS
 ```
 
 ## 测试结果
 
 ```
 go build ./...        PASS
+go test ./...         PASS（含 internal/p1 专项测试）
+go test -race ./...   PASS（本机 arm64）
 go vet ./...          PASS
-go test ./...         PASS（auth / httpapi / query / 4 个 provider /
-                            scheduler / service / storage 共 9 个包）
-go test -race ./...   PASS（在 GitHub Actions amd64 上）
 前端 npm run lint     PASS
-前端 npm run build    PASS（gzip 72KB）
+前端 npm run build    PASS（gzip JS 94KB）
+前端 npm ci            PASS（npm audit 报现有依赖树 4 个漏洞，未执行 audit fix）
 docker compose config PASS
-docker build          PASS（arm64 本机 + CI）
+docker build          PASS（Pi arm64，镜像 `domainhunter:p1-db91b6c`）
 ```
 
 > `go test -race` **无法在树莓派上运行**：该机内核是 47 位 VMA，
@@ -206,7 +216,7 @@ docker build          PASS（arm64 本机 + CI）
 
 ```
 docker compose -p domainhunter -f compose.yaml config -q   PASS
-docker build --build-arg VERSION=v2.1.0 -t domainhunter:v2.1.0   PASS（arm64，37.5MB）
+docker build --build-arg VERSION=v2.5.0-p1-db91b6c -t domainhunter:p1-db91b6c   PASS（Pi arm64）
 docker compose -p domainhunter up -d                        PASS
 HEALTHCHECK                                                 healthy
 ```
@@ -215,13 +225,15 @@ HEALTHCHECK                                                 healthy
 
 ```
 主机        树莓派 Pi (aarch64)，SSH 192.168.50.180:22370
-容器        DomainHunter        镜像 domainhunter:latest (= v2.4.1-codex-2f7669d)
+容器        DomainHunter        镜像 domainhunter:latest (= v2.5.0-p1-db91b6c)
 端口        22334 → 8080        网络 domainhunter_default
 compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/compose.yaml
 数据目录    /opt/docker-migrated/domainhunter （即容器内 /app/data）
-数据库      domainhunter.db（14.8MB，551 个域名）—— 2026-08-11 停机由 puff.db 改名
-资源        31MB RSS / 10 线程 / CPU 接近 0
+数据库      domainhunter.db（约16MB，550 个域名）—— 2026-08-11 停机由 puff.db 改名
+资源        内存限制 0 / cpu_shares 512 / 重启 0 / 当前健康
 容器总数    35（与改动前一致，未影响任何其他项目）
+备份        backups/domainhunter-20260812-023500-pre-p1.db
+回滚镜像    domainhunter:rollback-p1-20260812
 ```
 
 ## 回滚方式
@@ -232,7 +244,7 @@ compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/co
 
 ```bash
 cd /opt/docker-migrated/domainhunter
-docker tag domainhunter-go:v1-rollback domainhunter:latest
+docker tag domainhunter:rollback-p1-20260812 domainhunter:latest
 docker compose -p domainhunter -f compose.yaml up -d
 curl -f http://127.0.0.1:22334/health
 ```

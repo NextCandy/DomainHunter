@@ -42,6 +42,11 @@ v2 引入了 `schema_migrations` 表并按版本执行迁移：
 | 003 | observation_history | 新增 `domain_observations` |
 | 004 | query_attempts | 新增 `query_attempts` |
 | 005 | auth_hardening | `app_settings` 预置 `server_password_hash` / `session_secret` 两个键 |
+| 006 | epp_statuses | `domain_results.epp_statuses` |
+| 007 | folders | `folders` 表与 `domains.folder_id` |
+| 008 | api_tokens | Bearer token 哈希存储 |
+| 009 | notification_rules_templates_digest | 通知规则、模板与摘要配置 |
+| 010 | p1_saved_views_ai_automation | 智能视图、AI Provider/Job/估价、自动化规则/运行审计 |
 
 **全部是新增，没有任何列被重命名或删除**，`domains` / `domain_results` /
 `notification_history` / `app_settings` 的原有列语义完全不变。
@@ -91,6 +96,15 @@ v1 把密码明文存在 `app_settings.server_password`。v2 改用 bcrypt：
 | `DOMAINHUNTER_CORS_ORIGINS` | `PUFF_CORS_ORIGINS` |
 | `DOMAINHUNTER_CSRF_ENABLED` | `PUFF_CSRF_ENABLED` |
 
+P1 AI 变量没有旧版别名：
+
+| 变量 | 说明 |
+| --- | --- |
+| `DOMAINHUNTER_AI_API_KEY` | 优先级最高的环境 Key，不写入 SQLite |
+| `DOMAINHUNTER_SECRET_KEY` | UI 保存 Key 时用于 AES-GCM 加密的主密钥；不要提交到仓库 |
+| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | 手动 Base URL 的主机 allowlist；默认允许 `api.deepseek.com` |
+| `DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL` | 仅设为 `true` 才允许受控本机 HTTP 开发端点 |
+
 ### 2.5 API 变化
 
 旧接口全部保留，路径与响应结构不变：
@@ -102,6 +116,8 @@ Telegram Bot Token 的明文，改为 `password_set` / `bot_token_set` 布尔值
 保存设置时把对应字段留空即表示"保持不变"。
 
 新增能力放在 `/api/v2/*` 与 `/api/domains/{domain}/history`。
+P1 新增 `saved-views`、`bulk-actions`、`ai/*` 与 `automation/*`，均需登录和 CSRF；
+AI Key 读取只返回 `api_key_set` / `key_source`。
 
 ### 2.6 数据库文件名
 
@@ -210,4 +226,6 @@ docker compose up -d
 [ ] 随便点一个域名"立即检查"，能返回结果
 [ ] 设置页能读到原来的 SMTP / Telegram 配置
 [ ] docker logs 里没有 migration 相关报错
+[ ] P1 迁移 010 已应用，`PRAGMA integrity_check` 返回 `ok`
+[ ] 未登录访问 P1 受保护接口返回 401
 ```
