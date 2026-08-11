@@ -39,6 +39,8 @@ type barkResponse struct {
 	Message string `json:"message"`
 }
 
+const barkBodyLimit = 480
+
 // NewBarkNotifier 创建 Bark 通知器
 func NewBarkNotifier(cfg config.BarkConfig) *BarkNotifier { return &BarkNotifier{cfg: cfg} }
 
@@ -93,7 +95,7 @@ func (b *BarkNotifier) push(ctx context.Context, subject, body string) error {
 	}
 	payload, err := json.Marshal(barkPayload{
 		Title: subject,
-		Body:  truncate(body, 1800),
+		Body:  compactBarkBody(body),
 		Group: group,
 		Sound: strings.TrimSpace(cfg.Sound),
 		Icon:  strings.TrimSpace(cfg.Icon),
@@ -138,6 +140,38 @@ func (b *BarkNotifier) push(ctx context.Context, subject, body string) error {
 		return fmt.Errorf("Bark API 错误 [%d]: %s", result.Code, result.Message)
 	}
 	return nil
+}
+
+// compactBarkBody keeps Bark notifications readable on a phone. The full event
+// remains available in email/Telegram and the notification history; Bark only
+// needs the short status summary and should not carry WHOIS/RDAP payloads.
+func compactBarkBody(body string) string {
+	body = strings.TrimSpace(body)
+	const marker = "\n=== WHOIS/RDAP 信息 ==="
+	if markerIndex := strings.Index(body, marker); markerIndex >= 0 {
+		body = strings.TrimSpace(body[:markerIndex])
+	}
+
+	lines := strings.Split(body, "\n")
+	compact := make([]string, 0, len(lines))
+	blank := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			if blank {
+				continue
+			}
+			blank = true
+			compact = append(compact, line)
+			continue
+		}
+		blank = false
+		if strings.HasPrefix(line, "详细信息:") || strings.HasPrefix(line, "---") || strings.HasPrefix(line, "此消息由") {
+			continue
+		}
+		compact = append(compact, line)
+	}
+	return truncate(strings.TrimSpace(strings.Join(compact, "\n")), barkBodyLimit)
 }
 
 func truncate(text string, limit int) string {

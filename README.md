@@ -226,6 +226,7 @@ data/
 - 从 `error` 恢复不通知
 - 目标状态本身不需要通知（`unknown` / `error` / `skipped`）时不通知
 - **可注册结论证据不足时不通知**
+- Bark 使用精简正文，仅保留状态摘要，不推送 WHOIS/RDAP 原文，正文约 480 字节以内
 - 同一轮里多个域名的变化会合并成一条
 
 再加新渠道只需实现 `notification.Notifier` 接口，并在
