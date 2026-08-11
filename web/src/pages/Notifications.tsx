@@ -1,9 +1,41 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { DomainStatus, NotificationRecord, SettingsV2 } from "../lib/api";
+import type {
+  DomainStatus,
+  NotificationDigest,
+  NotificationDigestInput,
+  NotificationRecord,
+  NotificationRule,
+  NotificationRuleInput,
+  NotificationTemplate,
+  NotificationTemplateInput,
+  SettingsV2,
+} from "../lib/api";
 import { useAsync } from "../lib/useAsync";
-import { Card, EmptyState, ErrorNotice, Pill, Spinner, StatusBadge, useToast } from "../components/ui";
+import {
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorNotice,
+  Pill,
+  Spinner,
+  StatusBadge,
+  cx,
+  useToast,
+} from "../components/ui";
 import { formatDateTime } from "../lib/format";
+
+type NotificationTab = "channels" | "rules" | "templates";
+
+interface AsyncResource<T> {
+  data: T | null;
+  error: string;
+  loading: boolean;
+  reload: () => void;
+}
+
+const EMPTY_RULES: NotificationRule[] = [];
+const EMPTY_TEMPLATES: NotificationTemplate[] = [];
 
 export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const toast = useToast();
@@ -13,6 +45,18 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
     [],
     onUnauthorized,
   );
+  const rules = useAsync<{ rules: NotificationRule[] }>(
+    () => api.notifications.rules.list(),
+    [],
+    onUnauthorized,
+  );
+  const templates = useAsync<{ templates: NotificationTemplate[] }>(
+    () => api.notifications.templates.list(),
+    [],
+    onUnauthorized,
+  );
+  const digest = useAsync<NotificationDigest>(() => api.notifications.digest.get(), [], onUnauthorized);
+  const [tab, setTab] = useState<NotificationTab>("channels");
 
   return (
     <div className="space-y-4">
@@ -39,6 +83,29 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
         </button>
       </header>
 
+      <div className="flex gap-1 overflow-x-auto border-b border-line" role="tablist" aria-label="通知设置分类">
+        {([
+          ["channels", "渠道与历史"],
+          ["rules", "规则与摘要"],
+          ["templates", "模板"],
+        ] as Array<[NotificationTab, string]>).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={tab === value}
+            aria-controls={`notification-panel-${value}`}
+            className={cx(
+              "-mb-px shrink-0 border-b-2 px-3 py-2 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+              tab === value ? "border-accent font-medium text-ink" : "border-transparent text-ink-muted hover:text-ink",
+            )}
+            onClick={() => setTab(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {settings.error && <ErrorNotice message={settings.error} onRetry={settings.reload} />}
       {settings.loading && !settings.data && (
         <div className="flex items-center gap-2 py-8 text-ink-muted">
@@ -46,17 +113,20 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
         </div>
       )}
 
-      {settings.data && (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <EmailCard settings={settings.data} onSaved={settings.reload} />
-          <TelegramCard settings={settings.data} onSaved={settings.reload} />
-          <BarkCard settings={settings.data} onSaved={settings.reload} />
-          <FeishuCard settings={settings.data} onSaved={settings.reload} />
-          <WebhookCard settings={settings.data} onSaved={settings.reload} />
-        </div>
-      )}
+      {tab === "channels" && (
+        <div id="notification-panel-channels" className="space-y-4" role="tabpanel">
+          {settings.data && (
+            <div className="grid gap-4 xl:grid-cols-2">
+              <EmailCard settings={settings.data} onSaved={settings.reload} />
+              <TelegramCard settings={settings.data} onSaved={settings.reload} />
+              <BarkCard settings={settings.data} onSaved={settings.reload} />
+              <FeishuCard settings={settings.data} onSaved={settings.reload} />
+              <WebhookCard settings={settings.data} onSaved={settings.reload} />
+            </div>
+          )}
 
-      <Card title="通知历史" bodyClassName="p-0">
+          {history.error && <ErrorNotice message={history.error} onRetry={history.reload} />}
+          <Card title="通知历史" bodyClassName="p-0">
         {history.loading && !history.data ? (
           <div className="flex items-center gap-2 p-4 text-ink-muted">
             <Spinner /> 加载中…
@@ -91,7 +161,20 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
             </table>
           </div>
         )}
-      </Card>
+          </Card>
+        </div>
+      )}
+      {tab === "rules" && (
+        <div id="notification-panel-rules" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]" role="tabpanel">
+          <RulesPanel resource={rules} />
+          <DigestCard resource={digest} />
+        </div>
+      )}
+      {tab === "templates" && (
+        <div id="notification-panel-templates" role="tabpanel">
+          <TemplatesPanel resource={templates} />
+        </div>
+      )}
     </div>
   );
 }
@@ -119,11 +202,11 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <label className="block">
       <span className="label">{label}</span>
       {children}
       {hint && <p className="mt-1 text-[11px] text-ink-faint">{hint}</p>}
-    </div>
+    </label>
   );
 }
 
@@ -466,6 +549,372 @@ function WebhookCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
         启用 Webhook 通知
       </label>
       <Actions channel="webhook" saving={saving} onSave={() => save(form)} />
+    </Card>
+  );
+}
+
+interface RuleForm {
+  name: string;
+  enabled: boolean;
+  statuses: string;
+  silence_start: string;
+  silence_end: string;
+  per_domain: boolean;
+  digest_enabled: boolean;
+}
+
+function emptyRule(): RuleForm {
+  return {
+    name: "",
+    enabled: true,
+    statuses: "",
+    silence_start: "",
+    silence_end: "",
+    per_domain: true,
+    digest_enabled: false,
+  };
+}
+
+function ruleToForm(rule: NotificationRule): RuleForm {
+  return {
+    name: rule.name,
+    enabled: rule.enabled,
+    statuses: rule.statuses.join(", "),
+    silence_start: rule.silence_start,
+    silence_end: rule.silence_end,
+    per_domain: rule.per_domain,
+    digest_enabled: rule.digest_enabled,
+  };
+}
+
+function formToRule(form: RuleForm): NotificationRuleInput {
+  return {
+    ...form,
+    statuses: form.statuses
+      .split(/[,\s]+/)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  };
+}
+
+function RulesPanel({ resource }: { resource: AsyncResource<{ rules: NotificationRule[] }> }) {
+  const toast = useToast();
+  const rules = resource.data?.rules ?? EMPTY_RULES;
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [form, setForm] = useState<RuleForm>(emptyRule);
+  const [busy, setBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<NotificationRule | null>(null);
+
+  useEffect(() => {
+    if (selectedId === null) return;
+    const selected = rules.find((rule) => rule.id === selectedId);
+    if (selected) setForm(ruleToForm(selected));
+  }, [rules, selectedId]);
+
+  async function save() {
+    if (!form.name.trim()) {
+      toast("规则名称不能为空", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = formToRule({ ...form, name: form.name.trim() });
+      if (selectedId === null) {
+        const created = await api.notifications.rules.create(payload);
+        setSelectedId(created.id);
+      } else {
+        await api.notifications.rules.update(selectedId, payload);
+      }
+      toast("通知规则已保存", "success");
+      resource.reload();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "保存规则失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!pendingDelete) return;
+    setBusy(true);
+    try {
+      await api.notifications.rules.remove(pendingDelete.id);
+      if (selectedId === pendingDelete.id) {
+        setSelectedId(null);
+        setForm(emptyRule());
+      }
+      setPendingDelete(null);
+      toast("通知规则已删除", "success");
+      resource.reload();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "删除规则失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card
+      title="通知规则"
+      action={
+        <button
+          type="button"
+          className="btn btn-primary h-7 px-2 text-[12px]"
+          onClick={() => {
+            setSelectedId(null);
+            setForm(emptyRule());
+          }}
+          aria-label="新建通知规则"
+          title="新建通知规则"
+        >
+          新建规则
+        </button>
+      }
+    >
+      {resource.error && <ErrorNotice message={resource.error} onRetry={resource.reload} />}
+      {resource.loading && !resource.data ? (
+        <div className="flex items-center gap-2 py-6 text-[12px] text-ink-muted"><Spinner />加载规则…</div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[minmax(150px,0.35fr)_minmax(0,1fr)]">
+          <div className="space-y-1" role="listbox" aria-label="通知规则列表">
+            {rules.length === 0 ? (
+              <p className="rounded-md border border-dashed border-line px-3 py-5 text-center text-[12px] text-ink-faint">暂无规则</p>
+            ) : (
+              rules.map((rule) => (
+                <button
+                  key={rule.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedId === rule.id}
+                  className={cx(
+                    "flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+                    selectedId === rule.id ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-muted",
+                  )}
+                  onClick={() => setSelectedId(rule.id)}
+                  title={`编辑通知规则 ${rule.name}`}
+                >
+                  <span className="min-w-0 truncate">{rule.name}</span>
+                  <Pill>{rule.enabled ? "启用" : "停用"}</Pill>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="规则名称">
+                <input className="input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+              </Field>
+              <Field label="状态匹配" hint="留空表示匹配所有状态；多个状态用逗号分隔">
+                <input className="input" value={form.statuses} onChange={(event) => setForm({ ...form, statuses: event.target.value })} placeholder="available, registered" />
+              </Field>
+              <Field label="静默开始" hint="可留空，格式 HH:MM">
+                <input className="input" type="time" value={form.silence_start} onChange={(event) => setForm({ ...form, silence_start: event.target.value })} />
+              </Field>
+              <Field label="静默结束" hint="可留空，格式 HH:MM">
+                <input className="input" type="time" value={form.silence_end} onChange={(event) => setForm({ ...form, silence_end: event.target.value })} />
+              </Field>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm({ ...form, enabled: event.target.checked })} />启用规则</label>
+              <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={form.per_domain} onChange={(event) => setForm({ ...form, per_domain: event.target.checked })} />按域名去重</label>
+              <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={form.digest_enabled} onChange={(event) => setForm({ ...form, digest_enabled: event.target.checked })} />进入摘要</label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn btn-primary h-8" onClick={() => void save()} disabled={busy} aria-label="保存通知规则" title="保存通知规则">{busy && <Spinner />}保存规则</button>
+              {selectedId !== null && (
+                <button type="button" className="btn btn-danger h-8" onClick={() => setPendingDelete(rules.find((rule) => rule.id === selectedId) ?? null)} disabled={busy} aria-label="删除通知规则" title="删除通知规则">删除规则</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="删除通知规则"
+        description={pendingDelete ? `确定删除“${pendingDelete.name}”吗？` : ""}
+        confirmText="删除规则"
+        danger
+        onConfirm={() => void remove()}
+        onCancel={() => setPendingDelete(null)}
+      />
+    </Card>
+  );
+}
+
+function DigestCard({ resource }: { resource: AsyncResource<NotificationDigest> }) {
+  const toast = useToast();
+  const [form, setForm] = useState<NotificationDigestInput>({ enabled: false, hour: 9, minute: 0 });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (resource.data) {
+      setForm({ enabled: resource.data.enabled, hour: resource.data.hour, minute: resource.data.minute });
+    }
+  }, [resource.data]);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api.notifications.digest.update(form);
+      toast("通知摘要设置已保存", "success");
+      resource.reload();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "保存摘要设置失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="通知摘要">
+      {resource.error && <ErrorNotice message={resource.error} onRetry={resource.reload} />}
+      {resource.loading && !resource.data ? (
+        <div className="flex items-center gap-2 py-6 text-[12px] text-ink-muted"><Spinner />加载摘要设置…</div>
+      ) : (
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm({ ...form, enabled: event.target.checked })} />启用定时摘要</label>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="小时"><input className="input" type="number" min={0} max={23} value={form.hour} onChange={(event) => setForm({ ...form, hour: Number(event.target.value) })} /></Field>
+            <Field label="分钟"><input className="input" type="number" min={0} max={59} value={form.minute} onChange={(event) => setForm({ ...form, minute: Number(event.target.value) })} /></Field>
+          </div>
+          {resource.data?.last_sent_at && <p className="text-[11px] text-ink-faint">上次发送：{formatDateTime(resource.data.last_sent_at)}</p>}
+          <button type="button" className="btn btn-primary h-8" onClick={() => void save()} disabled={busy} aria-label="保存通知摘要设置" title="保存通知摘要设置">{busy && <Spinner />}保存摘要</button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+interface TemplateForm {
+  name: string;
+  event_type: string;
+  subject: string;
+  body: string;
+  enabled: boolean;
+}
+
+function emptyTemplate(): TemplateForm {
+  return { name: "", event_type: "status_change", subject: "", body: "", enabled: true };
+}
+
+function templateToForm(template: NotificationTemplate): TemplateForm {
+  return {
+    name: template.name,
+    event_type: template.event_type,
+    subject: template.subject,
+    body: template.body,
+    enabled: template.enabled,
+  };
+}
+
+function TemplatesPanel({ resource }: { resource: AsyncResource<{ templates: NotificationTemplate[] }> }) {
+  const toast = useToast();
+  const templates = resource.data?.templates ?? EMPTY_TEMPLATES;
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [form, setForm] = useState<TemplateForm>(emptyTemplate);
+  const [busy, setBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<NotificationTemplate | null>(null);
+
+  useEffect(() => {
+    if (selectedId === null) return;
+    const selected = templates.find((template) => template.id === selectedId);
+    if (selected) setForm(templateToForm(selected));
+  }, [templates, selectedId]);
+
+  async function save() {
+    if (!form.name.trim()) {
+      toast("模板名称不能为空", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload: NotificationTemplateInput = { ...form, name: form.name.trim() };
+      if (selectedId === null) {
+        const created = await api.notifications.templates.create(payload);
+        setSelectedId(created.id);
+      } else {
+        await api.notifications.templates.update(selectedId, payload);
+      }
+      toast("通知模板已保存", "success");
+      resource.reload();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "保存模板失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!pendingDelete) return;
+    setBusy(true);
+    try {
+      await api.notifications.templates.remove(pendingDelete.id);
+      if (selectedId === pendingDelete.id) {
+        setSelectedId(null);
+        setForm(emptyTemplate());
+      }
+      setPendingDelete(null);
+      toast("通知模板已删除", "success");
+      resource.reload();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "删除模板失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card
+      title="通知模板"
+      action={<button type="button" className="btn btn-primary h-7 px-2 text-[12px]" onClick={() => { setSelectedId(null); setForm(emptyTemplate()); }} aria-label="新建通知模板" title="新建通知模板">新建模板</button>}
+    >
+      {resource.error && <ErrorNotice message={resource.error} onRetry={resource.reload} />}
+      {resource.loading && !resource.data ? (
+        <div className="flex items-center gap-2 py-6 text-[12px] text-ink-muted"><Spinner />加载模板…</div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[minmax(180px,0.3fr)_minmax(0,1fr)]">
+          <div className="space-y-1" role="listbox" aria-label="通知模板列表">
+            {templates.length === 0 ? (
+              <p className="rounded-md border border-dashed border-line px-3 py-5 text-center text-[12px] text-ink-faint">暂无模板</p>
+            ) : templates.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                role="option"
+                aria-selected={selectedId === template.id}
+                className={cx("flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent", selectedId === template.id ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-muted")}
+                onClick={() => setSelectedId(template.id)}
+                title={`编辑通知模板 ${template.name}`}
+              >
+                <span className="min-w-0 truncate">{template.name}</span>
+                <Pill>{template.enabled ? "启用" : "停用"}</Pill>
+              </button>
+            ))}
+          </div>
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="模板名称"><input className="input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
+              <Field label="事件类型" hint="例如 status_change"><input className="input" value={form.event_type} onChange={(event) => setForm({ ...form, event_type: event.target.value })} /></Field>
+              <Field label="主题"><input className="input" value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} /></Field>
+            </div>
+            <Field label="正文"><textarea className="input min-h-40 resize-y font-mono text-[12px]" value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /></Field>
+            <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm({ ...form, enabled: event.target.checked })} />启用模板</label>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn btn-primary h-8" onClick={() => void save()} disabled={busy} aria-label="保存通知模板" title="保存通知模板">{busy && <Spinner />}保存模板</button>
+              {selectedId !== null && <button type="button" className="btn btn-danger h-8" onClick={() => setPendingDelete(templates.find((template) => template.id === selectedId) ?? null)} disabled={busy} aria-label="删除通知模板" title="删除通知模板">删除模板</button>}
+            </div>
+          </div>
+        </div>
+      )}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="删除通知模板"
+        description={pendingDelete ? `确定删除“${pendingDelete.name}”吗？` : ""}
+        confirmText="删除模板"
+        danger
+        onConfirm={() => void remove()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </Card>
   );
 }

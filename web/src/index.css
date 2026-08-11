@@ -12,7 +12,7 @@
     --line: 228 228 231;
     --ink: 24 24 27;
     --ink-muted: 82 82 91;
-    --ink-faint: 140 140 148;
+    --ink-faint: 105 105 112;
     --accent: 37 99 235;
     --accent-soft: 219 234 254;
     --density-card-pad: 1rem;
@@ -26,7 +26,7 @@
     --line: 44 48 56;
     --ink: 237 238 241;
     --ink-muted: 163 167 176;
-    --ink-faint: 120 125 134;
+    --ink-faint: 164 169 180;
     --accent: 96 154 255;
     --accent-soft: 30 47 78;
   }

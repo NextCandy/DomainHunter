@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { api } from "../lib/api";
-import type { SettingsV2 } from "../lib/api";
+import { api, UnauthorizedError } from "../lib/api";
+import type { ApiToken, SettingsV2 } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
-import { Card, ErrorNotice, Pill, Spinner, useToast } from "../components/ui";
+import { Card, ConfirmDialog, ErrorNotice, Pill, Spinner, useToast } from "../components/ui";
+import { formatDateTime } from "../lib/format";
 
 const RAW_MODES = [
   { value: "change_only", label: "仅在状态变化时保存" },
@@ -46,6 +47,7 @@ export function SettingsPage({
         <MonitorCard settings={data} onSaved={reload} />
         <HistoryCard settings={data} onSaved={reload} />
         <AccountCard settings={data} onChanged={onCredentialsChanged} />
+        <TokenManagementCard onUnauthorized={onUnauthorized} />
         <MaintenanceCard settings={data} onSaved={reload} />
       </div>
     </div>
@@ -78,6 +80,7 @@ function MonitorCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             className="input"
             type="number"
             min={5}
+            aria-label="检查间隔（秒）"
             value={form.check_interval}
             onChange={(event) => setForm({ ...form, check_interval: Number(event.target.value) })}
           />
@@ -88,6 +91,7 @@ function MonitorCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             type="number"
             min={1}
             max={1000}
+            aria-label="并发 worker"
             value={form.concurrent_limit}
             onChange={(event) => setForm({ ...form, concurrent_limit: Number(event.target.value) })}
           />
@@ -98,6 +102,7 @@ function MonitorCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             type="number"
             min={1}
             max={120}
+            aria-label="查询超时（秒）"
             value={form.timeout}
             onChange={(event) => setForm({ ...form, timeout: Number(event.target.value) })}
           />
@@ -141,6 +146,7 @@ function HistoryCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             className="input"
             type="number"
             min={0}
+            aria-label="保留天数"
             value={form.retention_days}
             onChange={(event) => setForm({ ...form, retention_days: Number(event.target.value) })}
           />
@@ -150,6 +156,7 @@ function HistoryCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             className="input"
             type="number"
             min={0}
+            aria-label="每域名最多保留"
             value={form.max_per_domain}
             onChange={(event) => setForm({ ...form, max_per_domain: Number(event.target.value) })}
           />
@@ -162,6 +169,7 @@ function HistoryCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             className="input"
             type="number"
             min={0}
+            aria-label="心跳间隔（小时）"
             value={form.heartbeat_hours}
             onChange={(event) => setForm({ ...form, heartbeat_hours: Number(event.target.value) })}
           />
@@ -169,6 +177,7 @@ function HistoryCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
         <Field label="原始报文">
           <select
             className="input"
+            aria-label="原始报文保存策略"
             value={form.raw_mode}
             onChange={(event) => setForm({ ...form, raw_mode: event.target.value })}
           >
@@ -184,6 +193,7 @@ function HistoryCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             className="input"
             type="number"
             min={0}
+            aria-label="单条报文上限（字节）"
             value={form.raw_max_bytes}
             onChange={(event) => setForm({ ...form, raw_max_bytes: Number(event.target.value) })}
           />
@@ -239,6 +249,7 @@ function AccountCard({ settings, onChanged }: { settings: SettingsV2; onChanged:
           <div className="flex gap-2">
             <input
               className="input"
+              aria-label="用户名"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
             />
@@ -252,18 +263,20 @@ function AccountCard({ settings, onChanged }: { settings: SettingsV2; onChanged:
           <Field label="当前密码">
             <input
               className="input"
-              type="password"
-              autoComplete="current-password"
-              value={current}
+            type="password"
+            autoComplete="current-password"
+            aria-label="当前密码"
+            value={current}
               onChange={(event) => setCurrent(event.target.value)}
             />
           </Field>
           <Field label="新密码" hint="至少 6 位">
             <input
               className="input"
-              type="password"
-              autoComplete="new-password"
-              value={next}
+            type="password"
+            autoComplete="new-password"
+            aria-label="新密码"
+            value={next}
               onChange={(event) => setNext(event.target.value)}
             />
           </Field>
@@ -299,6 +312,169 @@ function AccountCard({ settings, onChanged }: { settings: SettingsV2; onChanged:
   );
 }
 
+function TokenManagementCard({ onUnauthorized }: { onUnauthorized: () => void }) {
+  const tokens = useAsync<{ tokens: ApiToken[] }>(() => api.tokens.list(), [], onUnauthorized);
+  const toast = useToast();
+  const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["read", "write"]);
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pendingRevoke, setPendingRevoke] = useState<ApiToken | null>(null);
+
+  function toggleScope(scope: string) {
+    setScopes((current) => (current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope]));
+  }
+
+  async function createToken() {
+    if (!name.trim() || scopes.length === 0) return;
+    setBusy(true);
+    try {
+      const result = await api.tokens.create({ name: name.trim(), scopes });
+      setCreatedToken(result.token ?? null);
+      setName("");
+      toast("API Token 已创建，请立即复制保存", "success");
+      tokens.reload();
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onUnauthorized();
+        return;
+      }
+      toast(error instanceof Error ? error.message : "创建 API Token 失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeToken() {
+    if (!pendingRevoke) return;
+    setBusy(true);
+    try {
+      await api.tokens.revoke(pendingRevoke.id);
+      setPendingRevoke(null);
+      toast("API Token 已撤销", "success");
+      tokens.reload();
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onUnauthorized();
+        return;
+      }
+      toast(error instanceof Error ? error.message : "撤销 API Token 失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="API Token 管理">
+      {tokens.error && <ErrorNotice message={tokens.error} onRetry={tokens.reload} />}
+      <p className="mb-3 text-[12px] text-ink-muted">
+        Token 只在创建成功时显示一次；数据库仅保存不可逆哈希，离开此提示后无法再次查看原文。
+      </p>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <label>
+          <span className="label">名称</span>
+          <input
+            className="input"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="例如：自动化脚本"
+            aria-label="API Token 名称"
+          />
+        </label>
+        <fieldset>
+          <legend className="label">Scope</legend>
+          <div className="flex gap-3 pt-1.5 text-[13px]">
+            {[
+              ["read", "读取"],
+              ["write", "写入"],
+            ].map(([scope, label]) => (
+              <label key={scope} className="flex items-center gap-1.5">
+                <input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </div>
+      <button
+        type="button"
+        className="btn btn-primary mt-3 h-8"
+        onClick={() => void createToken()}
+        disabled={busy || !name.trim() || scopes.length === 0}
+        aria-label="创建 API Token"
+        title="创建 API Token（只显示一次）"
+      >
+        {busy && <Spinner />}创建 Token
+      </button>
+
+      {createdToken && (
+        <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10" role="alert">
+          <p className="text-[12px] font-medium text-amber-900 dark:text-amber-200">请立即复制，此 Token 只显示一次</p>
+          <code className="mt-2 block break-all rounded bg-black/5 px-2 py-1.5 text-[12px] text-amber-950 dark:bg-black/20 dark:text-amber-100">{createdToken}</code>
+          <button
+            type="button"
+            className="btn mt-2 h-7 px-2 text-[12px]"
+            onClick={() => {
+              void navigator.clipboard?.writeText(createdToken);
+              toast("Token 已复制", "success");
+            }}
+            aria-label="复制新创建的 API Token"
+            title="复制 Token"
+          >
+            复制 Token
+          </button>
+        </div>
+      )}
+
+      <div className="mt-4 border-t border-line pt-3">
+        <h3 className="text-[12px] font-medium text-ink-muted">已创建 Token</h3>
+        {tokens.loading && !tokens.data ? (
+          <div className="flex items-center gap-2 py-4 text-[12px] text-ink-muted"><Spinner />加载 Token…</div>
+        ) : !tokens.data?.tokens || tokens.data.tokens.length === 0 ? (
+          <p className="py-3 text-[12px] text-ink-faint">暂无 API Token</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-line rounded-md border border-line">
+            {tokens.data.tokens.map((token) => (
+              <li key={token.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[12px]">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{token.name}</p>
+                  <p className="mt-0.5 text-[11px] text-ink-faint">
+                    scope: {token.scopes.join(", ")} · 创建于 {formatDateTime(token.created_at)}
+                    {token.last_used_at ? ` · 最近使用 ${formatDateTime(token.last_used_at)}` : ""}
+                  </p>
+                </div>
+                {token.revoked_at ? (
+                  <Pill className="text-ink-faint">已撤销</Pill>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-danger h-7 px-2 text-[12px]"
+                    onClick={() => setPendingRevoke(token)}
+                    disabled={busy}
+                    aria-label={`撤销 API Token ${token.name}`}
+                    title={`撤销 ${token.name}`}
+                  >
+                    撤销
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <ConfirmDialog
+        open={Boolean(pendingRevoke)}
+        title="撤销 API Token"
+        description={pendingRevoke ? `撤销“${pendingRevoke.name}”后，使用它的脚本会立即失效。` : ""}
+        confirmText="撤销 Token"
+        danger
+        onConfirm={() => void revokeToken()}
+        onCancel={() => setPendingRevoke(null)}
+      />
+    </Card>
+  );
+}
+
 function MaintenanceCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () => void }) {
   const [level, setLevel] = useState(settings.log_level);
   const [busy, setBusy] = useState(false);
@@ -329,6 +505,7 @@ function MaintenanceCard({ settings, onSaved }: { settings: SettingsV2; onSaved:
           <div className="flex gap-2">
             <select
               className="input"
+              aria-label="日志级别"
               value={level}
               onChange={(event) => setLevel(event.target.value)}
             >

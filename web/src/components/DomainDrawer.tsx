@@ -148,6 +148,7 @@ export function DomainDrawer({
             <StatusBadge status={info.status} eppStatuses={info.epp_statuses} />
             {info.confidence && <Pill>可信度 {CONFIDENCE_LABELS[info.confidence] ?? info.confidence}</Pill>}
             <Pill>{providerLabel(info.query_method)}</Pill>
+            {info.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
           </span>
         )
       }
@@ -214,6 +215,7 @@ function OverviewTab({ info }: { info: DomainInfo }) {
       <Field label="状态">
         <StatusBadge status={info.status} eppStatuses={info.epp_statuses} />
       </Field>
+      {info.cached && <Field label="缓存">cached: true</Field>}
       <Field label="注册商">{info.registrar || "—"}</Field>
       <Field label="注册时间">{formatDateTime(info.created_date)}</Field>
       <Field label="更新时间">{formatDateTime(info.updated_date)}</Field>

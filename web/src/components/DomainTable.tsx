@@ -1,5 +1,5 @@
 import type { DomainInfo } from "../lib/api";
-import { DomainName, StatusBadge, cx, useStatusChangeHighlights } from "./ui";
+import { DomainName, Pill, StatusBadge, cx, useStatusChangeHighlights } from "./ui";
 import { formatDate, formatDateTime, formatRelative, providerLabel } from "../lib/format";
 
 interface Props {
@@ -76,6 +76,8 @@ function DesktopTable({
           {domains.map((item) => (
             <tr
               key={item.name}
+              draggable
+              onDragStart={(event) => setDragData(event, item.name, selected)}
               className={cx("hover:bg-surface-muted/60", highlighted.has(item.name) && "status-change-highlight")}
             >
               <td className="px-3 py-2">
@@ -90,7 +92,10 @@ function DesktopTable({
                 <DomainName name={item.name} favorite={item.favorite} onClick={() => onOpen(item.name)} />
               </td>
               <td className="px-3 py-2">
-                <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+                  {item.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
+                </div>
               </td>
               <td className="max-w-[180px] truncate px-3 py-2 text-ink-muted" title={item.registrar}>
                 {item.registrar || "—"}
@@ -147,6 +152,8 @@ function MobileList({
       {domains.map((item) => (
         <li
           key={item.name}
+          draggable
+          onDragStart={(event) => setDragData(event, item.name, selected)}
           className={cx("card p-3", highlighted.has(item.name) && "status-change-highlight")}
         >
           <div className="flex items-start gap-2">
@@ -161,6 +168,7 @@ function MobileList({
               <DomainName name={item.name} favorite={item.favorite} onClick={() => onOpen(item.name)} />
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-muted">
                 <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+                {item.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
                 <span className="truncate">{item.registrar || "—"}</span>
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-faint">
@@ -193,6 +201,13 @@ function MobileList({
       ))}
     </ul>
   );
+}
+
+function setDragData(event: React.DragEvent, name: string, selected: Set<string>) {
+  const names = selected.has(name) ? Array.from(selected) : [name];
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("application/x-domainhunter-domains", JSON.stringify(names));
+  event.dataTransfer.setData("text/plain", names.join("\n"));
 }
 
 function Row({ label, value }: { label: string; value: string }) {

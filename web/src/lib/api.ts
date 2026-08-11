@@ -60,6 +60,39 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+async function requestRaw<T>(path: string, body: BodyInit, contentType: string): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    body,
+    headers: { "Content-Type": contentType },
+  });
+}
+
+async function requestDownload(path: string): Promise<ApiDownload> {
+  const response = await fetch(path, { credentials: "same-origin" });
+  if (response.status === 401) throw new UnauthorizedError();
+  if (!response.ok) {
+    const text = await response.text();
+    let message = text.trim() || `请求失败 (${response.status})`;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed.error === "string") message = parsed.error;
+      else if (parsed && typeof parsed.message === "string") message = parsed.message;
+    } catch {
+      /* 后端错误响应是纯文本，直接使用 */
+    }
+    throw new ApiError(message, response.status);
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "domainhunter-domains";
+  return { blob: await response.blob(), filename };
+}
+
+export interface ApiDownload {
+  blob: Blob;
+  filename: string;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   getOptional: async <T>(path: string): Promise<T | null> => {
@@ -78,6 +111,95 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PATCH", body: body === undefined ? undefined : JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  domains: {
+    batchMoveFolder: (domains: string[], folderId: number | null) =>
+      request<{ status: string; moved: number; folder_id: number | null }>(
+        "/api/v2/domains/batch-move-folder",
+        {
+          method: "POST",
+          body: JSON.stringify({ domains, folder_id: folderId }),
+        },
+      ),
+    batchRetryFailed: () =>
+      request<{ status: string; queued: number; window_seconds: number; message: string }>(
+        "/api/v2/domains/batch-retry-failed",
+        { method: "POST", body: JSON.stringify({}) },
+      ),
+    exportDomains: (format: "csv" | "json") =>
+      requestDownload(`/api/v2/domains/export?format=${encodeURIComponent(format)}`),
+    importDomains: (content: string, format: "csv" | "json", mode: ImportMode) =>
+      requestRaw<{ status: string; result: DomainImportResult }>(
+        `/api/v2/domains/import?format=${format}&mode=${mode}`,
+        content,
+        format === "json" ? "application/json" : "text/csv",
+      ),
+  },
+  folders: {
+    list: () => request<FolderListResponse>("/api/v2/folders"),
+    create: (name: string, parentId: number | null) =>
+      request<Folder>("/api/v2/folders", {
+        method: "POST",
+        body: JSON.stringify({ name, parent_id: parentId }),
+      }),
+    update: (id: number, name: string, parentId: number | null) =>
+      request<{ status: string; id: number }>(`/api/v2/folders/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ name, parent_id: parentId }),
+      }),
+    remove: (id: number) =>
+      request<{ status: string; id: number }>(`/api/v2/folders/${id}`, { method: "DELETE" }),
+  },
+  notifications: {
+    rules: {
+      list: () => request<{ rules: NotificationRule[] }>("/api/v2/notifications/rules"),
+      create: (rule: NotificationRuleInput) =>
+        request<NotificationRule>("/api/v2/notifications/rules", {
+          method: "POST",
+          body: JSON.stringify(rule),
+        }),
+      update: (id: number, rule: NotificationRuleInput) =>
+        request<{ status: string; id: number }>(`/api/v2/notifications/rules/${id}`, {
+          method: "PUT",
+          body: JSON.stringify({ ...rule, id }),
+        }),
+      remove: (id: number) =>
+        request<{ status: string; id: number }>(`/api/v2/notifications/rules/${id}`, {
+          method: "DELETE",
+        }),
+    },
+    templates: {
+      list: () => request<{ templates: NotificationTemplate[] }>("/api/v2/notifications/templates"),
+      create: (template: NotificationTemplateInput) =>
+        request<NotificationTemplate>("/api/v2/notifications/templates", {
+          method: "POST",
+          body: JSON.stringify(template),
+        }),
+      update: (id: number, template: NotificationTemplateInput) =>
+        request<{ status: string; id: number }>(`/api/v2/notifications/templates/${id}`, {
+          method: "PUT",
+          body: JSON.stringify({ ...template, id }),
+        }),
+      remove: (id: number) =>
+        request<{ status: string; id: number }>(`/api/v2/notifications/templates/${id}`, {
+          method: "DELETE",
+        }),
+    },
+    digest: {
+      get: () => request<NotificationDigest>("/api/v2/notifications/digest"),
+      update: (digest: NotificationDigestInput) =>
+        request<{ status: string; digest: NotificationDigest }>("/api/v2/notifications/digest", {
+          method: "PUT",
+          body: JSON.stringify(digest),
+        }),
+    },
+  },
+  tokens: {
+    list: () => request<{ tokens: ApiToken[] }>("/api/v2/tokens"),
+    create: (input: ApiTokenInput) =>
+      request<ApiToken>("/api/v2/tokens", { method: "POST", body: JSON.stringify(input) }),
+    revoke: (id: number) =>
+      request<{ status: string; id: number }>(`/api/v2/tokens/${id}`, { method: "DELETE" }),
+  },
 };
 
 // ---------- 类型 ----------
@@ -125,6 +247,9 @@ export interface DomainInfo {
   favorite?: boolean;
   tags?: string[];
   note?: string;
+  folder_id?: number | null;
+  folder?: string;
+  cached?: boolean;
 }
 
 export interface DomainListResult {
@@ -293,4 +418,78 @@ export interface NotificationRecord {
   old_status: string;
   sent_at: string;
   type: string;
+}
+
+export type ImportMode = "skip" | "overwrite" | "deduplicate";
+
+export interface DomainImportResult {
+  imported: number;
+  overwritten: number;
+  skipped: number;
+  duplicates: number;
+  invalid?: string[];
+}
+
+export interface Folder {
+  id: number;
+  name: string;
+  parent_id?: number | null;
+  created_at: string;
+}
+
+export interface FolderTreeNode extends Folder {
+  children?: FolderTreeNode[] | null;
+}
+
+export interface FolderListResponse {
+  folders: Folder[] | null;
+  tree: FolderTreeNode[] | null;
+}
+
+export interface NotificationRule {
+  id: number;
+  name: string;
+  enabled: boolean;
+  statuses: string[];
+  silence_start: string;
+  silence_end: string;
+  per_domain: boolean;
+  digest_enabled: boolean;
+}
+
+export type NotificationRuleInput = Omit<NotificationRule, "id">;
+
+export interface NotificationTemplate {
+  id: number;
+  name: string;
+  event_type: string;
+  subject: string;
+  body: string;
+  enabled: boolean;
+}
+
+export type NotificationTemplateInput = Omit<NotificationTemplate, "id">;
+
+export interface NotificationDigest {
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  last_sent_at?: string | null;
+}
+
+export type NotificationDigestInput = Omit<NotificationDigest, "last_sent_at">;
+
+export interface ApiToken {
+  id: number;
+  name: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  token?: string;
+}
+
+export interface ApiTokenInput {
+  name: string;
+  scopes: string[];
 }

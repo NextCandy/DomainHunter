@@ -5,6 +5,9 @@ import type { DomainListResult, Facets } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { DomainTable } from "../components/DomainTable";
 import { DomainDrawer } from "../components/DomainDrawer";
+import { FolderTree } from "../components/FolderTree";
+import type { FolderSelection } from "../components/FolderTree";
+import { ImportExportDialog } from "../components/ImportExportDialog";
 import { ConfirmDialog, EmptyState, ErrorNotice, Spinner, cx, useToast } from "../components/ui";
 import { STATUS_LABELS, STATUS_ORDER } from "../lib/format";
 
@@ -28,6 +31,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const tld = params.get("tld") ?? "";
   const registrar = params.get("registrar") ?? "";
   const provider = params.get("provider") ?? "";
+  const statuses = params.get("statuses") ?? "";
   const sort = params.get("sort") ?? "";
   const order = params.get("order") ?? "asc";
   const favoriteOnly = params.get("favorite") === "true";
@@ -40,6 +44,9 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [busy, setBusy] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
+  const [folderSelection, setFolderSelection] = useState<FolderSelection>("all");
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => setSearchInput(search), [search]);
 
@@ -50,15 +57,16 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     if (tld) q.set("tld", tld);
     if (registrar) q.set("registrar", registrar);
     if (provider) q.set("provider", provider);
+    if (statuses) q.set("statuses", statuses);
     if (sort) {
       q.set("sort", sort);
       q.set("order", order);
     }
     if (favoriteOnly) q.set("favorite", "true");
     q.set("page", String(page));
-    q.set("limit", String(limit));
+    q.set("limit", String(folderSelection === "all" ? limit : 500));
     return q.toString();
-  }, [search, status, tld, registrar, provider, sort, order, page, limit, favoriteOnly]);
+  }, [search, status, statuses, tld, registrar, provider, sort, order, page, limit, favoriteOnly, folderSelection]);
 
   const { data, error, loading, reload } = useAsync<DomainListResult>(
     () => api.get<DomainListResult>(`/api/v2/domains?${query}`),
@@ -66,16 +74,23 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     onUnauthorized,
   );
 
-  const domains = useMemo(() => data?.domains ?? [], [data]);
+  const domains = useMemo(() => {
+    const items = data?.domains ?? [];
+    if (folderSelection === "all") return items;
+    return items.filter((item) =>
+      folderSelection === "root" ? item.folder_id == null : item.folder_id === folderSelection,
+    );
+  }, [data, folderSelection]);
 
   // 筛选项来自全量统计，翻页不会让下拉框内容跟着变
   const facets = useAsync<Facets>(() => api.get<Facets>("/api/v2/facets"), [], onUnauthorized);
+  const reloadFacets = facets.reload;
 
   // 列表和筛选项要一起刷新，否则新增/删除后下拉框的数量会对不上
   const refresh = useCallback(() => {
     reload();
-    facets.reload();
-  }, [reload, facets]);
+    reloadFacets();
+  }, [reload, reloadFacets]);
 
   const updateParams = useCallback(
     (next: Record<string, string>) => {
@@ -97,6 +112,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     (facets.data?.statuses ?? []).forEach((item) => map.set(item.value, item.count));
     return map;
   }, [facets.data]);
+  const failedCount = (statusCounts.get("error") ?? 0) + (statusCounts.get("unknown") ?? 0);
+  const failedOnly = statuses === "error,unknown";
 
   async function runCheck(name: string) {
     setBusy(name);
@@ -124,6 +141,30 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     }
   }
 
+  async function runBatchRetryFailed() {
+    setRetrying(true);
+    try {
+      const result = await api.domains.batchRetryFailed();
+      toast(result.message || `已将 ${result.queued} 个失败域名加入重试队列`, "success");
+      window.setTimeout(refresh, 1200);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "批量重试失败", "error");
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  async function moveDomainsToFolder(folderId: number | null, names: string[]) {
+    try {
+      const result = await api.domains.batchMoveFolder(names, folderId);
+      toast(`已移动 ${result.moved} 个域名`, "success");
+      setSelected(new Set());
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "移动域名失败", "error");
+    }
+  }
+
   async function confirmDelete() {
     if (!pendingDelete) return;
     try {
@@ -148,21 +189,56 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         <div>
           <h1 className="text-[18px] font-semibold tracking-tight">域名</h1>
           <p className="text-[12px] text-ink-muted">
-            共 {data?.total ?? 0} 个域名
-            {data && data.total_filtered !== data.total ? ` · 筛选出 ${data.total_filtered} 个` : ""}
+            {folderSelection === "all" ? `共 ${data?.total ?? 0} 个域名` : `当前文件夹 ${domains.length} 个域名`}
+            {folderSelection === "all" && data && data.total_filtered !== data.total
+              ? ` · 筛选出 ${data.total_filtered} 个`
+              : ""}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button type="button" className="btn h-8" onClick={refresh}>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" className="btn h-8" onClick={refresh} aria-label="刷新域名列表" title="刷新域名列表">
             刷新
           </button>
-          <button type="button" className="btn btn-primary h-8" onClick={() => setShowAdd(true)}>
+          <button
+            type="button"
+            className="btn h-8"
+            onClick={() => setShowImportExport(true)}
+            aria-label="打开域名导入导出"
+            title="导入或导出域名"
+          >
+            导入/导出
+          </button>
+          <button
+            type="button"
+            className={cx("btn h-8", failedCount > 0 && "border-amber-400 text-amber-700 dark:text-amber-300")}
+            onClick={() => void runBatchRetryFailed()}
+            disabled={retrying}
+            aria-label="重试失败和未知域名"
+            title="将失败和未知域名均摊到 30 秒重试窗口"
+          >
+            {retrying && <Spinner />}重试失败{failedCount > 0 ? `（${failedCount}）` : ""}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary h-8"
+            onClick={() => setShowAdd(true)}
+            aria-label="添加域名"
+            title="添加域名"
+          >
             添加域名
           </button>
         </div>
       </header>
 
-      <div className="card grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-4 lg:grid-cols-[minmax(190px,240px)_minmax(0,1fr)]">
+        <FolderTree
+          selected={folderSelection}
+          onSelect={setFolderSelection}
+          onDomainDrop={moveDomainsToFolder}
+          onUnauthorized={onUnauthorized}
+        />
+        <div className="min-w-0 space-y-4">
+          <div className="card grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-6">
         <form
           className="sm:col-span-2 lg:col-span-2"
           onSubmit={(event) => {
@@ -180,8 +256,9 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
 
         <select
           className="input"
+          aria-label="按状态筛选"
           value={status}
-          onChange={(event) => updateParams({ status: event.target.value })}
+          onChange={(event) => updateParams({ status: event.target.value, statuses: "" })}
         >
           <option value="">全部状态</option>
           {STATUS_ORDER.map((value) => {
@@ -196,7 +273,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           })}
         </select>
 
-        <select className="input" value={tld} onChange={(event) => updateParams({ tld: event.target.value })}>
+        <select className="input" aria-label="按后缀筛选" value={tld} onChange={(event) => updateParams({ tld: event.target.value })}>
           <option value="">全部后缀（{tldOptions.length}）</option>
           {tldOptions.map((item) => (
             <option key={item.value} value={item.value}>
@@ -207,6 +284,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
 
         <select
           className="input"
+          aria-label="按注册商筛选"
           value={registrar}
           onChange={(event) => updateParams({ registrar: event.target.value })}
         >
@@ -221,6 +299,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         <div className="flex gap-2">
           <select
             className="input"
+            aria-label="排序字段"
             value={sort}
             onChange={(event) => updateParams({ sort: event.target.value })}
           >
@@ -247,8 +326,24 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           >
             ★
           </button>
+          <button
+            type="button"
+            className={cx("btn shrink-0 text-[12px]", failedOnly && "border-accent text-accent")}
+            onClick={() => updateParams({ statuses: failedOnly ? "" : "error,unknown", status: "" })}
+            aria-label={failedOnly ? "取消失败域名筛选" : "筛选失败和未知域名"}
+            title="筛选 error 和 unknown 状态"
+            aria-pressed={failedOnly}
+          >
+            失败/未知
+          </button>
         </div>
       </div>
+
+      {failedCount > 0 && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          当前有 {failedCount} 个失败或未知域名；“重试失败”会由后端在 30 秒窗口内均摊排队，可先用“失败/未知”筛选查看。
+        </p>
+      )}
 
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2 text-[13px]">
@@ -308,12 +403,13 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         />
       )}
 
-      {data && data.total_pages > 1 && (
+      {folderSelection === "all" && data && data.total_pages > 1 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-ink-muted">
           <div className="flex items-center gap-2">
             <span>每页</span>
             <select
               className="input h-7 w-[72px] py-0"
+              aria-label="每页数量"
               value={limit}
               onChange={(event) => updateParams({ limit: event.target.value })}
             >
@@ -347,6 +443,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           </div>
         </div>
       )}
+        </div>
+      </div>
 
       <DomainDrawer
         domain={openDomain}
@@ -376,6 +474,13 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             setShowAdd(false);
             refresh();
           }}
+        />
+      )}
+      {showImportExport && (
+        <ImportExportDialog
+          onClose={() => setShowImportExport(false)}
+          onDone={refresh}
+          onUnauthorized={onUnauthorized}
         />
       )}
     </div>
