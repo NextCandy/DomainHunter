@@ -589,14 +589,40 @@ func (s *DomainService) scheduleImmediate(name string) {
 	}
 }
 
-// Remove 删除域名
+// Remove 删除域名。
+//
+// 删除会连带清掉查询结果、观测历史、查询尝试与通知记录，是不可撤销的操作，
+// 因此必须留下日志 —— 否则事后无法回答"这些域名是什么时候没的"。
 func (s *DomainService) Remove(ctx context.Context, name string) error {
-	return s.domains.Delete(ctx, domain.Normalize(name))
+	name = domain.Normalize(name)
+	if err := s.domains.Delete(ctx, name); err != nil {
+		s.log.Error(logger.Fields{"domain": name, "error": err.Error()}, "删除域名失败")
+		return err
+	}
+	s.log.Info(logger.Fields{"domain": name}, "已删除域名及其全部关联数据")
+	return nil
 }
 
 // RemoveMany 批量删除域名
 func (s *DomainService) RemoveMany(ctx context.Context, names []string) (int64, error) {
-	return s.domains.DeleteMany(ctx, names)
+	deleted, err := s.domains.DeleteMany(ctx, names)
+	if err != nil {
+		s.log.Error(logger.Fields{"count": len(names), "error": err.Error()}, "批量删除域名失败")
+		return deleted, err
+	}
+	s.log.Info(logger.Fields{"count": deleted, "domains": strings.Join(normalizeAll(names), ",")},
+		"已批量删除域名及其全部关联数据")
+	return deleted, nil
+}
+
+func normalizeAll(names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if n := domain.Normalize(name); n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // Update 更新域名属性（收藏、备注、标签、通知开关）
