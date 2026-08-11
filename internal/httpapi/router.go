@@ -120,6 +120,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v2/saved-views/{id}", s.withAuthScope("write", s.handleSavedView))
 	mux.HandleFunc("POST /api/v2/bulk-actions/preview", s.withAuthScope("write", s.handleBulkPreview))
 	mux.HandleFunc("POST /api/v2/bulk-actions", s.withAuthScope("write", s.handleBulkExecute))
+	mux.HandleFunc("GET /api/v2/bulk-actions/audits", s.withAuthScope("read", s.handleBulkAudits))
 	mux.HandleFunc("GET /api/v2/ai/settings", s.withAuthScope("read", s.handleAISettings))
 	mux.HandleFunc("PUT /api/v2/ai/settings", s.withAuthScope("write", s.handleAISettings))
 	mux.HandleFunc("PATCH /api/v2/ai/settings", s.withAuthScope("write", s.handleAISettings))

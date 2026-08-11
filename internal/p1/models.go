@@ -133,6 +133,15 @@ type BulkPreview struct {
 	Warning     string   `json:"warning,omitempty"`
 }
 
+type BulkAudit struct {
+	ID         int64          `json:"id"`
+	ActionType string         `json:"action_type"`
+	Matched    int            `json:"matched"`
+	TaskCount  int            `json:"task_count"`
+	Result     map[string]any `json:"result"`
+	CreatedAt  time.Time      `json:"created_at"`
+}
+
 type AutomationRule struct {
 	ID              int64            `json:"id"`
 	Name            string           `json:"name"`

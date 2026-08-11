@@ -138,3 +138,101 @@ func TestFilterValueHelpers(t *testing.T) {
 		t.Fatal("non-empty string classified as empty")
 	}
 }
+
+func TestBulkExecuteWritesAudit(t *testing.T) {
+	db, err := sqlite.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO domains(name,enabled,notify) VALUES('audit.example',1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	service := New(db)
+	result, err := service.ExecuteBulk(context.Background(), BulkAction{Type: "tag", Tag: "review", Domains: []string{"audit.example"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["updated"] != 1 {
+		t.Fatalf("unexpected bulk result: %#v", result)
+	}
+	var tags string
+	if err := db.QueryRow(`SELECT COALESCE(tags,'') FROM domains WHERE name='audit.example'`).Scan(&tags); err != nil {
+		t.Fatal(err)
+	}
+	if tags != "review" {
+		t.Fatalf("bulk tag was not applied: %q", tags)
+	}
+	audits, err := service.ListBulkAudits(context.Background(), 10)
+	if err != nil || len(audits) != 1 {
+		t.Fatalf("ListBulkAudits() len=%d err=%v", len(audits), err)
+	}
+	if audits[0].ActionType != "tag" || audits[0].Matched != 1 || audits[0].TaskCount != 1 {
+		t.Fatalf("unexpected bulk audit: %+v", audits[0])
+	}
+}
+
+func TestAutomationEventBridgeProcessesNewDomain(t *testing.T) {
+	db, err := sqlite.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	service := New(db)
+	rule, err := service.CreateAutomationRule(context.Background(), AutomationRule{
+		Name:    "new-domain-tag",
+		Enabled: true,
+		Trigger: FilterNode{Field: "event_type", Op: "eq", Value: "domain_added"},
+		Conditions: FilterNode{Version: 1, Logic: "and", Conditions: []FilterNode{{
+			Field: "status", Op: "eq", Value: "available",
+		}}},
+		Actions:         []map[string]any{{"type": "tag", "tag": "new"}},
+		CooldownSeconds: 0,
+		DailyRunCap:     10,
+		DryRun:          false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.initializeAutomationCursors(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO domains(name,enabled,notify) VALUES('new.example',1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO domain_results(domain,status) VALUES('new.example','available')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.scanAutomationEvents(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var tags string
+	if err := db.QueryRow(`SELECT COALESCE(tags,'') FROM domains WHERE name='new.example'`).Scan(&tags); err != nil {
+		t.Fatal(err)
+	}
+	if tags != "new" {
+		t.Fatalf("event bridge did not apply tag: %q", tags)
+	}
+	var runs int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM automation_runs WHERE rule_id=? AND event_id='domain:1' AND status='succeeded'`, rule.ID).Scan(&runs); err != nil {
+		t.Fatal(err)
+	}
+	if runs != 1 {
+		t.Fatalf("expected one succeeded automation run, got %d", runs)
+	}
+	if err := service.scanAutomationEvents(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM automation_runs WHERE rule_id=? AND event_id='domain:1'`, rule.ID).Scan(&runs); err != nil {
+		t.Fatal(err)
+	}
+	if runs != 1 {
+		t.Fatalf("event bridge was not idempotent, got %d runs", runs)
+	}
+}

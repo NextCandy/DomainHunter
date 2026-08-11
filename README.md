@@ -269,6 +269,7 @@ GET    /api/v2/backups         POST /api/v2/backups
 GET/POST/PUT/DELETE /api/v2/saved-views                 保存智能视图
 POST   /api/v2/bulk-actions/preview                     批量动作影响预览
 POST   /api/v2/bulk-actions                             批量安全动作执行
+GET    /api/v2/bulk-actions/audits                      批量动作审计
 GET/PUT /api/v2/ai/settings                             DeepSeek 设置（不回显 Key）
 GET    /api/v2/ai/{models,usage,jobs,valuations/{domain}}
 POST   /api/v2/ai/jobs                                  持久化 AI 估价 Job
@@ -306,7 +307,9 @@ AI 默认使用 DeepSeek OpenAI-compatible `/chat/completions`。Job 写入 SQLi
 自动化以“触发器 → 条件 → 安全动作 → 冷却/每日上限”构建，服务端只允许标签、
 优先级、文件夹、通知开关、监控开关、加入 AI 队列、已有检查/通知等动作；规则不得
 删除域名、改密码/密钥、支付购买或调用任意 URL。运行以 `(rule_id,event_id,domain)`
-幂等，并带 per-domain cooldown、daily cap 和审计记录；新规则默认 Dry-run。
+幂等，并带 per-domain cooldown、daily cap 和审计记录；新规则默认 Dry-run。后台事件桥接
+会从新增域名、观测完成/状态变化/异常恢复和每日临近到期扫描投递事件，游标持久化在
+SQLite；批量写入与 AI 入队均记录匹配数、任务数和结果，可从 `bulk-actions/audits` 查询。
 
 ## 开发
 

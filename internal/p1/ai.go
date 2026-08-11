@@ -120,6 +120,7 @@ func (s *AIService) SaveSettings(ctx context.Context, input AISettingsInput) (AI
 	if strings.TrimSpace(input.BaseURL) == "" {
 		input.BaseURL = defaults.BaseURL
 	}
+	input.BaseURL = strings.TrimRight(strings.TrimSpace(input.BaseURL), "/")
 	if err := validateAIBaseURL(input.BaseURL); err != nil {
 		return AISettingsPublic{}, err
 	}

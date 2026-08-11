@@ -126,6 +126,20 @@ func (s *Server) handleBulkExecute(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, r, http.StatusOK, result)
 }
 
+func (s *Server) handleBulkAudits(w http.ResponseWriter, r *http.Request) {
+	p1Service := s.p1OrError(w, r)
+	if p1Service == nil {
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	audits, err := p1Service.ListBulkAudits(r.Context(), limit)
+	if err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]any{"audits": audits})
+}
+
 func (s *Server) handleAISettings(w http.ResponseWriter, r *http.Request) {
 	p1Service := s.p1OrError(w, r)
 	if p1Service == nil {

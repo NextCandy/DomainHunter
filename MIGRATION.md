@@ -47,6 +47,7 @@ v2 引入了 `schema_migrations` 表并按版本执行迁移：
 | 008 | api_tokens | Bearer token 哈希存储 |
 | 009 | notification_rules_templates_digest | 通知规则、模板与摘要配置 |
 | 010 | p1_saved_views_ai_automation | 智能视图、AI Provider/Job/估价、自动化规则/运行审计 |
+| 011 | p1_automation_events_and_bulk_audits | 自动化事件游标与批量动作审计 |
 
 **全部是新增，没有任何列被重命名或删除**，`domains` / `domain_results` /
 `notification_history` / `app_settings` 的原有列语义完全不变。
@@ -118,6 +119,9 @@ Telegram Bot Token 的明文，改为 `password_set` / `bot_token_set` 布尔值
 新增能力放在 `/api/v2/*` 与 `/api/domains/{domain}/history`。
 P1 新增 `saved-views`、`bulk-actions`、`ai/*` 与 `automation/*`，均需登录和 CSRF；
 AI Key 读取只返回 `api_key_set` / `key_source`。
+批量写入和 AI 入队会记录到 `bulk_action_audits`，可通过
+`GET /api/v2/bulk-actions/audits` 查询；自动化事件桥接由后台每 30 秒扫描新增域名、
+观测和临近到期数据，游标不会重放部署前的历史记录。
 
 ### 2.6 数据库文件名
 
@@ -226,6 +230,6 @@ docker compose up -d
 [ ] 随便点一个域名"立即检查"，能返回结果
 [ ] 设置页能读到原来的 SMTP / Telegram 配置
 [ ] docker logs 里没有 migration 相关报错
-[ ] P1 迁移 010 已应用，`PRAGMA integrity_check` 返回 `ok`
+[ ] P1 迁移 011 已应用，`PRAGMA integrity_check` 返回 `ok`
 [ ] 未登录访问 P1 受保护接口返回 401
 ```

@@ -169,6 +169,8 @@ LIMIT ?
 | `ai_domain_valuations` | 严格 Schema 校验后的研究性估价与 TTL |
 | `automation_rules` | 触发器、条件、安全动作与防护栏 |
 | `automation_runs` | Dry-run/执行审计与 `(rule,event,domain)` 幂等 |
+| `automation_cursors` | 新增域名、观测与每日到期扫描的事件游标，避免重放旧数据 |
+| `bulk_action_audits` | 批量变更/AI 入队的匹配数、任务数与结果审计 |
 | `schema_migrations` | 已应用的迁移版本 |
 
 迁移在启动时执行，有待执行迁移时先 `VACUUM INTO` 生成一份一致备份
@@ -191,7 +193,12 @@ URL 条件树 / 保存视图 ──→ Advanced Filter ──→ 域名列表与
                                                      ▼
                                          ai_domain_valuations（TTL）
 
-事件 → Automation Rule → 条件匹配 → Dry-run / 白名单动作 → automation_runs
+新增域名 / 观测完成 / 状态变化 / 异常恢复 / 临近到期
+        │（持久化游标，30s 扫描）
+        ▼
+Automation Rule → 条件匹配 → Dry-run / 白名单动作 → automation_runs
+                                             │
+                                             └─批量变更或 AI 入队 → bulk_action_audits
 ```
 
 AI 是研究、排序和解释层，不能写入查询引擎的 `available` 结论；自动化也不拥有

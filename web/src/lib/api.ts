@@ -216,6 +216,7 @@ export const api = {
         method: "POST",
         body: JSON.stringify(action),
       }),
+    bulkAudits: () => request<{ audits: BulkAudit[] }>("/api/v2/bulk-actions/audits?limit=100"),
     ai: {
       settings: () => request<AISettings>("/api/v2/ai/settings"),
       saveSettings: (input: AISettingsInput) =>
@@ -580,6 +581,15 @@ export interface BulkPreview {
   daily_used: number;
   within_limit: boolean;
   warning?: string;
+}
+
+export interface BulkAudit {
+  id: number;
+  action_type: string;
+  matched: number;
+  task_count: number;
+  result: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface AISettings {

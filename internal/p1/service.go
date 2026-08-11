@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"DomainHunter/internal/domain"
@@ -17,14 +19,56 @@ import (
 type Service struct {
 	db *sqlite.DB
 	ai *AIService
+
+	automationMu      sync.Mutex
+	automationCancel  context.CancelFunc
+	automationWG      sync.WaitGroup
+	automationStarted bool
 }
 
 func New(db *sqlite.DB) *Service {
 	return &Service{db: db, ai: NewAIService(db)}
 }
 
-func (s *Service) Start(ctx context.Context) { s.ai.Start(ctx) }
-func (s *Service) Stop()                     { s.ai.Stop() }
+func (s *Service) Start(ctx context.Context) {
+	s.ai.Start(ctx)
+
+	s.automationMu.Lock()
+	if s.automationStarted {
+		s.automationMu.Unlock()
+		return
+	}
+	eventCtx, cancel := context.WithCancel(ctx)
+	s.automationCancel = cancel
+	s.automationStarted = true
+	s.automationWG.Add(1)
+	s.automationMu.Unlock()
+
+	if err := s.initializeAutomationCursors(eventCtx); err != nil {
+		// P1 migration runs before Start. If a deployment has an unexpected
+		// schema problem, keep AI available but do not run an unbounded replay.
+		cancel()
+		s.automationWG.Done()
+		s.automationMu.Lock()
+		s.automationCancel = nil
+		s.automationStarted = false
+		s.automationMu.Unlock()
+		return
+	}
+	go s.automationLoop(eventCtx)
+}
+
+func (s *Service) Stop() {
+	s.automationMu.Lock()
+	if s.automationCancel != nil {
+		s.automationCancel()
+		s.automationCancel = nil
+	}
+	s.automationStarted = false
+	s.automationMu.Unlock()
+	s.automationWG.Wait()
+	s.ai.Stop()
+}
 
 func (s *Service) AISettings(ctx context.Context) (AISettingsPublic, error) {
 	return s.ai.PublicSettings(ctx)
@@ -43,6 +87,223 @@ func (s *Service) EnqueueAI(ctx context.Context, names []string) (int, error) {
 func (s *Service) CancelAIJob(ctx context.Context, id int64) error { return s.ai.CancelJob(ctx, id) }
 func (s *Service) AIValuation(ctx context.Context, name string) (*Valuation, error) {
 	return s.ai.GetValuation(ctx, name)
+}
+
+type automationObservationEvent struct {
+	ID             int64
+	Domain         string
+	Status         string
+	PreviousStatus string
+	Changed        bool
+}
+
+func (s *Service) initializeAutomationCursors(ctx context.Context) error {
+	var domainID, observationID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(id),0) FROM domains`).Scan(&domainID); err != nil {
+		return err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(id),0) FROM domain_observations`).Scan(&observationID); err != nil {
+		return err
+	}
+	for key, value := range map[string]string{
+		"domain_id":      strconv.FormatInt(domainID, 10),
+		"observation_id": strconv.FormatInt(observationID, 10),
+		"expiry_day":     "",
+	} {
+		if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO automation_cursors(key,value) VALUES(?,?)`, key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) automationCursor(ctx context.Context, key string) (string, error) {
+	var value string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM automation_cursors WHERE key=?`, key).Scan(&value)
+	return value, err
+}
+
+func (s *Service) setAutomationCursor(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO automation_cursors(key,value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP`, key, value)
+	return err
+}
+
+func (s *Service) automationLoop(ctx context.Context) {
+	defer s.automationWG.Done()
+	_ = s.scanAutomationEvents(ctx)
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_ = s.scanAutomationEvents(ctx)
+		}
+	}
+}
+
+func (s *Service) scanAutomationEvents(ctx context.Context) error {
+	if err := s.scanNewDomainEvents(ctx); err != nil {
+		return err
+	}
+	if err := s.scanObservationEvents(ctx); err != nil {
+		return err
+	}
+	return s.scanExpiryEvents(ctx)
+}
+
+func (s *Service) scanNewDomainEvents(ctx context.Context) error {
+	raw, err := s.automationCursor(ctx, "domain_id")
+	if err != nil {
+		return err
+	}
+	cursor, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("自动化域名游标无效: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,name FROM domains WHERE id>? ORDER BY id ASC LIMIT 100`, cursor)
+	if err != nil {
+		return err
+	}
+	type domainEvent struct {
+		id   int64
+		name string
+	}
+	var events []domainEvent
+	for rows.Next() {
+		var event domainEvent
+		if err := rows.Scan(&event.id, &event.name); err != nil {
+			rows.Close()
+			return err
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, item := range events {
+		if _, err := s.EvaluateAutomation(ctx, AutomationEvent{
+			ID: fmt.Sprintf("domain:%d", item.id), Type: "domain_added", Domain: item.name,
+		}, true); err != nil {
+			return err
+		}
+		if err := s.setAutomationCursor(ctx, "domain_id", strconv.FormatInt(item.id, 10)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) scanObservationEvents(ctx context.Context) error {
+	raw, err := s.automationCursor(ctx, "observation_id")
+	if err != nil {
+		return err
+	}
+	cursor, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("自动化观测游标无效: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT current.id,current.domain,current.status,COALESCE(current.changed,0),
+		       COALESCE((SELECT previous.status
+				FROM domain_observations AS previous
+				WHERE lower(previous.domain)=lower(current.domain)
+				  AND (previous.observed_at<current.observed_at OR
+				       (previous.observed_at=current.observed_at AND previous.id<current.id))
+				ORDER BY previous.observed_at DESC, previous.id DESC LIMIT 1),'')
+		FROM domain_observations AS current
+		WHERE current.id>? ORDER BY current.id ASC LIMIT 100`, cursor)
+	if err != nil {
+		return err
+	}
+	var events []automationObservationEvent
+	for rows.Next() {
+		var event automationObservationEvent
+		var changed int
+		if err := rows.Scan(&event.ID, &event.Domain, &event.Status, &changed, &event.PreviousStatus); err != nil {
+			rows.Close()
+			return err
+		}
+		event.Changed = changed == 1
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, item := range events {
+		pending := []AutomationEvent{{
+			ID: fmt.Sprintf("observation:%d:completed", item.ID), Type: "observation_completed", Domain: item.Domain,
+		}}
+		if item.Changed {
+			pending = append(pending, AutomationEvent{
+				ID: fmt.Sprintf("observation:%d:changed", item.ID), Type: "status_changed", Domain: item.Domain,
+			})
+		}
+		if strings.EqualFold(item.Status, "error") {
+			pending = append(pending, AutomationEvent{
+				ID: fmt.Sprintf("observation:%d:error", item.ID), Type: "error", Domain: item.Domain,
+			})
+		} else if item.Changed && strings.EqualFold(item.PreviousStatus, "error") {
+			pending = append(pending, AutomationEvent{
+				ID: fmt.Sprintf("observation:%d:recovery", item.ID), Type: "recovery", Domain: item.Domain,
+			})
+		}
+		for _, event := range pending {
+			if _, err := s.EvaluateAutomation(ctx, event, true); err != nil {
+				return err
+			}
+		}
+		if err := s.setAutomationCursor(ctx, "observation_id", strconv.FormatInt(item.ID, 10)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) scanExpiryEvents(ctx context.Context) error {
+	today := time.Now().UTC().Format("2006-01-02")
+	lastDay, err := s.automationCursor(ctx, "expiry_day")
+	if err != nil {
+		return err
+	}
+	if lastDay == today {
+		return nil
+	}
+	now := time.Now().UTC()
+	rows, err := s.db.QueryContext(ctx, `SELECT domain FROM domain_results
+		WHERE expiry_at IS NOT NULL AND expiry_at>=? AND expiry_at<=?
+		ORDER BY expiry_at ASC, domain ASC LIMIT 500`, now, now.Add(7*24*time.Hour))
+	if err != nil {
+		return err
+	}
+	var domains []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		domains = append(domains, name)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, name := range domains {
+		if _, err := s.EvaluateAutomation(ctx, AutomationEvent{
+			ID: fmt.Sprintf("expiry:%s:%s", today, strings.ToLower(name)), Type: "expiry_scan", Domain: name,
+		}, true); err != nil {
+			return err
+		}
+	}
+	return s.setAutomationCursor(ctx, "expiry_day", today)
 }
 
 type richDomain struct {
@@ -360,6 +621,28 @@ func max(a, b int) int {
 	return b
 }
 
+type contextExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func insertBulkAudit(ctx context.Context, execer contextExecer, action BulkAction, matched, taskCount int, result map[string]any) error {
+	input, err := json.Marshal(action)
+	if err != nil {
+		return fmt.Errorf("序列化批量审计输入失败: %w", err)
+	}
+	output, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("序列化批量审计结果失败: %w", err)
+	}
+	_, err = execer.ExecContext(ctx, `INSERT INTO bulk_action_audits(action_type,input_json,matched,task_count,result_json) VALUES(?,?,?,?,?)`,
+		action.Type, string(input), matched, taskCount, string(output))
+	return err
+}
+
+func (s *Service) recordBulkAudit(ctx context.Context, action BulkAction, matched, taskCount int, result map[string]any) error {
+	return insertBulkAudit(ctx, s.db, action, matched, taskCount, result)
+}
+
 func (s *Service) ExecuteBulk(ctx context.Context, action BulkAction) (map[string]any, error) {
 	if err := validateBulkAction(action); err != nil {
 		return nil, err
@@ -373,14 +656,30 @@ func (s *Service) ExecuteBulk(ctx context.Context, action BulkAction) (map[strin
 		for _, item := range items {
 			names = append(names, item.Info.Name)
 		}
-		queued, err := s.ai.Enqueue(ctx, names)
-		if err != nil {
+		queued := 0
+		for start := 0; start < len(names); start += 100 {
+			end := start + 100
+			if end > len(names) {
+				end = len(names)
+			}
+			batchQueued, err := s.ai.Enqueue(ctx, names[start:end])
+			if err != nil {
+				return nil, err
+			}
+			queued += batchQueued
+		}
+		result := map[string]any{"status": "accepted", "updated": 0, "queued": queued}
+		if err := s.recordBulkAudit(ctx, action, len(items), queued, result); err != nil {
 			return nil, err
 		}
-		return map[string]any{"status": "accepted", "updated": 0, "queued": queued}, nil
+		return result, nil
 	}
 	if len(items) == 0 {
-		return map[string]any{"status": "success", "updated": 0}, nil
+		result := map[string]any{"status": "success", "updated": 0}
+		if err := s.recordBulkAudit(ctx, action, 0, 0, result); err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -410,10 +709,42 @@ func (s *Service) ExecuteBulk(ctx context.Context, action BulkAction) (map[strin
 			return nil, err
 		}
 	}
+	result := map[string]any{"status": "success", "updated": len(items)}
+	// Keep ordinary domain mutations and their audit record in one transaction.
+	// The audit is inserted before commit so a failed audit cannot leave an
+	// apparently successful, unaudited bulk mutation behind.
+	if err := insertBulkAudit(ctx, tx, action, len(items), len(items), result); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return map[string]any{"status": "success", "updated": len(items)}, nil
+	return result, nil
+}
+
+func (s *Service) ListBulkAudits(ctx context.Context, limit int) ([]BulkAudit, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,action_type,matched,task_count,result_json,created_at
+		FROM bulk_action_audits ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []BulkAudit
+	for rows.Next() {
+		var item BulkAudit
+		var raw string
+		if err := rows.Scan(&item.ID, &item.ActionType, &item.Matched, &item.TaskCount, &raw, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(raw), &item.Result); err != nil {
+			return nil, fmt.Errorf("解析批量审计结果失败: %w", err)
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }
 
 func boolInt(value bool) int {

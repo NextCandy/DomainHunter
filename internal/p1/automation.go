@@ -142,6 +142,22 @@ func triggerMatches(trigger FilterNode, event AutomationEvent) bool {
 	if strings.EqualFold(trigger.Field, "event_type") || strings.EqualFold(trigger.Field, "event") {
 		return compareValue(event.Type, strings.ToLower(trigger.Op), trigger.Value)
 	}
+	if trigger.Field != "" || len(trigger.Conditions) == 0 {
+		return true
+	}
+	if strings.EqualFold(trigger.Logic, "or") {
+		for _, child := range trigger.Conditions {
+			if triggerMatches(child, event) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, child := range trigger.Conditions {
+		if !triggerMatches(child, event) {
+			return false
+		}
+	}
 	return true
 }
 

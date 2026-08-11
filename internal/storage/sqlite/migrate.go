@@ -309,6 +309,27 @@ var migrations = []Migration{
 			`CREATE INDEX IF NOT EXISTS idx_automation_runs_rule ON automation_runs(rule_id, started_at DESC)`,
 		},
 	},
+	{
+		Version: "011",
+		Name:    "p1_automation_events_and_bulk_audits",
+		Stmts: []string{
+			`CREATE TABLE IF NOT EXISTS automation_cursors (
+				key TEXT PRIMARY KEY,
+				value TEXT NOT NULL,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`CREATE TABLE IF NOT EXISTS bulk_action_audits (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				action_type TEXT NOT NULL,
+				input_json TEXT NOT NULL,
+				matched INTEGER NOT NULL DEFAULT 0,
+				task_count INTEGER NOT NULL DEFAULT 0,
+				result_json TEXT NOT NULL DEFAULT '{}',
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_bulk_action_audits_created ON bulk_action_audits(created_at DESC)`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录
