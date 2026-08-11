@@ -1,4 +1,4 @@
-# 运行期数据与本地密钥
+﻿# 运行期数据与本地密钥
 /data/
 *.db
 *.db-shm
@@ -19,3 +19,4 @@
 node_modules/
 web/node_modules/
 .vite/
+web/tsconfig.tsbuildinfo
