@@ -20,6 +20,7 @@ import {
   formatRelative,
   providerLabel,
 } from "../lib/format";
+import { AIDomainValuationCard } from "./AIDomainValuationCard";
 
 interface DetailResponse {
   info: DomainInfo;
@@ -212,6 +213,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function OverviewTab({ info }: { info: DomainInfo }) {
   return (
     <div>
+      <AIDomainValuationCard domain={info.name} />
       <Field label="状态">
         <StatusBadge status={info.status} eppStatuses={info.epp_statuses} />
       </Field>

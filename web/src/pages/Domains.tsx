@@ -1,13 +1,16 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
-import type { DomainListResult, Facets } from "../lib/api";
+import type { DomainListResult, Facets, FilterNode } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { DomainTable } from "../components/DomainTable";
 import { DomainDrawer } from "../components/DomainDrawer";
 import { FolderTree } from "../components/FolderTree";
 import type { FolderSelection } from "../components/FolderTree";
 import { ImportExportDialog } from "../components/ImportExportDialog";
+import { AdvancedFilterDrawer } from "../components/AdvancedFilterDrawer";
+import { SavedViewMenu } from "../components/SavedViewMenu";
+import { BulkActionPreviewDialog } from "../components/BulkActionPreviewDialog";
 import { ConfirmDialog, EmptyState, ErrorNotice, Spinner, cx, useToast } from "../components/ui";
 import { STATUS_LABELS, STATUS_ORDER } from "../lib/format";
 
@@ -35,6 +38,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const sort = params.get("sort") ?? "";
   const order = params.get("order") ?? "asc";
   const favoriteOnly = params.get("favorite") === "true";
+  const advancedRaw = params.get("filter") ?? "";
   const page = Number(params.get("page") ?? "1") || 1;
   const limit = Number(params.get("limit") ?? "20") || 20;
 
@@ -47,6 +51,13 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [showImportExport, setShowImportExport] = useState(false);
   const [folderSelection, setFolderSelection] = useState<FolderSelection>("all");
   const [retrying, setRetrying] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showBulkAction, setShowBulkAction] = useState(false);
+
+  const advancedFilter = useMemo<FilterNode>(() => {
+    if (!advancedRaw) return { version: 1, logic: "and", conditions: [] };
+    try { return JSON.parse(advancedRaw) as FilterNode; } catch { return { version: 1, logic: "and", conditions: [] }; }
+  }, [advancedRaw]);
 
   useEffect(() => setSearchInput(search), [search]);
 
@@ -63,10 +74,11 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       q.set("order", order);
     }
     if (favoriteOnly) q.set("favorite", "true");
+    if (advancedRaw) q.set("filter", advancedRaw);
     q.set("page", String(page));
     q.set("limit", String(folderSelection === "all" ? limit : 500));
     return q.toString();
-  }, [search, status, statuses, tld, registrar, provider, sort, order, page, limit, favoriteOnly, folderSelection]);
+  }, [search, status, statuses, tld, registrar, provider, sort, order, page, limit, favoriteOnly, advancedRaw, folderSelection]);
 
   const { data, error, loading, reload } = useAsync<DomainListResult>(
     () => api.get<DomainListResult>(`/api/v2/domains?${query}`),
@@ -199,6 +211,14 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           <button type="button" className="btn h-8" onClick={refresh} aria-label="刷新域名列表" title="刷新域名列表">
             刷新
           </button>
+          <button type="button" className={cx("btn h-8", advancedRaw && "border-accent text-accent")} onClick={() => setShowAdvanced(true)}>
+            高级筛选{advancedRaw ? " · 已启用" : ""}
+          </button>
+          <SavedViewMenu
+            filter={advancedFilter}
+            onApply={(filter) => updateParams({ filter: JSON.stringify(filter) })}
+            onUnauthorized={onUnauthorized}
+          />
           <button
             type="button"
             className="btn h-8"
@@ -337,6 +357,10 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             失败/未知
           </button>
         </div>
+        <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-6">
+          {advancedRaw && <button type="button" className="btn h-7 border-accent text-[12px] text-accent" onClick={() => updateParams({ filter: "" })}>清除高级条件</button>}
+          <span className="self-center text-[11px] text-ink-faint">高级条件支持状态、TLD、注册商、标签和 AI 质量分，可与基础筛选组合。</span>
+        </div>
       </div>
 
       {failedCount > 0 && (
@@ -350,6 +374,9 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           <span>已选择 {selected.size} 个域名</span>
           <button type="button" className="btn h-7 text-[12px]" onClick={runBatchCheck}>
             批量检查
+          </button>
+          <button type="button" className="btn h-7 text-[12px]" onClick={() => setShowBulkAction(true)}>
+            批量操作预览
           </button>
           <button
             type="button"
@@ -483,6 +510,18 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           onUnauthorized={onUnauthorized}
         />
       )}
+      <AdvancedFilterDrawer
+        open={showAdvanced}
+        initial={advancedFilter}
+        onApply={(filter) => updateParams({ filter: JSON.stringify(filter) })}
+        onClose={() => setShowAdvanced(false)}
+      />
+      <BulkActionPreviewDialog
+        open={showBulkAction}
+        domains={Array.from(selected)}
+        onClose={() => setShowBulkAction(false)}
+        onDone={() => { setSelected(new Set()); refresh(); }}
+      />
     </div>
   );
 }

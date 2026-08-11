@@ -265,6 +265,17 @@ GET    /api/v2/observations    GET  /api/v2/providers  GET /api/v2/notifications
 POST   /api/v2/notifications/test/{channel}
 GET    /api/v2/settings        PUT  /api/v2/settings/{query-policy,history,log-level}
 GET    /api/v2/backups         POST /api/v2/backups
+
+GET/POST/PUT/DELETE /api/v2/saved-views                 保存智能视图
+POST   /api/v2/bulk-actions/preview                     批量动作影响预览
+POST   /api/v2/bulk-actions                             批量安全动作执行
+GET/PUT /api/v2/ai/settings                             DeepSeek 设置（不回显 Key）
+GET    /api/v2/ai/{models,usage,jobs,valuations/{domain}}
+POST   /api/v2/ai/jobs                                  持久化 AI 估价 Job
+GET/POST/PUT/DELETE /api/v2/automation/rules            规则构建器
+POST   /api/v2/automation/rules/{id}/dry-run             Dry-run 与运行审计
+GET    /api/v2/automation/runs
+POST   /api/v2/automation/evaluate                       事件评估（默认不执行）
 ```
 
 `GET /api/v2/facets` 返回**全量**的后缀 / 注册商 / 查询源 / 状态 / 标签清单及各自
@@ -272,6 +283,30 @@ GET    /api/v2/backups         POST /api/v2/backups
 
 > 安全调整：`GET /api/settings` 不再回吐 SMTP 密码与 Telegram Bot Token 明文，
 > 改为 `password_set` / `bot_token_set` 布尔值；保存时对应字段留空表示不修改。
+
+## P1 高级筛选、AI 研究与自动化
+
+P1 的高级条件以版本化 JSON 条件树编码进 URL，支持状态、TLD、注册商、标签、
+日期和 AI 结果条件；智能视图只保存条件，不保存私密凭据。批量标签、优先级、
+文件夹、通知、监控和 AI 估价都先通过 `/bulk-actions/preview` 返回实际匹配数、
+样例、任务数、缓存命中和每日限额，再执行后端批量动作。
+
+AI 默认使用 DeepSeek OpenAI-compatible `/chat/completions`。Job 写入 SQLite，
+包含 `queued/running/succeeded/failed/deferred/cancelled` 状态、租约恢复、指数退避、
+输入指纹去重、TTL 缓存和每日限额。发送给模型的输入只含域名、TLD、字符特征、
+确认状态、可信度、日期、注册商及可选标签/优先级，绝不包含 WHOIS/RDAP 原文、备注、
+通知配置、Token 或密码。模型返回的严格 JSON Schema 未通过时不会伪造估价。
+
+密钥优先从 `DOMAINHUNTER_AI_API_KEY` 读取；UI 保存 Key 需要
+`DOMAINHUNTER_SECRET_KEY`，数据库只保存 AES-GCM 密文。读取接口只返回
+`api_key_set` 与 `key_source`。Base URL 默认仅 HTTPS，拒绝 loopback、私有/链路本地、
+元数据地址，解析 DNS 后再次检查；`DOMAINHUNTER_AI_ALLOWED_HOSTS` 可收紧主机范围，
+只有显式 `DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL=true` 才允许受控本机 HTTP。
+
+自动化以“触发器 → 条件 → 安全动作 → 冷却/每日上限”构建，服务端只允许标签、
+优先级、文件夹、通知开关、监控开关、加入 AI 队列、已有检查/通知等动作；规则不得
+删除域名、改密码/密钥、支付购买或调用任意 URL。运行以 `(rule_id,event_id,domain)`
+幂等，并带 per-domain cooldown、daily cap 和审计记录；新规则默认 Dry-run。
 
 ## 开发
 

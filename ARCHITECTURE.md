@@ -163,6 +163,12 @@ LIMIT ?
 | `domain_observations` | 每次查询的历史观测，`changed` 标记状态变化 |
 | `query_attempts` | 每个 Provider 的单次尝试（状态、耗时、错误、原文） |
 | `notification_history` | 通知去重 |
+| `saved_views` | 版本化高级筛选条件与共享视图 |
+| `ai_provider_settings` | DeepSeek 配置与加密 Key 密文（不存明文） |
+| `ai_jobs` | 可租约恢复、重试、限额和去重的持久化 AI Job |
+| `ai_domain_valuations` | 严格 Schema 校验后的研究性估价与 TTL |
+| `automation_rules` | 触发器、条件、安全动作与防护栏 |
+| `automation_runs` | Dry-run/执行审计与 `(rule,event,domain)` 幂等 |
 | `schema_migrations` | 已应用的迁移版本 |
 
 迁移在启动时执行，有待执行迁移时先 `VACUUM INTO` 生成一份一致备份
@@ -170,6 +176,26 @@ LIMIT ?
 
 历史表有保留上限（默认 180 天 / 每域名 200 条 / 原始报文仅在状态变化时保存且
 最多 16KB），保证长期运行不会把数据库撑爆。
+
+## P1 数据流
+
+```
+URL 条件树 / 保存视图 ──→ Advanced Filter ──→ 域名列表与批量预览
+                                               │
+                                               ├─ 安全批量写入（单事务）
+                                               └─ AI Job Repository
+                                                     │ 租约 / 重试 / 限额
+                                                     ▼
+                                            DeepSeek Provider
+                                                     │ 严格 JSON Schema
+                                                     ▼
+                                         ai_domain_valuations（TTL）
+
+事件 → Automation Rule → 条件匹配 → Dry-run / 白名单动作 → automation_runs
+```
+
+AI 是研究、排序和解释层，不能写入查询引擎的 `available` 结论；自动化也不拥有
+任意网络调用或高风险外部操作权限。
 
 ## 通知
 

@@ -71,8 +71,10 @@ Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动
 | 007 | `folders` 与 `domains.folder_id` |
 | 008 | `api_tokens` |
 | 009 | `notification_rules` / `notification_templates` / `notification_digest` |
+| 010 | P1 `saved_views` / `ai_provider_settings` / `ai_jobs` / `ai_domain_valuations` / `automation_rules` / `automation_runs` |
 
-因此 **v1 二进制仍能读 v2 的库**，这是回滚能无损进行的前提。
+因此 **v1 二进制仍能读 v2 的库**；迁移 010 仅新增表和索引，旧字段与旧 API 不变，
+回滚程序不会删除 P1 数据。
 
 数据文件：默认 `domainhunter.db`；**已存在 `puff.db` 的部署继续使用 puff.db，
 程序绝不自动改名**。树莓派已在 2026-08-11 停机手工改名为 `domainhunter.db`。

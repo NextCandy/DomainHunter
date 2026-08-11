@@ -12,6 +12,7 @@ import { HistoryPage } from "./pages/History";
 import { ProvidersPage } from "./pages/Providers";
 import { NotificationsPage } from "./pages/Notifications";
 import { SettingsPage } from "./pages/Settings";
+import { AutomationPage } from "./pages/Automation";
 
 export default function App() {
   const [session, setSession] = useState<SessionInfo | null>(null);
@@ -100,6 +101,7 @@ export default function App() {
               />
             }
           />
+          <Route path="/automation" element={<AutomationPage onUnauthorized={handleUnauthorized} />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

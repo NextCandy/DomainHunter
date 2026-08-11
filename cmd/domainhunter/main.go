@@ -18,6 +18,7 @@ import (
 	"DomainHunter/internal/httpapi"
 	"DomainHunter/internal/logger"
 	"DomainHunter/internal/notification"
+	"DomainHunter/internal/p1"
 	"DomainHunter/internal/query"
 	"DomainHunter/internal/query/providers/fallback"
 	"DomainHunter/internal/query/providers/rdap"
@@ -68,6 +69,9 @@ func run(dataDir string) error {
 	if err := db.Migrate(); err != nil {
 		return err
 	}
+	p1Service := p1.New(db)
+	p1Service.Start(ctx)
+	defer p1Service.Stop()
 
 	domainRepo := sqlite.NewDomainRepo(db)
 	resultRepo := sqlite.NewResultRepo(db)
@@ -177,6 +181,7 @@ func run(dataDir string) error {
 		Notification:  notifier,
 		Engine:        engine,
 		Notifications: notificationRepo,
+		P1:            p1Service,
 		Version:       AppVersion,
 	})
 

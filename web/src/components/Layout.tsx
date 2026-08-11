@@ -12,6 +12,7 @@ const NAV = [
   { to: "/history", label: "查询历史" },
   { to: "/providers", label: "查询源" },
   { to: "/notifications", label: "通知" },
+  { to: "/automation", label: "自动化" },
   { to: "/settings", label: "系统设置" },
 ];
 
