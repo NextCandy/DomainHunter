@@ -110,8 +110,13 @@ domains.next_check_at → 每 5s 扫描 → 优先级队列(manual>retry>schedul
 React 18 + TypeScript + Vite + Tailwind v3，运行时依赖只有 react /
 react-dom / react-router-dom，构建产物 gzip 后约 72KB，**零外部请求**。
 
-7 个页面：概览 / 域名 / 观察列表 / 查询历史 / 查询源 / 通知 / 系统设置。
+7 个页面：概览 / 域名 / 抢注看板 / 查询历史 / 查询源 / 通知 / 系统设置。
 域名详情抽屉分四个标签页：概览 / 查询证据 / 状态时间线 / 原始报文。
+
+**抢注看板**只显示处于掉落流程的域名（可注册 / 待删除 / 赎回期 / 已过期 /
+宽限期），按抢注紧迫度排序。它取代了原来的「观察列表」——那一页本质上就是
+「域名列表 + favorite=true」，同一个组件加一个 prop，且收藏数一直是 0。
+收藏能力保留为域名页筛选栏里的「★ 只看收藏」开关。
 
 `web/dist` 随仓库提交并 go:embed，因此 `go build` 与 GoReleaser 在没有 Node 的
 环境下也能产出完整程序，Docker 镜像也不需要 Node 阶段。CI 会校验 dist 与源码一致。
