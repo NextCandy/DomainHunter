@@ -196,6 +196,38 @@ func TestSessionLoginLogoutFlow(t *testing.T) {
 	}
 }
 
+// 退出登录必须让"记住登录"令牌一并失效：客户端就算留着那个 cookie，
+// 也不能再免密码进来。
+func TestLogoutRevokesRememberToken(t *testing.T) {
+	ts, _ := newTestServer(t)
+	c := newClient(t, ts)
+
+	resp := c.login("domainhunter", "domainhunter123")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("登录失败: %d", resp.StatusCode)
+	}
+	var remember string
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == rememberCookie {
+			remember = cookie.Value
+		}
+	}
+	if remember == "" {
+		t.Fatal("登录应下发记住登录令牌")
+	}
+
+	if resp := c.do(http.MethodPost, "/api/logout", "", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("退出失败: %d", resp.StatusCode)
+	}
+
+	// 手工回放旧的 remember_token
+	replay := c.do(http.MethodGet, "/api/domains", "",
+		map[string]string{"Cookie": rememberCookie + "=" + remember})
+	if replay.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("退出后回放旧的记住登录令牌应返回 401，实际 %d", replay.StatusCode)
+	}
+}
+
 func TestCSRFRejectsCrossOriginWrite(t *testing.T) {
 	ts, _ := newTestServer(t)
 	c := newClient(t, ts)

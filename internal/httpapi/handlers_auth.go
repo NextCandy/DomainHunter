@@ -58,10 +58,16 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleLogout 注销
+// handleLogout 注销。
+//
+// 除了清 Cookie，还会撤销"记住登录"令牌 —— 否则客户端只要留着那个 cookie，
+// 退出登录后依然能免密码进来。代价是其他设备上的免登录状态也会失效。
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookie); err == nil {
 		s.deps.Auth.Logout(cookie.Value)
+	}
+	if err := s.deps.Auth.RevokeRememberTokens(r.Context()); err != nil {
+		s.log.Warn(logger.Fields{"error": err.Error()}, "撤销记住登录令牌失败")
 	}
 	s.clearSessionCookies(w, r)
 

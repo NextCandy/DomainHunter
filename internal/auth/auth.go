@@ -166,6 +166,29 @@ func (a *Authenticator) UpdatePassword(ctx context.Context, newPassword string) 
 		return err
 	}
 	a.sessions.Clear()
+	// 改密码必须让旧的"记住登录"令牌一并失效，否则拿着旧 cookie 的客户端
+	// 仍然能免密码进来。
+	if err := a.RevokeRememberTokens(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RevokeRememberTokens 轮换签名密钥，使所有设备上的"记住登录"令牌立即失效。
+//
+// 令牌本身是无状态 HMAC，没有服务端记录可删，所以撤销的唯一办法是换密钥。
+// 对单账号的自托管管理端来说，"退出登录 = 所有设备都要重新登录"是可接受且
+// 更安全的语义。
+func (a *Authenticator) RevokeRememberTokens(ctx context.Context) error {
+	secret := randomToken(32)
+	if a.persist != nil {
+		if err := a.persist(ctx, map[string]string{config.KeySessionSecret: secret}); err != nil {
+			return fmt.Errorf("轮换会话签名密钥失败: %w", err)
+		}
+	}
+	a.mu.Lock()
+	a.sessionSecret = secret
+	a.mu.Unlock()
 	return nil
 }
 

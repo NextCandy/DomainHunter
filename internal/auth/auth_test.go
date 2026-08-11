@@ -119,12 +119,42 @@ func TestRememberTokenUsesSessionSecret(t *testing.T) {
 		t.Fatal("被篡改的令牌不应通过校验")
 	}
 
-	// 改密码不再影响记住登录令牌（签名密钥独立），但改用户名会
 	if err := a.UpdateUsername(ctx, "operator"); err != nil {
 		t.Fatalf("修改用户名失败: %v", err)
 	}
 	if a.ValidateRememberToken(token) {
 		t.Fatal("用户名变更后旧令牌应失效")
+	}
+}
+
+func TestRememberTokenRevokedOnLogoutAndPasswordChange(t *testing.T) {
+	ctx := context.Background()
+
+	a, err := New(ctx, config.ServerConfig{Username: "admin", Password: "secret123"}, newStore().persist)
+	if err != nil {
+		t.Fatalf("创建认证器失败: %v", err)
+	}
+	token := a.GenerateRememberToken()
+	if !a.ValidateRememberToken(token) {
+		t.Fatal("新令牌应有效")
+	}
+	if err := a.RevokeRememberTokens(ctx); err != nil {
+		t.Fatalf("撤销令牌失败: %v", err)
+	}
+	if a.ValidateRememberToken(token) {
+		t.Fatal("撤销后旧令牌必须失效，否则退出登录形同虚设")
+	}
+
+	b, err := New(ctx, config.ServerConfig{Username: "admin", Password: "secret123"}, newStore().persist)
+	if err != nil {
+		t.Fatalf("创建认证器失败: %v", err)
+	}
+	stale := b.GenerateRememberToken()
+	if err := b.UpdatePassword(ctx, "another-secret"); err != nil {
+		t.Fatalf("修改密码失败: %v", err)
+	}
+	if b.ValidateRememberToken(stale) {
+		t.Fatal("改密码后旧的记住登录令牌必须失效")
 	}
 }
 
