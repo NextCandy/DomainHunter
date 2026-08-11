@@ -1,12 +1,14 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import type { Overview, OverviewItem, ProviderHealth } from "../lib/api";
+import type { Overview, OverviewItem, OverviewTrendPoint, ProviderHealth } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import {
   Card,
   EmptyState,
   ErrorNotice,
   Pill,
+  Sparkline,
   Spinner,
   StatusBadge,
   cx,
@@ -35,12 +37,40 @@ const HEALTH_DOT: Record<ProviderHealth["state"], string> = {
   unknown: "bg-zinc-400",
 };
 
+const TREND_COLORS = {
+  total: "rgb(var(--accent))",
+  available: "rgb(16 185 129)",
+  highScore: "rgb(245 158 11)",
+};
+
 export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const { data, error, loading, reload } = useAsync<Overview>(
     () => api.get<Overview>("/api/v2/overview"),
     [],
     onUnauthorized,
   );
+  const [trend, setTrend] = useState<OverviewTrendPoint[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void api
+      .getOptional<unknown>("/api/v2/overview/trend?days=7")
+      .then((payload) => {
+        if (active) setTrend(normalizeTrend(payload));
+      })
+      .catch((err) => {
+        if (err instanceof Error && err.message.includes("会话")) onUnauthorized();
+        if (active) setTrend([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [onUnauthorized]);
+
+  const fallbackTrend = useMemo(() => (data ? buildFallbackTrend(data) : []), [data]);
+  const trendPoints = trend && trend.length > 0 ? trend : fallbackTrend;
+  const usingFallback = !trend || trend.length === 0;
 
   if (loading && !data) {
     return (
@@ -92,6 +122,8 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
           />
         ))}
       </div>
+
+      <TrendCard points={trendPoints} usingFallback={usingFallback} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card title="最近状态变化" bodyClassName="p-0">
@@ -194,6 +226,144 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
       </Card>
     </div>
   );
+}
+
+function TrendCard({
+  points,
+  usingFallback,
+}: {
+  points: OverviewTrendPoint[];
+  usingFallback: boolean;
+}) {
+  const series = usingFallback
+    ? [
+        {
+          label: "状态变化",
+          values: points.map((point) => point.changes),
+          color: TREND_COLORS.total,
+        },
+        {
+          label: "可注册变化",
+          values: points.map((point) => point.available),
+          color: TREND_COLORS.available,
+        },
+      ]
+    : [
+        {
+          label: "新增域名",
+          values: points.map((point) => point.total),
+          color: TREND_COLORS.total,
+        },
+        {
+          label: "可注册",
+          values: points.map((point) => point.available),
+          color: TREND_COLORS.available,
+        },
+        {
+          label: "高分域名",
+          values: points.map((point) => point.high_score),
+          color: TREND_COLORS.highScore,
+        },
+      ];
+
+  return (
+    <Card
+      title="最近 7 天趋势"
+      action={
+        <Pill title={usingFallback ? "趋势接口不可用，使用现有概览摘要" : "来自趋势接口"}>
+          {usingFallback ? "摘要降级" : "实时数据"}
+        </Pill>
+      }
+    >
+      <Sparkline series={series} />
+      <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
+        <span>{formatTrendDay(points[0]?.day)}</span>
+        <span>{formatTrendDay(points[points.length - 1]?.day)}</span>
+      </div>
+    </Card>
+  );
+}
+
+function normalizeTrend(payload: unknown): OverviewTrendPoint[] {
+  const points = extractTrendPoints(payload);
+  return points
+    .map((point, index) => {
+      if (!point || typeof point !== "object") return null;
+      const value = point as Record<string, unknown>;
+      const day = normalizeDay(value.day ?? value.date ?? value.label ?? value.timestamp) ?? `day-${index}`;
+      return {
+        day,
+        total: readNumber(value.total, value.count, value.domains, value.new_domains, value.added),
+        available: readNumber(value.available, value.available_count, value.free),
+        high_score: readNumber(value.high_score, value.highScore, value.high, value.score_80_plus),
+        changes: readNumber(value.changes, value.status_changes, value.change_count),
+      };
+    })
+    .filter((point): point is OverviewTrendPoint => point !== null)
+    .slice(-7);
+}
+
+function extractTrendPoints(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  const value = payload as Record<string, unknown>;
+  for (const key of ["points", "trend", "data", "items"]) {
+    if (Array.isArray(value[key])) return value[key];
+  }
+  return [];
+}
+
+function readNumber(...values: unknown[]): number {
+  for (const value of values) {
+    const number = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(number)) return Math.max(0, number);
+  }
+  return 0;
+}
+
+function normalizeDay(value: unknown): string | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return localDayKey(date);
+}
+
+function localDayKey(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function buildFallbackTrend(data: Overview): OverviewTrendPoint[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const points = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - 6 + index);
+    return { day: localDayKey(date), total: 0, available: 0, high_score: 0, changes: 0 };
+  });
+  const byDay = new Map(points.map((point) => [point.day, point]));
+
+  for (const item of data.recent_changes ?? []) {
+    const day = normalizeDay(item.observed_at);
+    const point = day ? byDay.get(day) : undefined;
+    if (point) {
+      point.changes += 1;
+      point.total += 1;
+    }
+  }
+  for (const item of data.recent_available ?? []) {
+    const day = normalizeDay(item.observed_at);
+    const point = day ? byDay.get(day) : undefined;
+    if (point) point.available += 1;
+  }
+  return points;
+}
+
+function formatTrendDay(value?: string): string {
+  if (!value || value.startsWith("day-")) return "—";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "—";
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 function StatTile({

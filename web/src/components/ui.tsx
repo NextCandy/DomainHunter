@@ -166,13 +166,22 @@ function TransferLockMark() {
   );
 }
 
-export function Pill({ children, className }: { children: ReactNode; className?: string }) {
+export function Pill({
+  children,
+  className,
+  title,
+}: {
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
   return (
     <span
       className={cx(
         "inline-flex items-center rounded border border-line bg-surface-muted px-1.5 py-0.5 text-[11px] leading-4 text-ink-muted",
         className,
       )}
+      title={title}
     >
       {children}
     </span>

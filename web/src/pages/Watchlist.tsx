@@ -3,7 +3,17 @@ import { api } from "../lib/api";
 import type { DomainInfo, DomainListResult, DomainStatus } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { DomainDrawer } from "../components/DomainDrawer";
-import { Card, EmptyState, ErrorNotice, Pill, Spinner, StatusBadge, cx, useToast } from "../components/ui";
+import {
+  Card,
+  DomainName,
+  EmptyState,
+  ErrorNotice,
+  Pill,
+  Spinner,
+  StatusBadge,
+  cx,
+  useToast,
+} from "../components/ui";
 import {
   STATUS_LABELS,
   daysUntil,
@@ -42,6 +52,14 @@ const STATUS_HINT: Record<string, string> = {
   expired: "已过期，等待进入删除流程",
   grace: "续费宽限期，多数会被续费",
 };
+
+const DROP_STAGES: Array<{ status: DomainStatus; hint: string }> = [
+  { status: "grace", hint: "等待是否续费" },
+  { status: "expired", hint: "已过期" },
+  { status: "redemption", hint: "仍可赎回" },
+  { status: "pending_delete", hint: "即将释放" },
+  { status: "available", hint: "可以注册" },
+];
 
 export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [openDomain, setOpenDomain] = useState<string | null>(null);
@@ -125,6 +143,8 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
           </div>
         ))}
       </div>
+
+      <DropBoard counts={counts} />
 
       {error && <ErrorNotice message={error} onRetry={reload} />}
 
@@ -215,6 +235,61 @@ function DaysCell({ item }: { item: DomainInfo }) {
   );
 }
 
+function DropBoard({ counts }: { counts: Map<string, number> }) {
+  return (
+    <Card
+      title="掉落阶段"
+      action={<Pill title="从宽限期到可注册的五个观察阶段">5 阶段</Pill>}
+      bodyClassName="p-0"
+    >
+      <div className="relative overflow-hidden px-4 py-4">
+        <div
+          className="absolute bottom-7 left-8 top-7 w-px bg-line md:hidden"
+          aria-hidden="true"
+        />
+        <svg
+          className="pointer-events-none absolute left-8 right-8 top-9 hidden h-1.5 w-[calc(100%-4rem)] md:block"
+          viewBox="0 0 100 4"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <line x1="5" y1="2" x2="95" y2="2" stroke="rgb(var(--line))" strokeWidth="1" />
+        </svg>
+        <ol className="relative grid gap-4 md:grid-cols-5 md:gap-2">
+          {DROP_STAGES.map(({ status, hint }) => {
+            const count = counts.get(status) ?? 0;
+            const active = count > 0;
+            return (
+              <li
+                key={status}
+                className="flex items-center gap-3 md:flex-col md:gap-2 md:text-center"
+                aria-label={`${STATUS_LABELS[status]}，${count} 个`}
+              >
+                <span
+                  className={cx(
+                    "z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[12px] font-semibold tabular transition-colors",
+                    active
+                      ? "border-accent bg-accent text-white shadow-sm"
+                      : "border-line bg-surface-raised text-ink-faint",
+                  )}
+                >
+                  {count}
+                </span>
+                <span className="min-w-0">
+                  <span className="block">
+                    <StatusBadge status={status} />
+                  </span>
+                  <span className="mt-1 block text-[11px] text-ink-faint">{hint}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </Card>
+  );
+}
+
 function Row({
   item,
   busy,
@@ -229,16 +304,10 @@ function Row({
   return (
     <tr className="hover:bg-surface-muted/60">
       <td className="px-3 py-2">
-        <button
-          type="button"
-          className="mono text-left text-ink hover:text-accent hover:underline"
-          onClick={onOpen}
-        >
-          {item.name}
-        </button>
+        <DomainName name={item.name} onClick={onOpen} />
       </td>
       <td className="px-3 py-2">
-        <StatusBadge status={item.status} />
+        <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
       </td>
       <td className="px-3 py-2 text-[12px] text-ink-muted">{STATUS_HINT[item.status] ?? "—"}</td>
       <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">
@@ -280,11 +349,9 @@ function MobileCard({
 }) {
   return (
     <li className="card p-3">
-      <button type="button" className="mono block w-full truncate text-left text-[13px]" onClick={onOpen}>
-        {item.name}
-      </button>
+      <DomainName name={item.name} onClick={onOpen} className="block w-full" />
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        <StatusBadge status={item.status} />
+        <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
         <Pill>{STATUS_HINT[item.status] ?? STATUS_LABELS[item.status]}</Pill>
       </div>
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-faint">

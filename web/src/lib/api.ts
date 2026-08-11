@@ -62,6 +62,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
+  getOptional: async <T>(path: string): Promise<T | null> => {
+    try {
+      return await request<T>(path);
+    } catch (error) {
+      // 新版接口尚未部署时，调用方可以继续使用旧接口数据；认证失效仍需交给 App 处理。
+      if (error instanceof UnauthorizedError) throw error;
+      return null;
+    }
+  },
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }),
   put: <T>(path: string, body?: unknown) =>
@@ -189,6 +198,14 @@ export interface Overview {
   providers: ProviderHealth[] | null;
   monitor: Record<string, unknown>;
   history?: { observations: number; attempts: number };
+}
+
+export interface OverviewTrendPoint {
+  day: string;
+  total: number;
+  available: number;
+  high_score: number;
+  changes: number;
 }
 
 export interface SessionInfo {
