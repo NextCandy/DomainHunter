@@ -1,4 +1,4 @@
-﻿# 运行期数据与本地密钥
+# 运行期数据与本地密钥
 /data/
 *.db
 *.db-shm
@@ -10,8 +10,6 @@
 # 构建产物
 /domainhunter
 /domainhunter.exe
-/puff
-/Puff
 *.exe
 /dist/
 

@@ -1,7 +1,6 @@
 # 树莓派上的实际部署配置。
 # compose 项目名 domainhunter，目录 /opt/docker-migrated/domainhunter。
-# 该目录同时是数据目录，直接挂到 /app/data，数据库文件就在其中
-#（历史原因文件名仍是 puff.db，程序会自动识别并继续使用它）。
+# 该目录同时是数据目录，直接挂到 /app/data，数据库文件 domainhunter.db 就在其中。
 services:
   domainhunter:
     image: domainhunter:latest

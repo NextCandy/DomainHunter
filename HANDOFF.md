@@ -68,9 +68,9 @@
 
 因此 **v1 二进制仍能读 v2 的库**，这是回滚能无损进行的前提。
 
-数据文件：全新安装创建 `domainhunter.db`；**已存在 `puff.db` 的部署继续使用
-puff.db 且不会被改名**（树莓派上就是这种情况）。可用 `DOMAINHUNTER_DB_FILE`
-覆盖。
+数据文件：默认 `domainhunter.db`；**已存在 `puff.db` 的部署继续使用 puff.db，
+程序绝不自动改名**。树莓派已在 2026-08-11 停机手工改名为 `domainhunter.db`。
+可用 `DOMAINHUNTER_DB_FILE` 覆盖。
 
 ## Query Provider
 
@@ -203,11 +203,11 @@ HEALTHCHECK                                                 healthy
 
 ```
 主机        树莓派 Pi (aarch64)，SSH 100.116.187.99:22370
-容器        DomainHunter        镜像 domainhunter:latest (= v2.1.0)
+容器        DomainHunter        镜像 domainhunter:latest (= v2.2.0)
 端口        22334 → 8080        网络 domainhunter_default
 compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/compose.yaml
 数据目录    /opt/docker-migrated/domainhunter （即容器内 /app/data）
-数据库      puff.db（15.5MB，771 个域名）—— 沿用旧文件名，程序自动识别
+数据库      domainhunter.db（14.8MB，551 个域名）—— 2026-08-11 停机由 puff.db 改名
 资源        31MB RSS / 10 线程 / CPU 接近 0
 容器总数    35（与改动前一致，未影响任何其他项目）
 ```
@@ -239,9 +239,19 @@ docker compose -p puff -f compose.yaml up -d
 **3. 连数据一起回滚**
 
 ```bash
+cd /opt/docker-migrated/domainhunter
 docker compose -p domainhunter -f compose.yaml stop
-cp -a backups/puff-20260811-100852-pre-v2-manual.db puff.db
-rm -f puff.db-wal puff.db-shm
+cp -a backups/puff-20260811-100852-pre-v2-manual.db domainhunter.db
+rm -f domainhunter.db-wal domainhunter.db-shm
+docker compose -p domainhunter -f compose.yaml up -d
+```
+
+**4. 只回滚数据库文件名**
+
+```bash
+cd /opt/docker-migrated/domainhunter
+docker compose -p domainhunter -f compose.yaml stop
+mv domainhunter.db puff.db
 docker compose -p domainhunter -f compose.yaml up -d
 ```
 
@@ -255,6 +265,7 @@ tag         backup-before-domainhunter-refactor-20260811-0852  ← 回滚到重�
 数据库备份  /opt/docker-migrated/domainhunter/backups/
               puff-20260811-100852-pre-v2-manual.db      （重构前基线，817 域名）
               puff-20260811-143159-pre-owned-cleanup.db  （清理已拥有域名前，695）
+              puff-20260811-153045-pre-db-rename.db      （改名前冷拷贝，551）
 compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
 ```
 
@@ -290,14 +301,12 @@ compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
 
 ## 下一步建议
 
-1. Review 后把分支合并进 `main`，打 `v2.1.0` tag 触发 GHCR 镜像与 Release。
+1. 打 `v2.2.0` tag 触发 GoReleaser 与 GHCR 多架构镜像（分支已合并进 `main`）。
 2. 给 `fallback` / `whois_ls` 加"每 Provider 并发上限"，比最小间隔更能保护
    单实例服务。
 3. 把"转移锁定"从主状态改成附加标记，让 605 个域名回到"已注册"——需要一次性
    抑制通知。
-4. 考虑把 `puff.db` 改名成 `domainhunter.db`（程序已支持两种名字）：
-   停容器 → `mv puff.db domainhunter.db` → 起容器。回滚时改回即可。
-5. 历史表已有 1.9 万条观测；若想立刻瘦身，可把「每域名最多保留」调小后等一次
+4. 历史表已有 1.9 万条观测；若想立刻瘦身，可把「每域名最多保留」调小后等一次
    清理（每 6 小时一轮）。
 
 ## 踩坑记录

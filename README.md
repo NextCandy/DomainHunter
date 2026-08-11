@@ -1,8 +1,8 @@
 # DomainHunter
 
-DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。它保留了 Puff 的 SQLite
-数据与 Web 管理界面，把查询链路建立在"RDAP 优先、WHOIS 兼容、**无法确认就不报告
-可注册**"的安全模型上，并为每个结论保留可追溯的查询证据。
+DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。查询链路建立在
+"RDAP 优先、WHOIS 兼容、**无法确认就不报告可注册**"的安全模型上，
+并为每个结论保留可追溯的查询证据。
 
 单体 Go 应用 + SQLite + 单容器，适合树莓派、Synology NAS 与普通 Linux VPS 自托管。
 
@@ -23,7 +23,7 @@ DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。它�
   详情页据此回答"当前状态为什么是这个结果"。
 - 状态流转有历史：`registered → grace → redemption → pending_delete → available`
   全程可回溯。
-- 兼容原 Puff 的 `data/puff.db` 与 `PUFF_*` 环境变量，升级无需重建任何数据。
+- 旧版遗留的 `data/puff.db` 与 `PUFF_*` 环境变量仍被接受，升级无需重建任何数据。
 
 ## 快速开始
 
@@ -38,8 +38,9 @@ curl -f http://127.0.0.1:8080/health
 
 默认端口 `8080`，默认账号 `domainhunter / domainhunter123`，**登录后请立即修改密码**。
 
-已有 Puff / DomainHunter 安装只需把原 `data/puff.db` 挂到 `/app/data/puff.db`，
-账号、域名列表与监控设置会继续使用数据库中的值，详见 [MIGRATION.md](MIGRATION.md)。
+升级已有安装只需把原数据目录挂到 `/app/data`，账号、域名列表与监控设置
+会继续使用数据库中的值。旧文件名 `puff.db` 也能被识别，详见
+[MIGRATION.md](MIGRATION.md)。
 
 本地编译运行：
 
@@ -54,7 +55,7 @@ go build -o domainhunter ./cmd/domainhunter
 ```
 HTTP  →  Service  →  Scheduler  →  Worker Pool  →  Query Engine  →  Provider
                           ↑                              ↓
-                     Repository  ←────────────────  SQLite (puff.db)
+                     Repository  ←──────────────────  SQLite
                                                           ↓
                                                    Notification
 ```
@@ -111,15 +112,16 @@ extra_hosts:
 
 ```
 data/
-├── domainhunter.db         主数据库（全新安装时创建）
-├── puff.db                 既有部署沿用的旧文件名，存在时**优先使用**，不会被改名
+├── domainhunter.db         主数据库
+├── puff.db                 旧版遗留文件名；存在时**优先使用**，不会被自动改名
 └── backups/
     └── *-YYYYMMDD-HHMMSS-*.db   迁移前自动生成的备份，只保留最近 5 份
 ```
 
 选择哪个文件的顺序是：`DOMAINHUNTER_DB_FILE` 环境变量 → 已存在的 `puff.db`
 → 已存在的 `domainhunter.db` → 全新安装创建 `domainhunter.db`。
-既有部署因此完全不受影响，也不会在旁边多出一个空库。
+旧部署因此不会被动过，也不会在旁边多出一个空库；想改名的话停容器手动
+`mv` 即可，见 [MIGRATION.md](MIGRATION.md)。
 
 ## 环境变量
 
@@ -303,7 +305,7 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 
 - 有待执行迁移时启动会自动 `VACUUM INTO` 生成备份，失败即中止升级。
 - 管理端「系统设置 → 维护」可随时手动备份，只保留最近 5 份。
-- 恢复：停容器 → 用备份覆盖 `data/puff.db` → 删除 `puff.db-wal` / `puff.db-shm`
+- 恢复：停容器 → 用备份覆盖 `data/domainhunter.db` → 删除同名的 `-wal` / `-shm`
   → 重启。
 
 ## 故障排查

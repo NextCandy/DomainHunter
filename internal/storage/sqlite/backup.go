@@ -37,7 +37,7 @@ func (d *DB) Backup(label string) (string, error) {
 }
 
 // PruneBackups 只保留最近 keep 份自动备份，避免树莓派/NAS 上无限增长。
-// 只清理本程序生成的 puff-*.db，不会碰用户自己放进去的文件。
+// 只清理本程序生成的备份（见 isBackupName），不会碰用户自己放进去的文件。
 func (d *DB) PruneBackups(keep int) error {
 	if keep <= 0 {
 		keep = 5

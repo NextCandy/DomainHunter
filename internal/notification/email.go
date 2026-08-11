@@ -382,7 +382,7 @@ func (e *EmailNotifier) buildBatchHTMLContent(subject, message string) string {
 		if strings.HasPrefix(line, "时间: ") {
 			timestamp = strings.TrimPrefix(line, "时间: ")
 		} else if strings.Contains(line, ". ") && !strings.HasPrefix(line, "---") {
-			// 解析域名行 "1. test1.puff"
+			// 解析域名行 "1. example.com"
 			parts := strings.SplitN(line, ". ", 2)
 			if len(parts) == 2 {
 				domain := parts[1]

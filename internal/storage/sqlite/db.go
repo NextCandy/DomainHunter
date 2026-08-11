@@ -1,8 +1,7 @@
 // Package sqlite 提供 DomainHunter 的 SQLite 存储实现。
 //
-// 数据文件固定为 data/puff.db —— 这是为了无损兼容既有 Puff/DomainHunter 部署，
-// 与项目已经更名为 DomainHunter 无关。任何改名都需要一套可回滚的迁移机制，
-// 目前不值得为此冒险。
+// 数据文件默认是 data/domainhunter.db。从旧版 Puff 升级上来的部署里文件名是
+// puff.db，此时会继续使用它而不是在旁边新建一个空库 —— 见 ResolveFile。
 package sqlite
 
 import (

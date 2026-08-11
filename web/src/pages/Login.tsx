@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../lib/api";
+import { Logo } from "../components/Logo";
 import { Spinner } from "../components/ui";
 
 export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
@@ -28,9 +29,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
     <div className="flex min-h-full items-center justify-center px-4 py-10">
       <div className="w-full max-w-[340px]">
         <div className="mb-6 flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded bg-ink text-[12px] font-bold text-surface-raised">
-            DH
-          </span>
+          <Logo className="h-7 w-7" />
           <div>
             <h1 className="text-[16px] font-semibold tracking-tight">DomainHunter</h1>
             <p className="text-[12px] text-ink-muted">域名状态长期监控</p>

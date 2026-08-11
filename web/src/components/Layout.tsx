@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTheme } from "../lib/theme";
 import type { ThemeMode } from "../lib/theme";
+import { Logo } from "./Logo";
 import { cx } from "./ui";
 
 const NAV = [
@@ -37,9 +38,7 @@ export function Layout({
       <header className="sticky top-0 z-30 border-b border-line bg-surface-raised/95 backdrop-blur">
         <div className="mx-auto flex h-12 max-w-[1600px] items-center gap-3 px-3 sm:px-5">
           <div className="flex items-center gap-2">
-            <span className="grid h-6 w-6 place-items-center rounded bg-ink text-[11px] font-bold text-surface-raised">
-              DH
-            </span>
+            <Logo className="h-6 w-6" />
             <span className="text-[14px] font-semibold tracking-tight">DomainHunter</span>
           </div>
 
@@ -119,7 +118,7 @@ export function Layout({
       </main>
 
       <footer className="border-t border-line px-3 py-3 text-center text-[11px] text-ink-faint sm:px-5">
-        DomainHunter {version} · 数据文件 data/puff.db
+        DomainHunter {version}
       </footer>
     </div>
   );

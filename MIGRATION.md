@@ -1,4 +1,4 @@
-﻿# 升级与回滚指南
+# 升级与回滚指南
 
 本文覆盖三个阶段：
 
@@ -108,20 +108,25 @@ Telegram Bot Token 的明文，改为 `password_set` / `bot_token_set` 布尔值
 选择顺序：
 
 1. `DOMAINHUNTER_DB_FILE` 环境变量
-2. 已存在的 `puff.db`（**既有部署走这条，不会被改名**）
+2. 已存在的 `puff.db`（旧版遗留，**程序绝不自动改名**）
 3. 已存在的 `domainhunter.db`
 4. 都不存在（全新安装）→ 创建 `domainhunter.db`
 
-想把既有部署改成新名字（可选，程序两种名字都支持）：
+改名是可选的手动操作，程序两种名字都支持。要改就必须停机做，
+运行中改名会让已打开的文件句柄与新文件脱节：
 
 ```bash
 docker compose stop domainhunter
-cd data && mv puff.db domainhunter.db
+cd data
+cp -a puff.db backups/puff-$(date +%Y%m%d-%H%M%S)-pre-db-rename.db   # 回滚点
+mv puff.db domainhunter.db
 rm -f puff.db-wal puff.db-shm
+sqlite3 domainhunter.db "PRAGMA integrity_check; SELECT COUNT(*) FROM domains;"
 docker compose up -d
 ```
 
-> 注意：改名后如果要回滚到 v1，需要先把文件名改回 `puff.db`。
+回滚就是把 `domainhunter.db` 改回 `puff.db`（或直接用上面那份回滚点覆盖）。
+树莓派部署已在 2026-08-11 执行完这步，现在用的是 `domainhunter.db`。
 
 ### 2.7 仓库与镜像改名
 
@@ -153,7 +158,8 @@ Compose 里如果写的是 `image: domainhunter-go:latest`，改成 `domainhunte
 
 ```bash
 # 1. 先备份（升级流程也会自动备份，但手工留一份更稳）
-cp -a data/puff.db data/puff.db.pre-v2
+#    <库名> = domainhunter.db，旧部署未改名时是 puff.db
+cp -a data/<库名> data/<库名>.pre-v2
 
 # 2. 记录当前镜像，回滚时要用
 docker inspect DomainHunter --format '{{.Image}}'
@@ -189,8 +195,9 @@ docker compose up -d
 
 ```bash
 docker compose stop domainhunter
-cp -a data/backups/puff-YYYYMMDD-HHMMSS-pre-migration.db data/puff.db
-rm -f data/puff.db-wal data/puff.db-shm
+# 用 data/backups/ 里迁移前那份覆盖回去，文件名跟当前实际使用的库保持一致
+cp -a data/backups/<库名>-YYYYMMDD-HHMMSS-pre-migration.db data/<库名>
+rm -f data/<库名>-wal data/<库名>-shm
 docker compose up -d
 ```
 

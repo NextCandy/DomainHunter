@@ -42,8 +42,8 @@ web/                     React + TypeScript + Vite + Tailwind 管理端
 
 ```
                    ┌──────────────────────────────┐
-                   │        SQLite (puff.db)      │
-                   │  domains.next_check_at       │
+                   │            SQLite            │
+                   │    domains.next_check_at     │
                    └───────────────┬──────────────┘
                                    │ 每 5s 扫描到期域名
                                    ▼
@@ -166,7 +166,7 @@ LIMIT ?
 | `schema_migrations` | 已应用的迁移版本 |
 
 迁移在启动时执行，有待执行迁移时先 `VACUUM INTO` 生成一份一致备份
-（`data/backups/puff-*.db`，只保留最近 5 份），备份失败则中止升级。
+（`data/backups/<库名>-YYYYMMDD-HHMMSS-*.db`，只保留最近 5 份），备份失败则中止升级。
 
 历史表有保留上限（默认 180 天 / 每域名 200 条 / 原始报文仅在状态变化时保存且
 最多 16KB），保证长期运行不会把数据库撑爆。

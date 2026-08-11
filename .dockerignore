@@ -8,8 +8,6 @@ data
 .env
 domainhunter
 domainhunter.exe
-puff
-Puff
 
 # 前端只需要构建产物 web/dist，源码与依赖不进镜像上下文
 web/node_modules
