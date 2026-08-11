@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-11 · P0–P2 已合并进 `main` · 线上版本 `v2.4.0`
+> 最后更新：2026-08-12 · P0–P2 与 Bark 通知精简已合并进 `main` · Pi 版本 `v2.4.1-codex-2f7669d`
 
 ## 本次目标
 
@@ -33,6 +33,8 @@
 | 前端 | React 18 + TS + Vite + Tailwind，7 个页面，文件夹/导入导出/通知规则/Token 管理，go:embed 进单容器 |
 | 文档 | README / ARCHITECTURE.md / MIGRATION.md / 本文件 |
 | 改名 | 仓库、镜像、树莓派部署目录与 compose 项目名统一为 DomainHunter |
+
+Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动页脚，仅保留状态摘要，正文约 480 字节以内。
 
 ## 架构变化
 
@@ -173,6 +175,8 @@ react-dom / react-router-dom，构建产物 gzip 后约 72KB，**零外部请求
 .com/.net → rdap    .im → whois_ls    .do → fallback   PASS
 详情 / 观测历史 / 查询尝试 / 原始报文          PASS
 Bark 测试推送（真机收到）                      PASS
+email / Telegram / Bark 真实测试（2026-08-12）  PASS
+Bark 精简正文回归测试                            PASS
 未配置渠道给出明确提示                          PASS
 /health                                        PASS
 ```
@@ -208,8 +212,8 @@ HEALTHCHECK                                                 healthy
 ## 当前部署状态
 
 ```
-主机        树莓派 Pi (aarch64)，SSH 100.116.187.99:22370
-容器        DomainHunter        镜像 domainhunter:latest (= v2.2.1)
+主机        树莓派 Pi (aarch64)，SSH 192.168.50.180:22370
+容器        DomainHunter        镜像 domainhunter:latest (= v2.4.1-codex-2f7669d)
 端口        22334 → 8080        网络 domainhunter_default
 compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/compose.yaml
 数据目录    /opt/docker-migrated/domainhunter （即容器内 /app/data）
@@ -269,18 +273,20 @@ tag         backup-before-domainhunter-refactor-20260811-0852  ← 回滚到重�
 改动前 commit 1f989c7f02bf7303696112a217cdde4fa5313581
 旧镜像      domainhunter-go:v1-rollback (31cc46c9b25f)  ← v1
             domainhunter:v2.1.0-rollback、domainhunter:v2.2.0  ← v2 各阶段
+            domainhunter:v2.4.0-rollback-20260812-0003  ← Bark 修复前
 数据库备份  /opt/docker-migrated/domainhunter/backups/
+              domainhunter-20260812-0003-pre-bark.db
               puff-20260811-100852-pre-v2-manual.db      （重构前基线，817 域名）
               puff-20260811-143159-pre-owned-cleanup.db  （清理已拥有域名前，695）
               puff-20260811-153045-pre-db-rename.db      （改名前冷拷贝，551）
 compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
              /opt/docker-migrated/domainhunter/compose.yaml.pre-dbrename-comment
+             /opt/docker-migrated/domainhunter/compose.yaml.pre-bark-20260812-0003
 ```
 
 ## 未完成项
 
-- 没有打 Release tag，因此 GHCR 上还没有 v2 镜像；树莓派使用 ARM64 本地构建镜像。
-- 本次 QA 使用本地替身验证通知规则、模板与摘要调度，未向真实外部渠道发送测试消息。
+- 飞书机器人与自定义 Webhook 当前未启用，因此未发送真实测试消息。
 
 ## 已知问题
 
