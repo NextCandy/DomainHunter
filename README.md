@@ -6,6 +6,12 @@ DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。它�
 
 单体 Go 应用 + SQLite + 单容器，适合树莓派、Synology NAS 与普通 Linux VPS 自托管。
 
+| 文档 | 内容 |
+| --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 目录结构、运行时数据流、查询引擎的决策顺序、调度与存储设计 |
+| [MIGRATION.md](MIGRATION.md) | 从 Puff / v1 升级、数据库文件名、密码迁移、升级步骤与回滚 |
+| [HANDOFF.md](HANDOFF.md) | 重构交接：改了什么、验证到什么程度、已知问题、踩坑记录 |
+
 ## 设计目标
 
 - 使用 IANA RDAP bootstrap 动态补充 TLD → RDAP 映射，内置静态配置作为离线兜底；
@@ -54,6 +60,26 @@ HTTP  →  Service  →  Scheduler  →  Worker Pool  →  Query Engine  →  Pr
 ```
 
 完整说明见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+## 管理界面
+
+React + TypeScript + Vite + Tailwind，构建产物经 `go:embed` 打进同一个二进制，
+**生产运行时不需要 Node，仍然只有一个容器**。支持浅色 / 深色 / 跟随系统，
+窄屏下表格自动换成卡片列表。
+
+| 页面 | 作用 |
+| --- | --- |
+| 概览 | 状态统计、最近状态变化、即将到期、最近可注册、查询失败、查询源健康 |
+| 域名 | 全量列表：搜索、状态 / 后缀 / 注册商 / 查询源筛选、排序、分页、批量检查与删除、★ 只看收藏 |
+| 抢注看板 | **只**显示处于掉落流程的域名（可注册 / 待删除 / 赎回期 / 已过期 / 宽限期），按抢注紧迫度排序并给出距今天数 |
+| 查询历史 | 全局状态变化 + 按域名查看完整状态时间线与各查询源历史 |
+| 查询源 | 各 Provider 健康度、IANA bootstrap 状态、查询策略编辑 |
+| 通知 | 五个渠道的配置与单独测试、通知历史 |
+| 系统设置 | 监控参数、历史保留策略、账户、备份与维护 |
+
+域名详情是右侧抽屉，分四个标签页：概览 / 查询证据 / 状态时间线 / 原始报文。
+「查询证据」会列出本次结论里**每个查询源分别看到了什么**（状态、耗时、错误），
+这是回答"当前状态为什么是这个结果"的地方。
 
 ## Docker Compose
 
@@ -137,12 +163,18 @@ data/
   "tlds": {
     "im": { "providers": ["whois_ls", "rdap", "whois"], "validate_available": true },
     "do": { "providers": ["fallback", "rdap", "whois"], "validate_available": true }
-  }
+  },
+  "rate_limits": { "fallback": "1s", "whois_ls": "1s", "whois:cn": "2s" }
 }
 ```
 
 `validate_available` 取 `true`（= `"distrust"`，不单独采信）、`"confirm"`
 （需要第二个来源印证）或 `"trust"`。**留空即保持默认行为**，无需任何配置。
+
+`rate_limits` 按 `provider` 或 `provider:tld` 限制两次查询的最小间隔。
+`whois_ls` 与 `fallback` 默认各 `1s`：它们指向公共网关或单实例本地服务，
+几十个请求同时打过去会让它们从 2 秒返回退化成 20 秒超时，反而把本来能查到的
+域名变成 `unknown`。通用的 RDAP / WHOIS 默认不限速。
 
 ### 关于 `.im` 与 `.do`
 
@@ -155,6 +187,24 @@ data/
 
 `available` `registered` `grace` `redemption` `pending_delete` `expired`
 `transfer_locked` `hold` `unknown` `error` `skipped`
+
+## 历史数据
+
+每次查询都可以留下一条观测（`domain_observations`）和每个查询源的一次尝试
+（`query_attempts`）。为了让树莓派 / NAS 长期运行不被撑爆，写入与保留都有上限，
+在管理端「系统设置 → 历史数据保留」里调：
+
+| 设置 | 默认 | 作用 |
+| --- | --- | --- |
+| 保留天数 | 180 | 超过就清理；0 表示不按时间清理 |
+| 每域名最多保留 | 200 | 超过就丢最旧的；0 表示不限制 |
+| **心跳间隔（小时）** | **6** | 状态**没有变化**时两条观测的最小间隔；0 表示每次查询都记 |
+| 原始报文 | 仅状态变化时保存 | 也可选总是保存 / 不保存 |
+| 单条报文上限 | 16 KB | 超出截断 |
+
+心跳间隔是最关键的一项：800 个域名按 10 分钟一轮，每次都记就是**每天 11 万行**
+几乎完全相同的数据。默认设置下状态变化一条不漏，其余每 6 小时留一个心跳。
+清理任务每 6 小时跑一次。
 
 ## 通知
 
@@ -178,6 +228,47 @@ data/
 
 再加新渠道只需实现 `notification.Notifier` 接口，并在
 `Manager.RegisterAll` / `ApplyConfig` 里各加一行。
+
+## API
+
+接口都需要登录（Cookie 会话），写操作要过 CSRF 校验。**旧版接口全部保留，
+路径与响应结构不变**，新能力放在 `/api/v2/*`。
+
+```
+POST   /api/login              GET  /api/session      POST /api/logout
+GET    /api/csrf
+
+GET    /api/domains            分页 + 搜索 + 状态筛选（旧版）
+GET    /api/domain/{name}      POST /api/domain/check/{name}
+POST   /api/domain/add         POST /api/domain/batch-add
+DELETE /api/domain/remove/{name}
+POST   /api/domain/whois-raw/{name}
+GET    /api/stats              POST /api/monitor/{start,stop,reload}
+GET    /api/settings           POST /api/settings/{smtp,telegram,bark,feishu,webhook,monitor}
+POST   /api/notification/test  POST /api/test/{email,telegram}
+POST   /api/database/clean-orphaned
+GET    /health                 GET  /api/health/providers
+
+GET    /api/domains/{domain}/history      状态时间线
+GET    /api/domains/{domain}/attempts     各查询源的历史尝试
+
+GET    /api/v2/overview        GET  /api/v2/meta       GET /api/v2/facets
+GET    /api/v2/domains         支持 statuses=a,b,c 多状态并集
+POST   /api/v2/domains         POST /api/v2/domains/{batch-add,batch-delete,batch-check}
+GET    /api/v2/domains/{domain}           详情 + 证据 + 历史 + 尝试
+PATCH  /api/v2/domains/{domain}           收藏 / 备注 / 标签 / 通知开关
+DELETE /api/v2/domains/{domain}           POST /api/v2/domains/{domain}/check
+GET    /api/v2/observations    GET  /api/v2/providers  GET /api/v2/notifications
+POST   /api/v2/notifications/test/{channel}
+GET    /api/v2/settings        PUT  /api/v2/settings/{query-policy,history,log-level}
+GET    /api/v2/backups         POST /api/v2/backups
+```
+
+`GET /api/v2/facets` 返回**全量**的后缀 / 注册商 / 查询源 / 状态 / 标签清单及各自
+数量——筛选下拉框据此渲染，翻页不会让可选项跟着变。
+
+> 安全调整：`GET /api/settings` 不再回吐 SMTP 密码与 Telegram Bot Token 明文，
+> 改为 `password_set` / `bot_token_set` 布尔值；保存时对应字段留空表示不修改。
 
 ## 开发
 
@@ -225,7 +316,9 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 | `.do` 显示 `unknown` | 确认本地 whois-domain-lookup 服务可达（`extra_hosts` 是否生效） |
 | 反代下登录后立刻掉线 | 反代需要透传 `X-Forwarded-Proto`，或显式设置 `DOMAINHUNTER_COOKIE_SECURE` |
 | 前端写操作 403 | CSRF 校验失败；刷新页面重新获取令牌，或检查反代是否吞掉了 `Origin` |
-| 数据库越来越大 | 「系统设置 → 历史数据保留」下调保留天数 / 每域名条数 / 原始报文策略 |
+| 数据库越来越大 | 「系统设置 → 历史数据保留」下调心跳间隔以外的项，或确认心跳间隔不是 0 |
+| `sqlite3` 命令行报 `database is locked` | 应用正在写。加 `-cmd '.timeout 15000'` 即可；应用自身有 10 秒 busy timeout，不受影响 |
+| 退出登录后其他设备也要重新登录 | 这是有意的：退出与改密码都会轮换签名密钥，撤销所有设备的免登录令牌 |
 
 ## 发布
 

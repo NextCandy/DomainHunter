@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-11 · 已合并进 `main`（`refactor/domainhunter-v2` 保留） · 线上版本 `v2.2.0`
+> 最后更新：2026-08-11 · 已合并进 `main` · 线上版本 `v2.2.0`
 
 ## 本次目标
 
@@ -248,14 +248,13 @@ docker compose -p domainhunter -f compose.yaml up -d
 **回滚点清单**
 
 ```
-分支        main（已由 refactor/domainhunter-v2 快进合并，分支保留未删）
-tag         backup-before-domainhunter-refactor-20260811-0852
+分支        main（refactor/domainhunter-v2 已快进合并进来并删除）
+tag         backup-before-domainhunter-refactor-20260811-0852  ← 回滚到重构前用它
 改动前 commit 1f989c7f02bf7303696112a217cdde4fa5313581
 旧镜像      domainhunter-go:v1-rollback (31cc46c9b25f)
 数据库备份  /opt/docker-migrated/domainhunter/backups/
-              puff-20260811-100852-pre-v2-manual.db   （升级前，817 域名）
-              puff-20260811-100918-pre-migration.db   （迁移前自动生成）
-              puff-20260811-140520-pre-rename.db      （改名前，771 域名）
+              puff-20260811-100852-pre-v2-manual.db      （重构前基线，817 域名）
+              puff-20260811-143159-pre-owned-cleanup.db  （清理已拥有域名前，695）
 compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
 ```
 
