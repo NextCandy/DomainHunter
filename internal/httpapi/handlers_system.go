@@ -99,9 +99,10 @@ func (s *Server) handleCleanOrphaned(w http.ResponseWriter, r *http.Request) {
 // handleProviders 查询源健康状态
 func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, r, http.StatusOK, map[string]any{
-		"providers": s.deps.Engine.Health().Snapshot(s.deps.Engine.Providers().Names()),
-		"policy":    s.deps.Engine.Policy().Config(),
-		"bootstrap": registry.Bootstrap(),
+		"providers":   s.deps.Engine.Health().Snapshot(s.deps.Engine.Providers().Names()),
+		"policy":      s.deps.Engine.Policy().Config(),
+		"rate_limits": s.deps.Engine.Limiter().Rules(),
+		"bootstrap":   registry.Bootstrap(),
 	})
 }
 
@@ -207,7 +208,7 @@ func (s *Server) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://api.github.com/repos/NextCandy/DomainHunter-go/releases/latest", nil)
+		"https://api.github.com/repos/NextCandy/DomainHunter/releases/latest", nil)
 	if err != nil {
 		s.writeJSON(w, r, http.StatusOK, map[string]any{"error": "无法检查更新", "currentVersion": current})
 		return

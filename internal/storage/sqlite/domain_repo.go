@@ -236,23 +236,78 @@ func (r *DomainRepo) ScheduleNext(ctx context.Context, name string, next time.Ti
 
 // BackfillSchedule 为 next_check_at 为空的域名补一个初始时间。
 //
-// 升级后第一次启动时，用 domain_results.last_checked + 间隔推算，
-// 避免 817 个域名在同一秒全部到期造成查询风暴。
+// 只在升级后的第一次启动生效。已有的 last_checked + 间隔如果还在未来就沿用；
+// 否则把这些"已经到期"的域名**均匀打散**到接下来的一个间隔窗口里 ——
+// 否则几百个域名会在同一秒全部到期，把注册局和本地备用服务打爆。
 func (r *DomainRepo) BackfillSchedule(ctx context.Context, defaultInterval time.Duration) (int64, error) {
 	if defaultInterval <= 0 {
 		defaultInterval = 5 * time.Minute
 	}
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE domains SET next_check_at = COALESCE(
-			(SELECT datetime(r.last_checked, ?) FROM domain_results r WHERE lower(r.domain) = lower(domains.name)),
-			?)
-		 WHERE next_check_at IS NULL`,
-		fmt.Sprintf("+%d seconds", int(defaultInterval.Seconds())), time.Now())
+
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT d.name, r.last_checked FROM domains d
+		 LEFT JOIN domain_results r ON lower(r.domain) = lower(d.name)
+		 WHERE d.next_check_at IS NULL
+		 ORDER BY d.id ASC`)
+	if err != nil {
+		return 0, fmt.Errorf("查询待补齐调度时间的域名失败: %w", err)
+	}
+
+	type pending struct {
+		name        string
+		lastChecked sql.NullTime
+	}
+	var todo []pending
+	for rows.Next() {
+		var item pending
+		if err := rows.Scan(&item.name, &item.lastChecked); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		todo = append(todo, item)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(todo) == 0 {
+		return 0, nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `UPDATE domains SET next_check_at = ? WHERE name = ?`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	now := time.Now()
+	var updated int64
+	for i, item := range todo {
+		next := now
+		if item.lastChecked.Valid {
+			next = item.lastChecked.Time.Add(defaultInterval)
+		}
+		if !next.After(now) {
+			// 已经到期：按顺序均摊到 [now, now+interval) 内的一个时刻
+			offset := time.Duration(float64(defaultInterval) * float64(i) / float64(len(todo)))
+			next = now.Add(offset)
+		}
+		if _, err := stmt.ExecContext(ctx, next, item.name); err != nil {
+			return 0, fmt.Errorf("补齐调度时间失败(%s): %w", item.name, err)
+		}
+		updated++
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return updated, nil
 }
 
 // LastNotifiedStatus 读取最近一次已通知的状态

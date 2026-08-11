@@ -1,14 +1,12 @@
 package httpapi
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
 
 	"DomainHunter/internal/config"
 	"DomainHunter/internal/logger"
-	"DomainHunter/internal/notification"
 )
 
 // handleGetSettings 旧版设置读取。
@@ -58,6 +56,18 @@ func (s *Server) handleSettingsV2(w http.ResponseWriter, r *http.Request) {
 		"telegram": map[string]any{
 			"bot_token_set": cfg.Telegram.BotToken != "",
 			"chat_id":       cfg.Telegram.ChatID, "enabled": cfg.Telegram.Enabled,
+		},
+		"bark": map[string]any{
+			"url": cfg.Bark.URL, "group": cfg.Bark.Group, "sound": cfg.Bark.Sound,
+			"level": cfg.Bark.Level, "icon": cfg.Bark.Icon, "enabled": cfg.Bark.Enabled,
+		},
+		"feishu": map[string]any{
+			"webhook": cfg.Feishu.Webhook, "secret_set": cfg.Feishu.Secret != "",
+			"enabled": cfg.Feishu.Enabled,
+		},
+		"webhook": map[string]any{
+			"url": cfg.Webhook.URL, "secret_set": cfg.Webhook.Secret != "",
+			"enabled": cfg.Webhook.Enabled,
 		},
 		"monitor": map[string]any{
 			"check_interval":   int(cfg.Monitor.CheckInterval.Seconds()),
@@ -112,9 +122,6 @@ func (s *Server) handleSMTPSettings(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := s.deps.Notification.UpdateEmailConfig(smtp); err != nil {
-		s.log.Error(logger.Fields{"error": err.Error()}, "更新邮件通知器配置失败")
-	}
 	s.writeJSON(w, r, http.StatusOK, map[string]string{"status": "success", "message": "SMTP设置保存成功"})
 }
 
@@ -144,10 +151,73 @@ func (s *Server) handleTelegramSettings(w http.ResponseWriter, r *http.Request) 
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := s.deps.Notification.UpdateTelegramConfig(telegram); err != nil {
-		s.log.Error(logger.Fields{"error": err.Error()}, "更新Telegram通知器配置失败")
-	}
 	s.writeJSON(w, r, http.StatusOK, map[string]string{"status": "success", "message": "Telegram设置保存成功"})
+}
+
+// handleBarkSettings 保存 Bark 设置
+func (s *Server) handleBarkSettings(w http.ResponseWriter, r *http.Request) {
+	var req config.BarkConfig
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.deps.Settings.UpdateBark(r.Context(), req); err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]string{"status": "success", "message": "Bark 设置保存成功"})
+}
+
+// handleFeishuSettings 保存飞书机器人设置
+func (s *Server) handleFeishuSettings(w http.ResponseWriter, r *http.Request) {
+	var req config.FeishuConfig
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	// 留空表示沿用已保存的密钥
+	if strings.TrimSpace(req.Secret) == "" {
+		req.Secret = s.config().Feishu.Secret
+	}
+	if err := s.deps.Settings.UpdateFeishu(r.Context(), req); err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]string{"status": "success", "message": "飞书设置保存成功"})
+}
+
+// handleWebhookSettings 保存通用 Webhook 设置
+func (s *Server) handleWebhookSettings(w http.ResponseWriter, r *http.Request) {
+	var req config.WebhookConfig
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if strings.TrimSpace(req.Secret) == "" {
+		req.Secret = s.config().Webhook.Secret
+	}
+	if err := s.deps.Settings.UpdateWebhook(r.Context(), req); err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]string{"status": "success", "message": "Webhook 设置保存成功"})
+}
+
+// handleChannelTest 按名称测试单个通知渠道
+func (s *Server) handleChannelTest(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("channel")
+	notifier := s.deps.Notification.Find(name)
+	if notifier == nil {
+		s.writeJSON(w, r, http.StatusOK, map[string]any{"status": "error", "message": "未找到通知渠道: " + name})
+		return
+	}
+	if !notifier.Enabled() {
+		s.writeJSON(w, r, http.StatusOK, map[string]any{"status": "error", "message": "该渠道未启用或未配置完整"})
+		return
+	}
+	if err := notifier.Test(r.Context()); err != nil {
+		s.log.Error(logger.Fields{"channel": name, "error": err.Error()}, "测试通知发送失败")
+		s.writeJSON(w, r, http.StatusOK, map[string]any{"status": "error", "message": "发送失败: " + err.Error()})
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]any{"status": "success", "message": "测试通知已发送"})
 }
 
 // handleMonitorSettings 保存监控参数并热重载
@@ -177,7 +247,7 @@ func (s *Server) handleMonitorSettings(w http.ResponseWriter, r *http.Request) {
 
 // handleHistorySettings 保存历史保留策略
 func (s *Server) handleHistorySettings(w http.ResponseWriter, r *http.Request) {
-	var req config.HistoryConfig
+	req := s.config().History
 	if !s.decodeJSON(w, r, &req) {
 		return
 	}
@@ -218,60 +288,54 @@ func (s *Server) handleLogLevel(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, r, http.StatusOK, map[string]string{"status": "success", "message": "日志级别已更新"})
 }
 
-// handleNotificationTest 测试所有已启用的通知渠道
+// handleNotificationTest 测试所有已启用的通知渠道。
+//
+// 兼容性：email_status / telegram_status 两个字段保持不变，
+// 新渠道的结果放在 channels 里，旧前端不受影响。
 func (s *Server) handleNotificationTest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.writeError(w, r, http.StatusMethodNotAllowed, "不允许的请求方法")
 		return
 	}
-	cfg := s.config()
 
-	emailStatus := testChannel(r.Context(), s.deps.Notification, "email", cfg.SMTP.Enabled)
-	telegramStatus := testChannel(r.Context(), s.deps.Notification, "telegram", cfg.Telegram.Enabled)
-
-	if !cfg.SMTP.Enabled && !cfg.Telegram.Enabled {
-		s.writeJSON(w, r, http.StatusOK, map[string]any{
-			"status":          "warning",
-			"message":         "未启用任何通知方式，请先在设置中配置并启用邮件或Telegram通知",
-			"email_status":    emailStatus,
-			"telegram_status": telegramStatus,
-			"timestamp":       time.Now(),
-		})
-		return
+	channels := map[string]string{}
+	enabled, failed := 0, 0
+	for _, notifier := range s.deps.Notification.Notifiers() {
+		if !notifier.Enabled() {
+			channels[notifier.Name()] = "未启用"
+			continue
+		}
+		enabled++
+		if err := notifier.Test(r.Context()); err != nil {
+			channels[notifier.Name()] = "发送失败: " + err.Error()
+			failed++
+			s.log.Error(logger.Fields{"channel": notifier.Name(), "error": err.Error()}, "测试通知发送失败")
+			continue
+		}
+		channels[notifier.Name()] = "发送成功"
 	}
 
-	emailFailed := cfg.SMTP.Enabled && emailStatus != "发送成功"
-	telegramFailed := cfg.Telegram.Enabled && telegramStatus != "发送成功"
-
-	overall, message := "success", "测试通知发送完成"
-	switch {
-	case emailFailed && telegramFailed:
-		overall, message = "error", "所有通知方式发送失败"
-	case emailFailed || telegramFailed:
-		overall, message = "warning", "部分通知方式发送失败"
-	}
-
-	s.writeJSON(w, r, http.StatusOK, map[string]any{
-		"status":          overall,
-		"message":         message,
-		"email_status":    emailStatus,
-		"telegram_status": telegramStatus,
+	response := map[string]any{
+		"channels":        channels,
+		"email_status":    channels["email"],
+		"telegram_status": channels["telegram"],
 		"timestamp":       time.Now(),
-	})
-}
-
-func testChannel(ctx context.Context, mgr *notification.Manager, name string, enabled bool) string {
-	if !enabled {
-		return "未启用"
 	}
-	notifier := mgr.Find(name)
-	if notifier == nil {
-		return "通知器未初始化"
+	switch {
+	case enabled == 0:
+		response["status"] = "warning"
+		response["message"] = "未启用任何通知方式，请先在通知页面配置并启用至少一个渠道"
+	case failed == enabled:
+		response["status"] = "error"
+		response["message"] = "所有通知方式发送失败"
+	case failed > 0:
+		response["status"] = "warning"
+		response["message"] = "部分通知方式发送失败"
+	default:
+		response["status"] = "success"
+		response["message"] = "测试通知发送完成"
 	}
-	if err := notifier.Test(ctx); err != nil {
-		return "发送失败: " + err.Error()
-	}
-	return "发送成功"
+	s.writeJSON(w, r, http.StatusOK, response)
 }
 
 // handleTestEmail 单独测试邮件

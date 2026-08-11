@@ -35,12 +35,20 @@ type Engine struct {
 
 // NewEngine 创建查询引擎
 func NewEngine(providers *Registry, policy *Policy) *Engine {
-	return &Engine{
+	engine := &Engine{
 		providers: providers,
 		policy:    policy,
 		health:    NewHealthTracker(),
 		limiter:   NewLimiter(),
 	}
+	engine.ApplyPolicy(policy.Config())
+	return engine
+}
+
+// ApplyPolicy 在策略变更后同步限速规则
+func (e *Engine) ApplyPolicy(cfg Config) {
+	e.policy.Update(cfg)
+	e.limiter.Apply(cfg.RateLimits, DefaultRateLimits)
 }
 
 // Providers 返回底层 Provider 集合

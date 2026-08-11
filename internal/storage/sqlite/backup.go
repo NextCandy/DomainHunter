@@ -19,7 +19,7 @@ func (d *DB) Backup(label string) (string, error) {
 		return "", fmt.Errorf("创建备份目录失败: %w", err)
 	}
 
-	name := fmt.Sprintf("puff-%s", time.Now().Format("20060102-150405"))
+	name := fmt.Sprintf("%s-%s", d.backupPrefix(), time.Now().Format("20060102-150405"))
 	if label = sanitizeLabel(label); label != "" {
 		name += "-" + label
 	}
@@ -59,10 +59,10 @@ func (d *DB) PruneBackups(keep int) error {
 		if entry.IsDir() {
 			continue
 		}
-		name := entry.Name()
-		if !strings.HasPrefix(name, "puff-") || !strings.HasSuffix(name, ".db") {
+		if !isBackupName(entry.Name()) {
 			continue
 		}
+		name := entry.Name()
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -94,12 +94,27 @@ func (d *DB) ListBackups() ([]string, error) {
 	}
 	var out []string
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "puff-") && strings.HasSuffix(entry.Name(), ".db") {
+		if !entry.IsDir() && isBackupName(entry.Name()) {
 			out = append(out, entry.Name())
 		}
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(out)))
 	return out, nil
+}
+
+// backupPrefix 备份文件名前缀，跟随实际使用的数据库文件名
+func (d *DB) backupPrefix() string {
+	return strings.TrimSuffix(filepath.Base(d.path), ".db")
+}
+
+// isBackupName 判断是否是本程序生成的备份。
+// 同时认 puff- 与 domainhunter- 两个前缀，改名前后的备份都能被列出与清理。
+func isBackupName(name string) bool {
+	if !strings.HasSuffix(name, ".db") {
+		return false
+	}
+	return strings.HasPrefix(name, LegacyFile[:len(LegacyFile)-3]+"-") ||
+		strings.HasPrefix(name, DefaultFile[:len(DefaultFile)-3]+"-")
 }
 
 func sanitizeLabel(label string) string {

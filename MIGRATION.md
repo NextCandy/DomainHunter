@@ -1,4 +1,4 @@
-# 升级与回滚指南
+﻿# 升级与回滚指南
 
 本文覆盖三个阶段：
 
@@ -131,7 +131,7 @@ docker compose logs --tail 50
 
 ```bash
 # 用记录下来的旧镜像 ID 覆盖 image 字段后重启，或者
-docker tag <旧镜像ID> domainhunter-go:latest
+docker tag <旧镜像ID> domainhunter:latest
 docker compose up -d
 ```
 

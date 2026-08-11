@@ -1,4 +1,4 @@
-# GoReleaser 直接编译 ./cmd/domainhunter；前端产物 web/dist 已随仓库提交，
+﻿# GoReleaser 直接编译 ./cmd/domainhunter；前端产物 web/dist 已随仓库提交，
 # 通过 go:embed 打进二进制，因此这里不需要 Node 环境。
 version: 2
 project_name: DomainHunter
@@ -63,6 +63,6 @@ changelog:
 release:
   github:
     owner: NextCandy
-    name: DomainHunter-go
+    name: DomainHunter
 
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json

@@ -2,6 +2,7 @@ package notification
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -78,8 +79,19 @@ func (t *TelegramNotifier) GetType() string {
 	return "telegram"
 }
 
+// Name 实现 Notifier
+func (t *TelegramNotifier) Name() string { return t.GetType() }
+
+// Enabled 实现 Notifier
+func (t *TelegramNotifier) Enabled() bool { return t.IsEnabled() }
+
+// Send 实现 Notifier
+func (t *TelegramNotifier) Send(_ context.Context, event Event) error {
+	return t.SendMessage(event.Subject, event.Body)
+}
+
 // Test 测试Telegram连接
-func (t *TelegramNotifier) Test() error {
+func (t *TelegramNotifier) Test(context.Context) error {
 	if !t.enabled {
 		return fmt.Errorf("Telegram通知未启用")
 	}

@@ -94,6 +94,57 @@ func (s *SettingsService) UpdateTelegram(ctx context.Context, telegram config.Te
 	return nil
 }
 
+// UpdateBark 更新 Bark 配置
+func (s *SettingsService) UpdateBark(ctx context.Context, bark config.BarkConfig) error {
+	if err := s.repo.Upsert(ctx, map[string]string{
+		config.KeyBarkURL:     bark.URL,
+		config.KeyBarkGroup:   bark.Group,
+		config.KeyBarkSound:   bark.Sound,
+		config.KeyBarkLevel:   bark.Level,
+		config.KeyBarkIcon:    bark.Icon,
+		config.KeyBarkEnabled: strconv.FormatBool(bark.Enabled),
+	}); err != nil {
+		return fmt.Errorf("保存设置失败: %w", err)
+	}
+
+	next := s.Config().Clone()
+	next.Bark = bark
+	s.broadcast(next)
+	return nil
+}
+
+// UpdateFeishu 更新飞书机器人配置
+func (s *SettingsService) UpdateFeishu(ctx context.Context, feishu config.FeishuConfig) error {
+	if err := s.repo.Upsert(ctx, map[string]string{
+		config.KeyFeishuWebhook: feishu.Webhook,
+		config.KeyFeishuSecret:  feishu.Secret,
+		config.KeyFeishuEnabled: strconv.FormatBool(feishu.Enabled),
+	}); err != nil {
+		return fmt.Errorf("保存设置失败: %w", err)
+	}
+
+	next := s.Config().Clone()
+	next.Feishu = feishu
+	s.broadcast(next)
+	return nil
+}
+
+// UpdateWebhook 更新通用 Webhook 配置
+func (s *SettingsService) UpdateWebhook(ctx context.Context, webhook config.WebhookConfig) error {
+	if err := s.repo.Upsert(ctx, map[string]string{
+		config.KeyWebhookURL:     webhook.URL,
+		config.KeyWebhookSecret:  webhook.Secret,
+		config.KeyWebhookEnabled: strconv.FormatBool(webhook.Enabled),
+	}); err != nil {
+		return fmt.Errorf("保存设置失败: %w", err)
+	}
+
+	next := s.Config().Clone()
+	next.Webhook = webhook
+	s.broadcast(next)
+	return nil
+}
+
 // UpdateMonitor 更新监控参数（秒）
 func (s *SettingsService) UpdateMonitor(ctx context.Context, checkInterval, concurrentLimit, timeout int) error {
 	if checkInterval < 5 {
@@ -134,10 +185,11 @@ func (s *SettingsService) UpdateHistory(ctx context.Context, history config.Hist
 	}
 
 	if err := s.repo.Upsert(ctx, map[string]string{
-		config.KeyHistoryDays:     strconv.Itoa(history.RetentionDays),
-		config.KeyHistoryMax:      strconv.Itoa(history.MaxPerDomain),
-		config.KeyHistoryRawMode:  history.RawMode,
-		config.KeyHistoryRawBytes: strconv.Itoa(history.RawMaxBytes),
+		config.KeyHistoryDays:      strconv.Itoa(history.RetentionDays),
+		config.KeyHistoryMax:       strconv.Itoa(history.MaxPerDomain),
+		config.KeyHistoryRawMode:   history.RawMode,
+		config.KeyHistoryRawBytes:  strconv.Itoa(history.RawMaxBytes),
+		config.KeyHistoryHeartbeat: strconv.Itoa(history.HeartbeatHours),
 	}); err != nil {
 		return fmt.Errorf("保存设置失败: %w", err)
 	}

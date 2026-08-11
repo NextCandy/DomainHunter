@@ -232,7 +232,8 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 		if filter.Status != "" && string(item.Status) != filter.Status {
 			continue
 		}
-		if tldFilter != "" && !strings.HasSuffix(strings.ToLower(item.Name), "."+tldFilter) {
+		// 后缀精确匹配：选 cn 不会把 com.cn 也带进来，与筛选项列表一一对应
+		if tldFilter != "" && TLDOf(item.Name) != tldFilter {
 			continue
 		}
 		if registrarFilter != "" && !strings.Contains(strings.ToLower(item.Registrar), registrarFilter) {
@@ -307,6 +308,106 @@ func beforePtr(a, b *time.Time) bool {
 	default:
 		return a.Before(*b)
 	}
+}
+
+// FacetItem 一个筛选项及其命中数量
+type FacetItem struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+// Facets 域名列表的可选筛选项。
+//
+// 前端的后缀/注册商下拉框必须列出**全部**取值，而不是当前这一页出现过的那些，
+// 否则翻页会让筛选项跟着变。
+type Facets struct {
+	Total      int         `json:"total"`
+	TLDs       []FacetItem `json:"tlds"`
+	Registrars []FacetItem `json:"registrars"`
+	Providers  []FacetItem `json:"providers"`
+	Statuses   []FacetItem `json:"statuses"`
+	Tags       []FacetItem `json:"tags"`
+}
+
+// Facets 统计全部域名的可选筛选项
+func (s *DomainService) Facets(ctx context.Context) (*Facets, error) {
+	entries, err := s.domains.List(ctx, false)
+	if err != nil {
+		return nil, fmt.Errorf("获取域名列表失败: %w", err)
+	}
+	results, err := s.results.LoadAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("加载域名结果失败: %w", err)
+	}
+
+	tlds := map[string]int{}
+	registrars := map[string]int{}
+	providers := map[string]int{}
+	statuses := map[string]int{}
+	tags := map[string]int{}
+
+	for _, entry := range entries {
+		tlds[TLDOf(entry.Name)]++
+		for _, tag := range entry.Tags {
+			if tag = strings.TrimSpace(tag); tag != "" {
+				tags[tag]++
+			}
+		}
+
+		res, ok := results[strings.ToLower(entry.Name)]
+		if !ok {
+			statuses[string(domain.StatusUnknown)]++
+			providers["pending"]++
+			continue
+		}
+		statuses[string(res.Status)]++
+		if provider := strings.TrimSpace(res.QueryMethod); provider != "" {
+			providers[provider]++
+		}
+		if registrar := strings.TrimSpace(res.Registrar); registrar != "" &&
+			!strings.Contains(registrar, "不支持") {
+			registrars[registrar]++
+		}
+	}
+
+	return &Facets{
+		Total:      len(entries),
+		TLDs:       sortFacets(tlds),
+		Registrars: sortFacets(registrars),
+		Providers:  sortFacets(providers),
+		Statuses:   sortFacets(statuses),
+		Tags:       sortFacets(tags),
+	}, nil
+}
+
+// sortFacets 按数量降序、同数量时按名称升序，保证下拉框顺序稳定
+func sortFacets(counts map[string]int) []FacetItem {
+	out := make([]FacetItem, 0, len(counts))
+	for value, count := range counts {
+		if value == "" {
+			continue
+		}
+		out = append(out, FacetItem{Value: value, Count: count})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Value < out[j].Value
+	})
+	return out
+}
+
+// TLDOf 返回域名的后缀。优先用内置的 TLD 表做最长后缀匹配，
+// 这样 a.com.cn 会得到 com.cn 而不是 cn；表里没有的后缀退回第一个点之后的部分。
+func TLDOf(name string) string {
+	if tld := registry.FindBestTLD(name); tld != "" {
+		return tld
+	}
+	if index := strings.Index(name, "."); index >= 0 {
+		return strings.ToLower(name[index+1:])
+	}
+	return ""
 }
 
 // Get 返回单个域名的当前状态

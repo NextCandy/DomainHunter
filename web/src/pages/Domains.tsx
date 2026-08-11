@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
-import type { DomainListResult } from "../lib/api";
+import type { DomainListResult, Facets } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { DomainTable } from "../components/DomainTable";
 import { DomainDrawer } from "../components/DomainDrawer";
 import { ConfirmDialog, EmptyState, ErrorNotice, Spinner, cx, useToast } from "../components/ui";
-import { STATUS_LABELS, STATUS_ORDER, tldOf } from "../lib/format";
+import { STATUS_LABELS, STATUS_ORDER } from "../lib/format";
 
 const SORT_OPTIONS = [
   { value: "", label: "默认（加入顺序）" },
@@ -75,6 +75,15 @@ export function DomainsPage({
 
   const domains = useMemo(() => data?.domains ?? [], [data]);
 
+  // 筛选项来自全量统计，翻页不会让下拉框内容跟着变
+  const facets = useAsync<Facets>(() => api.get<Facets>("/api/v2/facets"), [], onUnauthorized);
+
+  // 列表和筛选项要一起刷新，否则新增/删除后下拉框的数量会对不上
+  const refresh = useCallback(() => {
+    reload();
+    facets.reload();
+  }, [reload, facets]);
+
   const updateParams = useCallback(
     (next: Record<string, string>) => {
       const merged = new URLSearchParams(params);
@@ -88,21 +97,20 @@ export function DomainsPage({
     [params, setParams],
   );
 
-  const tldOptions = useMemo(() => {
-    const set = new Set<string>();
-    domains.forEach((item) => {
-      const value = tldOf(item.name);
-      if (value) set.add(value);
-    });
-    return Array.from(set).sort();
-  }, [domains]);
+  const tldOptions = facets.data?.tlds ?? [];
+  const registrarOptions = facets.data?.registrars ?? [];
+  const statusCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    (facets.data?.statuses ?? []).forEach((item) => map.set(item.value, item.count));
+    return map;
+  }, [facets.data]);
 
   async function runCheck(name: string) {
     setBusy(name);
     try {
       await api.post(`/api/v2/domains/${encodeURIComponent(name)}/check`);
       toast(`${name} 查询完成`, "success");
-      reload();
+      refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : "查询失败", "error");
     } finally {
@@ -117,7 +125,7 @@ export function DomainsPage({
       await api.post("/api/v2/domains/batch-check", { domains: names });
       toast(`已把 ${names.length} 个域名加入高优先级队列`, "success");
       setSelected(new Set());
-      window.setTimeout(reload, 2500);
+      window.setTimeout(refresh, 2500);
     } catch (err) {
       toast(err instanceof Error ? err.message : "批量检查失败", "error");
     }
@@ -133,7 +141,7 @@ export function DomainsPage({
       }
       toast(`已删除 ${pendingDelete.length} 个域名`, "success");
       setSelected(new Set());
-      reload();
+      refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : "删除失败", "error");
     } finally {
@@ -152,7 +160,7 @@ export function DomainsPage({
           </p>
         </div>
         <div className="flex gap-2">
-          <button type="button" className="btn h-8" onClick={reload}>
+          <button type="button" className="btn h-8" onClick={refresh}>
             刷新
           </button>
           <button type="button" className="btn btn-primary h-8" onClick={() => setShowAdd(true)}>
@@ -183,28 +191,39 @@ export function DomainsPage({
           onChange={(event) => updateParams({ status: event.target.value })}
         >
           <option value="">全部状态</option>
-          {STATUS_ORDER.map((value) => (
-            <option key={value} value={value}>
-              {STATUS_LABELS[value]}
-            </option>
-          ))}
+          {STATUS_ORDER.map((value) => {
+            const count = statusCounts.get(value);
+            if (!count && status !== value) return null;
+            return (
+              <option key={value} value={value}>
+                {STATUS_LABELS[value]}
+                {count ? `（${count}）` : ""}
+              </option>
+            );
+          })}
         </select>
 
         <select className="input" value={tld} onChange={(event) => updateParams({ tld: event.target.value })}>
-          <option value="">全部后缀</option>
-          {tldOptions.map((value) => (
-            <option key={value} value={value}>
-              .{value}
+          <option value="">全部后缀（{tldOptions.length}）</option>
+          {tldOptions.map((item) => (
+            <option key={item.value} value={item.value}>
+              .{item.value}（{item.count}）
             </option>
           ))}
         </select>
 
-        <input
+        <select
           className="input"
-          placeholder="注册商包含…"
-          defaultValue={registrar}
-          onBlur={(event) => updateParams({ registrar: event.target.value.trim() })}
-        />
+          value={registrar}
+          onChange={(event) => updateParams({ registrar: event.target.value })}
+        >
+          <option value="">全部注册商（{registrarOptions.length}）</option>
+          {registrarOptions.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.value}（{item.count}）
+            </option>
+          ))}
+        </select>
 
         <div className="flex gap-2">
           <select
@@ -252,7 +271,7 @@ export function DomainsPage({
         </div>
       )}
 
-      {error && <ErrorNotice message={error} onRetry={reload} />}
+      {error && <ErrorNotice message={error} onRetry={refresh} />}
 
       {loading && domains.length === 0 ? (
         <div className="flex items-center gap-2 py-12 text-ink-muted">
@@ -330,7 +349,7 @@ export function DomainsPage({
       <DomainDrawer
         domain={openDomain}
         onClose={() => setOpenDomain(null)}
-        onChanged={reload}
+        onChanged={refresh}
         onUnauthorized={onUnauthorized}
       />
 
@@ -353,7 +372,7 @@ export function DomainsPage({
           onClose={() => setShowAdd(false)}
           onDone={() => {
             setShowAdd(false);
-            reload();
+            refresh();
           }}
         />
       )}

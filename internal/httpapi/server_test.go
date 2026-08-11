@@ -265,6 +265,7 @@ func TestFrontendRoutesAreRegistered(t *testing.T) {
 		"/api/domains",
 		"/api/v2/overview",
 		"/api/v2/meta",
+		"/api/v2/facets",
 		"/api/v2/domains",
 		"/api/v2/observations",
 		"/api/v2/providers",

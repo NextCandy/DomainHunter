@@ -6,9 +6,6 @@ DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。它�
 
 单体 Go 应用 + SQLite + 单容器，适合树莓派、Synology NAS 与普通 Linux VPS 自托管。
 
-> 项目名称为 DomainHunter；GitHub 仓库使用 `NextCandy/DomainHunter-go`，因为账号下
-> 已有 `NextCandy/dh`，GitHub 会把 `DomainHunter` 路径解析到那个无关项目。
-
 ## 设计目标
 
 - 使用 IANA RDAP bootstrap 动态补充 TLD → RDAP 映射，内置静态配置作为离线兜底；
@@ -27,8 +24,8 @@ DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。它�
 需要 Go 1.24+ 或 Docker。
 
 ```bash
-git clone https://github.com/NextCandy/DomainHunter-go.git
-cd DomainHunter-go
+git clone https://github.com/NextCandy/DomainHunter.git
+cd DomainHunter
 docker compose up -d --build
 curl -f http://127.0.0.1:8080/health
 ```
@@ -88,16 +85,22 @@ extra_hosts:
 
 ```
 data/
-├── puff.db                 主数据库（文件名保持不变以兼容既有部署）
+├── domainhunter.db         主数据库（全新安装时创建）
+├── puff.db                 既有部署沿用的旧文件名，存在时**优先使用**，不会被改名
 └── backups/
-    └── puff-*.db           迁移前自动生成的备份，只保留最近 5 份
+    └── *-YYYYMMDD-HHMMSS-*.db   迁移前自动生成的备份，只保留最近 5 份
 ```
+
+选择哪个文件的顺序是：`DOMAINHUNTER_DB_FILE` 环境变量 → 已存在的 `puff.db`
+→ 已存在的 `domainhunter.db` → 全新安装创建 `domainhunter.db`。
+既有部署因此完全不受影响，也不会在旁边多出一个空库。
 
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `DOMAINHUNTER_DATA_DIR` | `data` | 数据目录 |
+| `DOMAINHUNTER_DB_FILE` | 自动选择 | 指定数据库文件名，覆盖自动选择 |
 | `DOMAINHUNTER_PORT` | 数据库中的 `server_port`（8080） | 监听端口 |
 | `DOMAINHUNTER_RDAP_BOOTSTRAP_URL` | `https://data.iana.org/rdap/dns.json` | IANA bootstrap |
 | `DOMAINHUNTER_WHOIS_FALLBACK_URL` | 空 | 本地结构化备用服务地址 |
@@ -155,14 +158,26 @@ data/
 
 ## 通知
 
-内置邮件与 Telegram。抑制规则：
+内置五个渠道，都在管理端「通知」页配置，可以单独开关与单独发测试：
+
+| 渠道 | 说明 |
+| --- | --- |
+| 邮件 | 标准 SMTP |
+| Telegram | Bot Token + Chat ID |
+| Bark | iOS 推送，填完整推送地址（含设备 key），官方或自建服务器均可 |
+| 飞书机器人 | 群自定义机器人 webhook，支持「签名校验」密钥 |
+| 自定义 Webhook | 事件以 JSON POST 出去，可选 `X-DomainHunter-Signature` 验签 |
+
+抑制规则：
 
 - 首次查询不通知（避免初始化时刷屏）
 - 从 `error` 恢复不通知
 - 目标状态本身不需要通知（`unknown` / `error` / `skipped`）时不通知
 - **可注册结论证据不足时不通知**
+- 同一轮里多个域名的变化会合并成一条
 
-新增渠道只需实现 `notification.Notifier` 接口。
+再加新渠道只需实现 `notification.Notifier` 接口，并在
+`Manager.RegisterAll` / `ApplyConfig` 里各加一行。
 
 ## 开发
 

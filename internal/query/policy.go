@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 // 内置 Provider 名称
@@ -63,6 +64,19 @@ type Config struct {
 	Providers map[string]ProviderSetting `json:"providers,omitempty"`
 	Default   *TLDPolicy                 `json:"default,omitempty"`
 	TLDs      map[string]TLDPolicy       `json:"tlds,omitempty"`
+	// RateLimits 按 "provider" 或 "provider:tld" 设置两次查询之间的最小间隔，
+	// 取值为 Go duration 字符串（如 "1s"）。"0" 表示不限速。
+	RateLimits map[string]string `json:"rate_limits,omitempty"`
+}
+
+// DefaultRateLimits 是未配置时的兜底限速。
+//
+// whois_ls 与 fallback 指向的是公共网关或单实例本地服务，一次调度里几十个
+// 请求同时打过去会让它们从"2 秒返回"退化成"20 秒超时"，反而把本来能查到的
+// 域名变成 unknown。这里默认给它们一个很小的间隔，通用的 RDAP/WHOIS 不限速。
+var DefaultRateLimits = map[string]time.Duration{
+	ProviderWhoisLS:  time.Second,
+	ProviderFallback: time.Second,
 }
 
 // AvailableSetting 兼容 bool 与三档字符串的配置项

@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -83,4 +83,4 @@ jobs:
           file: dockerfile
           push: false
           load: true
-          tags: domainhunter-go:ci
+          tags: domainhunter:ci

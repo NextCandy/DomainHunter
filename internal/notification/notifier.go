@@ -46,26 +46,6 @@ type Notifier interface {
 	Test(ctx context.Context) error
 }
 
-// legacyChannel 是旧版通知器暴露的最小能力，用于适配到 Notifier
-type legacyChannel interface {
-	SendMessage(subject, message string) error
-	IsEnabled() bool
-	GetType() string
-	Test() error
-}
-
-type channelAdapter struct{ inner legacyChannel }
-
-func (c channelAdapter) Name() string  { return c.inner.GetType() }
-func (c channelAdapter) Enabled() bool { return c.inner.IsEnabled() }
-func (c channelAdapter) Send(_ context.Context, event Event) error {
-	return c.inner.SendMessage(event.Subject, event.Body)
-}
-func (c channelAdapter) Test(context.Context) error { return c.inner.Test() }
-
-// Adapt 把旧版通知器包装为 Notifier
-func Adapt(channel legacyChannel) Notifier { return channelAdapter{inner: channel} }
-
 // Manager 通知管理器
 type Manager struct {
 	mu        sync.RWMutex
@@ -78,9 +58,6 @@ type Manager struct {
 	aggregator *Aggregator
 	history    repository.NotificationRepository
 	log        *logger.Logger
-
-	email    *EmailNotifier
-	telegram *TelegramNotifier
 }
 
 // NewManager 创建通知管理器
@@ -95,20 +72,14 @@ func NewManager(history repository.NotificationRepository) *Manager {
 	return m
 }
 
-// RegisterEmail 注册邮件通知器
-func (m *Manager) RegisterEmail(n *EmailNotifier) {
-	m.mu.Lock()
-	m.email = n
-	m.notifiers = append(m.notifiers, Adapt(n))
-	m.mu.Unlock()
-}
-
-// RegisterTelegram 注册 Telegram 通知器
-func (m *Manager) RegisterTelegram(n *TelegramNotifier) {
-	m.mu.Lock()
-	m.telegram = n
-	m.notifiers = append(m.notifiers, Adapt(n))
-	m.mu.Unlock()
+// RegisterAll 按配置创建并注册全部内置渠道。
+// 渠道始终注册，是否发送由各自的 Enabled() 决定，这样设置页可以随时开关。
+func (m *Manager) RegisterAll(cfg *config.Config) {
+	m.Register(NewEmailNotifier(cfg.SMTP))
+	m.Register(NewTelegramNotifier(cfg.Telegram))
+	m.Register(NewBarkNotifier(cfg.Bark))
+	m.Register(NewFeishuNotifier(cfg.Feishu))
+	m.Register(NewWebhookNotifier(cfg.Webhook))
 }
 
 // Register 注册任意通知渠道
@@ -119,6 +90,26 @@ func (m *Manager) Register(n Notifier) {
 	m.mu.Lock()
 	m.notifiers = append(m.notifiers, n)
 	m.mu.Unlock()
+}
+
+// ApplyConfig 把最新配置广播给所有渠道。
+//
+// 新增渠道时只需要在这里补一个 case，聚合、去重与格式化都不用动。
+func (m *Manager) ApplyConfig(cfg *config.Config) {
+	for _, n := range m.Notifiers() {
+		switch channel := n.(type) {
+		case *EmailNotifier:
+			channel.UpdateConfig(cfg.SMTP)
+		case *TelegramNotifier:
+			channel.UpdateConfig(cfg.Telegram)
+		case *BarkNotifier:
+			channel.UpdateConfig(cfg.Bark)
+		case *FeishuNotifier:
+			channel.UpdateConfig(cfg.Feishu)
+		case *WebhookNotifier:
+			channel.UpdateConfig(cfg.Webhook)
+		}
+	}
 }
 
 // Notifiers 返回全部渠道
@@ -261,30 +252,6 @@ func (m *Manager) dispatch(event Event) {
 		}(n)
 	}
 	wg.Wait()
-}
-
-// UpdateEmailConfig 热更新邮件配置
-func (m *Manager) UpdateEmailConfig(cfg config.SMTPConfig) error {
-	m.mu.RLock()
-	notifier := m.email
-	m.mu.RUnlock()
-	if notifier == nil {
-		return fmt.Errorf("未找到邮件通知器")
-	}
-	notifier.UpdateConfig(cfg)
-	return nil
-}
-
-// UpdateTelegramConfig 热更新 Telegram 配置
-func (m *Manager) UpdateTelegramConfig(cfg config.TelegramConfig) error {
-	m.mu.RLock()
-	notifier := m.telegram
-	m.mu.RUnlock()
-	if notifier == nil {
-		return fmt.Errorf("未找到 Telegram 通知器")
-	}
-	notifier.UpdateConfig(cfg)
-	return nil
 }
 
 // Stats 返回通知统计

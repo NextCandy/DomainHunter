@@ -123,9 +123,9 @@ func run(dataDir string) error {
 
 	// ---- 通知 ----
 	notifier := notification.NewManager(notificationRepo)
-	notifier.RegisterEmail(notification.NewEmailNotifier(cfg.SMTP))
-	notifier.RegisterTelegram(notification.NewTelegramNotifier(cfg.Telegram))
+	notifier.RegisterAll(cfg)
 	notifier.Start()
+	logger.Info("已启用的通知渠道: %v", notifier.EnabledNames())
 
 	// ---- 服务 ----
 	settingsSvc := service.NewSettingsService(settingsRepo, cfg)
@@ -142,8 +142,9 @@ func run(dataDir string) error {
 
 	settingsSvc.OnChange(func(next *config.Config) {
 		monitorSvc.UpdateConfig(next)
+		notifier.ApplyConfig(next)
 		if parsed, err := loadQueryPolicy(next); err == nil {
-			policy.Update(parsed)
+			engine.ApplyPolicy(parsed)
 		} else {
 			logger.Warn("查询策略更新失败: %v", err)
 		}

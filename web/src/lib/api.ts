@@ -200,6 +200,41 @@ export interface SessionInfo {
   version?: string;
 }
 
+export interface FacetItem {
+  value: string;
+  count: number;
+}
+
+export interface Facets {
+  total: number;
+  tlds: FacetItem[] | null;
+  registrars: FacetItem[] | null;
+  providers: FacetItem[] | null;
+  statuses: FacetItem[] | null;
+  tags: FacetItem[] | null;
+}
+
+export interface BarkSettings {
+  url: string;
+  group: string;
+  sound: string;
+  level: string;
+  icon: string;
+  enabled: boolean;
+}
+
+export interface FeishuSettings {
+  webhook: string;
+  secret_set: boolean;
+  enabled: boolean;
+}
+
+export interface WebhookSettings {
+  url: string;
+  secret_set: boolean;
+  enabled: boolean;
+}
+
 export interface SettingsV2 {
   smtp: {
     host: string;
@@ -211,10 +246,14 @@ export interface SettingsV2 {
     enabled: boolean;
   };
   telegram: { bot_token_set: boolean; chat_id: string; enabled: boolean };
+  bark: BarkSettings;
+  feishu: FeishuSettings;
+  webhook: WebhookSettings;
   monitor: { check_interval: number; concurrent_limit: number; timeout: number };
   history: {
     retention_days: number;
     max_per_domain: number;
+    heartbeat_hours: number;
     raw_mode: string;
     raw_max_bytes: number;
   };

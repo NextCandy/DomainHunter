@@ -21,6 +21,9 @@ type Config struct {
 	Server   ServerConfig   `json:"server"`
 	SMTP     SMTPConfig     `json:"smtp"`
 	Telegram TelegramConfig `json:"telegram"`
+	Bark     BarkConfig     `json:"bark"`
+	Feishu   FeishuConfig   `json:"feishu"`
+	Webhook  WebhookConfig  `json:"webhook"`
 	Monitor  MonitorConfig  `json:"monitor"`
 	Log      LogConfig      `json:"log"`
 	Security SecurityConfig `json:"security"`
@@ -60,6 +63,35 @@ type TelegramConfig struct {
 	Enabled  bool   `json:"enabled"`
 }
 
+// BarkConfig Bark 推送配置。
+//
+// URL 是完整的推送地址（自建服务器或 api.day.app），已包含设备 key，
+// 例如 https://bark.example.com/AbCdEf123。这与原 Puff 的配置格式一致。
+type BarkConfig struct {
+	URL     string `json:"url"`
+	Group   string `json:"group"`
+	Sound   string `json:"sound"`
+	Level   string `json:"level"`
+	Icon    string `json:"icon"`
+	Enabled bool   `json:"enabled"`
+}
+
+// FeishuConfig 飞书自定义机器人配置。
+// Secret 为可选的签名校验密钥（在机器人安全设置里开启"签名校验"时填写）。
+type FeishuConfig struct {
+	Webhook string `json:"webhook"`
+	Secret  string `json:"secret"`
+	Enabled bool   `json:"enabled"`
+}
+
+// WebhookConfig 通用 Webhook 配置。
+// 配置 Secret 后会带上 X-DomainHunter-Signature 头（sha256 HMAC）。
+type WebhookConfig struct {
+	URL     string `json:"url"`
+	Secret  string `json:"secret"`
+	Enabled bool   `json:"enabled"`
+}
+
 // MonitorConfig 监控配置
 type MonitorConfig struct {
 	CheckInterval   time.Duration `json:"check_interval"`
@@ -89,10 +121,22 @@ type SecurityConfig struct {
 
 // HistoryConfig 历史数据保留策略
 type HistoryConfig struct {
-	RetentionDays int    `json:"retention_days"`
-	MaxPerDomain  int    `json:"max_per_domain"`
-	RawMode       string `json:"raw_mode"`
-	RawMaxBytes   int    `json:"raw_max_bytes"`
+	RetentionDays int `json:"retention_days"`
+	MaxPerDomain  int `json:"max_per_domain"`
+	// HeartbeatHours 状态没有变化时，两条观测之间至少间隔多少小时。
+	// 每次查询都记一条会让数据库涨得毫无必要：817 个域名 10 分钟一轮
+	// 就是每天 11 万行，而其中绝大多数内容完全相同。
+	HeartbeatHours int    `json:"heartbeat_hours"`
+	RawMode        string `json:"raw_mode"`
+	RawMaxBytes    int    `json:"raw_max_bytes"`
+}
+
+// HeartbeatInterval 返回心跳观测的最小间隔；<=0 表示每次查询都记录
+func (h HistoryConfig) HeartbeatInterval() time.Duration {
+	if h.HeartbeatHours <= 0 {
+		return 0
+	}
+	return time.Duration(h.HeartbeatHours) * time.Hour
 }
 
 // Retention 转换为存储层保留策略
@@ -107,35 +151,48 @@ func (h HistoryConfig) Retention() repository.Retention {
 
 // 设置键名。前 4 组与重构前完全一致，新增键都带默认值，缺失时自动回填。
 const (
-	KeyServerPort      = "server_port"
-	KeyServerUsername  = "server_username"
-	KeyServerPassword  = "server_password"
-	KeyPasswordHash    = "server_password_hash"
-	KeySessionSecret   = "session_secret"
-	KeySMTPHost        = "smtp_host"
-	KeySMTPPort        = "smtp_port"
-	KeySMTPUser        = "smtp_user"
-	KeySMTPPass        = "smtp_pass"
-	KeySMTPFrom        = "smtp_from"
-	KeySMTPTo          = "smtp_to"
-	KeySMTPEnabled     = "smtp_enabled"
-	KeyTelegramToken   = "telegram_bot_token"
-	KeyTelegramChatID  = "telegram_chat_id"
-	KeyTelegramEnabled = "telegram_enabled"
-	KeyCheckInterval   = "monitor_check_interval"
-	KeyConcurrentLimit = "monitor_concurrent_limit"
-	KeyTimeout         = "monitor_timeout"
-	KeyCacheDuration   = "monitor_cache_duration"
-	KeyLogLevel        = "log_level"
-	KeyQueryPolicy     = "query_policy"
-	KeyHistoryDays     = "history_retention_days"
-	KeyHistoryMax      = "history_max_per_domain"
-	KeyHistoryRawMode  = "history_raw_mode"
-	KeyHistoryRawBytes = "history_raw_max_bytes"
-	KeyCookieSecure    = "security_cookie_secure"
-	KeyCookieSameSite  = "security_cookie_same_site"
-	KeyCORSOrigins     = "security_cors_origins"
-	KeyCSRFEnabled     = "security_csrf_enabled"
+	KeyServerPort       = "server_port"
+	KeyServerUsername   = "server_username"
+	KeyServerPassword   = "server_password"
+	KeyPasswordHash     = "server_password_hash"
+	KeySessionSecret    = "session_secret"
+	KeySMTPHost         = "smtp_host"
+	KeySMTPPort         = "smtp_port"
+	KeySMTPUser         = "smtp_user"
+	KeySMTPPass         = "smtp_pass"
+	KeySMTPFrom         = "smtp_from"
+	KeySMTPTo           = "smtp_to"
+	KeySMTPEnabled      = "smtp_enabled"
+	KeyTelegramToken    = "telegram_bot_token"
+	KeyTelegramChatID   = "telegram_chat_id"
+	KeyTelegramEnabled  = "telegram_enabled"
+	KeyBarkURL          = "bark_url"
+	KeyBarkGroup        = "bark_group"
+	KeyBarkSound        = "bark_sound"
+	KeyBarkLevel        = "bark_level"
+	KeyBarkIcon         = "bark_icon"
+	KeyBarkEnabled      = "bark_enabled"
+	KeyFeishuWebhook    = "feishu_webhook"
+	KeyFeishuSecret     = "feishu_secret"
+	KeyFeishuEnabled    = "feishu_enabled"
+	KeyWebhookURL       = "webhook_url"
+	KeyWebhookSecret    = "webhook_secret"
+	KeyWebhookEnabled   = "webhook_enabled"
+	KeyCheckInterval    = "monitor_check_interval"
+	KeyConcurrentLimit  = "monitor_concurrent_limit"
+	KeyTimeout          = "monitor_timeout"
+	KeyCacheDuration    = "monitor_cache_duration"
+	KeyLogLevel         = "log_level"
+	KeyQueryPolicy      = "query_policy"
+	KeyHistoryDays      = "history_retention_days"
+	KeyHistoryMax       = "history_max_per_domain"
+	KeyHistoryRawMode   = "history_raw_mode"
+	KeyHistoryRawBytes  = "history_raw_max_bytes"
+	KeyHistoryHeartbeat = "history_heartbeat_hours"
+	KeyCookieSecure     = "security_cookie_secure"
+	KeyCookieSameSite   = "security_cookie_same_site"
+	KeyCORSOrigins      = "security_cors_origins"
+	KeyCSRFEnabled      = "security_csrf_enabled"
 )
 
 // Defaults 返回默认配置
@@ -152,6 +209,8 @@ func Defaults() *Config {
 
 	cfg.Log.Level = "info"
 
+	cfg.Bark.Group = "DomainHunter"
+
 	cfg.Security.CookieSecure = "auto"
 	cfg.Security.CookieSameSite = "lax"
 	cfg.Security.CSRFEnabled = true
@@ -160,6 +219,7 @@ func Defaults() *Config {
 	cfg.History.RetentionDays = defaults.Days
 	cfg.History.MaxPerDomain = defaults.MaxPerDomain
 	cfg.History.RawMode = defaults.RawMode
+	cfg.History.HeartbeatHours = 6
 	cfg.History.RawMaxBytes = defaults.RawMaxBytes
 	return cfg
 }
@@ -225,6 +285,21 @@ func apply(cfg *Config, settings map[string]string) {
 	get(KeyTelegramChatID, func(v string) { cfg.Telegram.ChatID = v })
 	get(KeyTelegramEnabled, func(v string) { cfg.Telegram.Enabled = ParseBool(v) })
 
+	get(KeyBarkURL, func(v string) { cfg.Bark.URL = v })
+	get(KeyBarkGroup, func(v string) { cfg.Bark.Group = v })
+	get(KeyBarkSound, func(v string) { cfg.Bark.Sound = v })
+	get(KeyBarkLevel, func(v string) { cfg.Bark.Level = v })
+	get(KeyBarkIcon, func(v string) { cfg.Bark.Icon = v })
+	get(KeyBarkEnabled, func(v string) { cfg.Bark.Enabled = ParseBool(v) })
+
+	get(KeyFeishuWebhook, func(v string) { cfg.Feishu.Webhook = v })
+	get(KeyFeishuSecret, func(v string) { cfg.Feishu.Secret = v })
+	get(KeyFeishuEnabled, func(v string) { cfg.Feishu.Enabled = ParseBool(v) })
+
+	get(KeyWebhookURL, func(v string) { cfg.Webhook.URL = v })
+	get(KeyWebhookSecret, func(v string) { cfg.Webhook.Secret = v })
+	get(KeyWebhookEnabled, func(v string) { cfg.Webhook.Enabled = ParseBool(v) })
+
 	getInt(KeyCheckInterval, func(n int) { cfg.Monitor.CheckInterval = time.Duration(n) * time.Second })
 	getInt(KeyConcurrentLimit, func(n int) { cfg.Monitor.ConcurrentLimit = n })
 	getInt(KeyTimeout, func(n int) { cfg.Monitor.Timeout = time.Duration(n) * time.Second })
@@ -237,6 +312,7 @@ func apply(cfg *Config, settings map[string]string) {
 	getInt(KeyHistoryMax, func(n int) { cfg.History.MaxPerDomain = n })
 	get(KeyHistoryRawMode, func(v string) { cfg.History.RawMode = v })
 	getInt(KeyHistoryRawBytes, func(n int) { cfg.History.RawMaxBytes = n })
+	getInt(KeyHistoryHeartbeat, func(n int) { cfg.History.HeartbeatHours = n })
 
 	get(KeyCookieSecure, func(v string) { cfg.Security.CookieSecure = v })
 	get(KeyCookieSameSite, func(v string) { cfg.Security.CookieSameSite = v })
@@ -269,31 +345,44 @@ func applyEnvOverrides(cfg *Config) {
 
 func missingDefaults(cfg *Config, settings map[string]string) map[string]string {
 	defaults := map[string]string{
-		KeyServerPort:      cfg.Server.Port,
-		KeyServerUsername:  cfg.Server.Username,
-		KeyServerPassword:  cfg.Server.Password,
-		KeySMTPHost:        cfg.SMTP.Host,
-		KeySMTPPort:        strconv.Itoa(cfg.SMTP.Port),
-		KeySMTPUser:        cfg.SMTP.User,
-		KeySMTPPass:        cfg.SMTP.Password,
-		KeySMTPFrom:        cfg.SMTP.From,
-		KeySMTPTo:          cfg.SMTP.To,
-		KeySMTPEnabled:     strconv.FormatBool(cfg.SMTP.Enabled),
-		KeyTelegramToken:   cfg.Telegram.BotToken,
-		KeyTelegramChatID:  cfg.Telegram.ChatID,
-		KeyTelegramEnabled: strconv.FormatBool(cfg.Telegram.Enabled),
-		KeyCheckInterval:   strconv.Itoa(int(cfg.Monitor.CheckInterval.Seconds())),
-		KeyConcurrentLimit: strconv.Itoa(cfg.Monitor.ConcurrentLimit),
-		KeyTimeout:         strconv.Itoa(int(cfg.Monitor.Timeout.Seconds())),
-		KeyCacheDuration:   strconv.Itoa(int(cfg.Monitor.CacheDuration.Seconds())),
-		KeyLogLevel:        cfg.Log.Level,
-		KeyHistoryDays:     strconv.Itoa(cfg.History.RetentionDays),
-		KeyHistoryMax:      strconv.Itoa(cfg.History.MaxPerDomain),
-		KeyHistoryRawMode:  cfg.History.RawMode,
-		KeyHistoryRawBytes: strconv.Itoa(cfg.History.RawMaxBytes),
-		KeyCookieSecure:    cfg.Security.CookieSecure,
-		KeyCookieSameSite:  cfg.Security.CookieSameSite,
-		KeyCSRFEnabled:     strconv.FormatBool(cfg.Security.CSRFEnabled),
+		KeyServerPort:       cfg.Server.Port,
+		KeyServerUsername:   cfg.Server.Username,
+		KeyServerPassword:   cfg.Server.Password,
+		KeySMTPHost:         cfg.SMTP.Host,
+		KeySMTPPort:         strconv.Itoa(cfg.SMTP.Port),
+		KeySMTPUser:         cfg.SMTP.User,
+		KeySMTPPass:         cfg.SMTP.Password,
+		KeySMTPFrom:         cfg.SMTP.From,
+		KeySMTPTo:           cfg.SMTP.To,
+		KeySMTPEnabled:      strconv.FormatBool(cfg.SMTP.Enabled),
+		KeyTelegramToken:    cfg.Telegram.BotToken,
+		KeyTelegramChatID:   cfg.Telegram.ChatID,
+		KeyTelegramEnabled:  strconv.FormatBool(cfg.Telegram.Enabled),
+		KeyBarkURL:          cfg.Bark.URL,
+		KeyBarkGroup:        cfg.Bark.Group,
+		KeyBarkSound:        cfg.Bark.Sound,
+		KeyBarkLevel:        cfg.Bark.Level,
+		KeyBarkIcon:         cfg.Bark.Icon,
+		KeyBarkEnabled:      strconv.FormatBool(cfg.Bark.Enabled),
+		KeyFeishuWebhook:    cfg.Feishu.Webhook,
+		KeyFeishuSecret:     cfg.Feishu.Secret,
+		KeyFeishuEnabled:    strconv.FormatBool(cfg.Feishu.Enabled),
+		KeyWebhookURL:       cfg.Webhook.URL,
+		KeyWebhookSecret:    cfg.Webhook.Secret,
+		KeyWebhookEnabled:   strconv.FormatBool(cfg.Webhook.Enabled),
+		KeyCheckInterval:    strconv.Itoa(int(cfg.Monitor.CheckInterval.Seconds())),
+		KeyConcurrentLimit:  strconv.Itoa(cfg.Monitor.ConcurrentLimit),
+		KeyTimeout:          strconv.Itoa(int(cfg.Monitor.Timeout.Seconds())),
+		KeyCacheDuration:    strconv.Itoa(int(cfg.Monitor.CacheDuration.Seconds())),
+		KeyLogLevel:         cfg.Log.Level,
+		KeyHistoryDays:      strconv.Itoa(cfg.History.RetentionDays),
+		KeyHistoryMax:       strconv.Itoa(cfg.History.MaxPerDomain),
+		KeyHistoryRawMode:   cfg.History.RawMode,
+		KeyHistoryRawBytes:  strconv.Itoa(cfg.History.RawMaxBytes),
+		KeyHistoryHeartbeat: strconv.Itoa(cfg.History.HeartbeatHours),
+		KeyCookieSecure:     cfg.Security.CookieSecure,
+		KeyCookieSameSite:   cfg.Security.CookieSameSite,
+		KeyCSRFEnabled:      strconv.FormatBool(cfg.Security.CSRFEnabled),
 	}
 
 	missing := map[string]string{}
@@ -391,7 +480,10 @@ func (cfg *Config) Validate() error {
 }
 
 // NotificationEnabled 是否启用了任一通知渠道
-func (cfg *Config) NotificationEnabled() bool { return cfg.SMTP.Enabled || cfg.Telegram.Enabled }
+func (cfg *Config) NotificationEnabled() bool {
+	return cfg.SMTP.Enabled || cfg.Telegram.Enabled ||
+		cfg.Bark.Enabled || cfg.Feishu.Enabled || cfg.Webhook.Enabled
+}
 
 // Clone 返回配置的浅拷贝，便于热更新时替换整份配置而不产生数据竞争
 func (cfg *Config) Clone() *Config {

@@ -243,9 +243,17 @@ func (s *QueryService) toStored(info *domain.Info) domain.Info {
 	return stored
 }
 
-// saveHistory 写入观测与查询尝试历史
+// saveHistory 写入观测与查询尝试历史。
+//
+// 状态没变时不必每次都记：817 个域名 10 分钟一轮，每天就是 11 万条几乎完全
+// 相同的行。这里只在"状态变化"或"距上次观测超过心跳间隔"时落盘，
+// 既保留完整的状态流转，也不会把数据库撑爆。
 func (s *QueryService) saveHistory(ctx context.Context, record *domain.Domain, outcome query.Outcome, stored domain.Info, changed bool) {
-	retention := s.config().History.Retention()
+	history := s.config().History
+	if !changed && !s.heartbeatDue(ctx, record.Name, history.HeartbeatInterval()) {
+		return
+	}
+	retention := history.Retention()
 
 	obs := domain.Observation{
 		DomainID:     record.ID,
@@ -285,6 +293,22 @@ func (s *QueryService) saveHistory(ctx context.Context, record *domain.Domain, o
 	if _, err := s.observations.Save(ctx, obs, attempts); err != nil {
 		s.log.Error(logger.Fields{"domain": record.Name, "error": err.Error()}, "保存观测历史失败")
 	}
+}
+
+// heartbeatDue 距上次观测是否已经超过心跳间隔；interval<=0 表示每次都记录
+func (s *QueryService) heartbeatDue(ctx context.Context, name string, interval time.Duration) bool {
+	if interval <= 0 {
+		return true
+	}
+	latest, err := s.observations.ListByDomain(ctx, name, 1)
+	if err != nil {
+		// 读不到就按"该记"处理，宁可多写一条也不要丢历史
+		return true
+	}
+	if len(latest) == 0 {
+		return true
+	}
+	return time.Since(latest[0].ObservedAt) >= interval
 }
 
 // trimRaw 按保留策略决定是否保存原始报文，以及最多保存多少字节。

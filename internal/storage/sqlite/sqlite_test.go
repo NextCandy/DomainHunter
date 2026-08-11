@@ -3,6 +3,8 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -57,10 +59,31 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestResolveFilePrefersLegacyDatabase 既有部署的 puff.db 必须继续被使用，
+// 绝不能因为改名而在旁边新建一个空库
+func TestResolveFilePrefersLegacyDatabase(t *testing.T) {
+	dir := t.TempDir()
+	if got := ResolveFile(dir); got != DefaultFile {
+		t.Fatalf("全新安装应创建 %s，实际 %s", DefaultFile, got)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, LegacyFile), []byte{}, 0o644); err != nil {
+		t.Fatalf("创建旧库失败: %v", err)
+	}
+	if got := ResolveFile(dir); got != LegacyFile {
+		t.Fatalf("存在 %s 时必须继续使用它，实际 %s", LegacyFile, got)
+	}
+
+	t.Setenv("DOMAINHUNTER_DB_FILE", "custom.db")
+	if got := ResolveFile(dir); got != "custom.db" {
+		t.Fatalf("环境变量应优先，实际 %s", got)
+	}
+}
+
 // TestMigrateMarksLegacyBaseline 模拟既有 Puff 数据库：已有表但没有迁移记录
 func TestMigrateMarksLegacyBaseline(t *testing.T) {
 	dir := t.TempDir()
-	raw, err := sql.Open("sqlite", filepath.Join(dir, DefaultFile))
+	raw, err := sql.Open("sqlite", filepath.Join(dir, LegacyFile))
 	if err != nil {
 		t.Fatalf("创建旧库失败: %v", err)
 	}
@@ -262,21 +285,80 @@ func TestScheduleAndBackfill(t *testing.T) {
 func TestBackfillScheduleFillsMissing(t *testing.T) {
 	db := newTestDB(t)
 	repo := NewDomainRepo(db)
+	results := NewResultRepo(db)
 	ctx := context.Background()
 
 	if _, err := db.Exec(`INSERT INTO domains(name, enabled, notify) VALUES('nosched.com', 1, 1)`); err != nil {
 		t.Fatalf("插入无调度时间的域名失败: %v", err)
 	}
+	// 最近才查过的域名应沿用 last_checked + 间隔，而不是被立刻重查
+	if _, err := db.Exec(`INSERT INTO domains(name, enabled, notify) VALUES('recent.com', 1, 1)`); err != nil {
+		t.Fatalf("插入域名失败: %v", err)
+	}
+	if err := results.Save(ctx, domain.Info{
+		Name: "recent.com", Status: domain.StatusRegistered, LastChecked: time.Now(),
+	}); err != nil {
+		t.Fatalf("写入结果失败: %v", err)
+	}
+
 	n, err := repo.BackfillSchedule(ctx, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("补齐调度时间失败: %v", err)
 	}
-	if n != 1 {
-		t.Fatalf("应补齐 1 条，实际 %d", n)
+	if n != 2 {
+		t.Fatalf("应补齐 2 条，实际 %d", n)
 	}
+
 	entry, _ := repo.Get(ctx, "nosched.com")
 	if entry.NextCheckAt == nil {
 		t.Fatal("补齐后 next_check_at 仍为空")
+	}
+	recent, _ := repo.Get(ctx, "recent.com")
+	if recent.NextCheckAt == nil || !recent.NextCheckAt.After(time.Now().Add(4*time.Minute)) {
+		t.Fatalf("刚查过的域名不应立刻重查: %v", recent.NextCheckAt)
+	}
+}
+
+// TestBackfillScheduleSpreadsOverdueDomains 确认升级后不会出现"几百个域名
+// 同一秒全部到期"的查询风暴
+func TestBackfillScheduleSpreadsOverdueDomains(t *testing.T) {
+	db := newTestDB(t)
+	repo := NewDomainRepo(db)
+	ctx := context.Background()
+
+	const total = 100
+	for i := 0; i < total; i++ {
+		if _, err := db.Exec(`INSERT INTO domains(name, enabled, notify) VALUES(?, 1, 1)`,
+			fmt.Sprintf("bulk%03d.com", i)); err != nil {
+			t.Fatalf("插入域名失败: %v", err)
+		}
+	}
+
+	interval := 10 * time.Minute
+	if _, err := repo.BackfillSchedule(ctx, interval); err != nil {
+		t.Fatalf("补齐调度时间失败: %v", err)
+	}
+
+	due, err := repo.DueForCheck(ctx, time.Now(), 1000)
+	if err != nil {
+		t.Fatalf("查询到期域名失败: %v", err)
+	}
+	if len(due) > 10 {
+		t.Fatalf("到期域名应被打散，当前一次性到期 %d 个", len(due))
+	}
+
+	all, err := repo.List(ctx, true)
+	if err != nil {
+		t.Fatalf("读取域名失败: %v", err)
+	}
+	latest := time.Now()
+	for _, entry := range all {
+		if entry.NextCheckAt != nil && entry.NextCheckAt.After(latest) {
+			latest = *entry.NextCheckAt
+		}
+	}
+	if latest.After(time.Now().Add(interval)) {
+		t.Fatalf("打散后最晚的检查时间不应超出一个间隔窗口: %v", latest)
 	}
 }
 

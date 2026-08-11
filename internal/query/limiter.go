@@ -38,6 +38,41 @@ func (l *Limiter) Set(key string, interval time.Duration) {
 	l.mu.Unlock()
 }
 
+// Apply 用配置替换全部规则；未在配置里出现的键回落到 defaults
+func (l *Limiter) Apply(configured map[string]string, defaults map[string]time.Duration) {
+	rules := make(map[string]time.Duration, len(configured)+len(defaults))
+	for key, interval := range defaults {
+		rules[strings.ToLower(key)] = interval
+	}
+	for key, raw := range configured {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		interval, err := time.ParseDuration(raw)
+		if err != nil || interval < 0 {
+			continue
+		}
+		rules[strings.ToLower(key)] = interval
+	}
+
+	l.mu.Lock()
+	l.rules = rules
+	l.mu.Unlock()
+}
+
+// Rules 返回当前生效的限速规则（供 API 展示）
+func (l *Limiter) Rules() map[string]string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	out := make(map[string]string, len(l.rules))
+	for key, interval := range l.rules {
+		out[key] = interval.String()
+	}
+	return out
+}
+
 // Wait 阻塞到允许发起下一次查询为止；ctx 取消时立刻返回错误
 func (l *Limiter) Wait(ctx context.Context, provider, tld string) error {
 	if l == nil {

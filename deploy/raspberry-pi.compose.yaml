@@ -1,15 +1,16 @@
 # 树莓派上的实际部署配置。
-# compose 项目名固定为 puff（历史原因），目录 /opt/docker-migrated/puff。
-# 该目录同时是数据目录，直接挂到 /app/data，puff.db 就在其中。
+# compose 项目名 domainhunter，目录 /opt/docker-migrated/domainhunter。
+# 该目录同时是数据目录，直接挂到 /app/data，数据库文件就在其中
+#（历史原因文件名仍是 puff.db，程序会自动识别并继续使用它）。
 services:
   domainhunter:
-    image: domainhunter-go:latest
+    image: domainhunter:latest
     container_name: DomainHunter
     restart: unless-stopped
     ports:
       - "22334:8080"
     volumes:
-      - /opt/docker-migrated/puff:/app/data
+      - /opt/docker-migrated/domainhunter:/app/data
       - /etc/localtime:/etc/localtime:ro
     environment:
       TZ: Asia/Shanghai

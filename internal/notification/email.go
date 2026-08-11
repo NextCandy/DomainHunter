@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/smtp"
@@ -81,8 +82,19 @@ func (e *EmailNotifier) GetType() string {
 	return "email"
 }
 
+// Name 实现 Notifier
+func (e *EmailNotifier) Name() string { return e.GetType() }
+
+// Enabled 实现 Notifier
+func (e *EmailNotifier) Enabled() bool { return e.IsEnabled() }
+
+// Send 实现 Notifier
+func (e *EmailNotifier) Send(_ context.Context, event Event) error {
+	return e.SendMessage(event.Subject, event.Body)
+}
+
 // Test 测试邮件连接
-func (e *EmailNotifier) Test() error {
+func (e *EmailNotifier) Test(context.Context) error {
 	if !e.enabled {
 		return fmt.Errorf("邮件通知未启用")
 	}

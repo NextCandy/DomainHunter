@@ -52,6 +52,13 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/notification/test", s.withAuth(s.handleNotificationTest))
 	mux.HandleFunc("/api/test/email", s.withAuth(s.handleTestEmail))
 	mux.HandleFunc("/api/test/telegram", s.withAuth(s.handleTestTelegram))
+	mux.HandleFunc("POST /api/settings/bark", s.withAuth(s.handleBarkSettings))
+	mux.HandleFunc("PUT /api/settings/bark", s.withAuth(s.handleBarkSettings))
+	mux.HandleFunc("POST /api/settings/feishu", s.withAuth(s.handleFeishuSettings))
+	mux.HandleFunc("PUT /api/settings/feishu", s.withAuth(s.handleFeishuSettings))
+	mux.HandleFunc("POST /api/settings/webhook", s.withAuth(s.handleWebhookSettings))
+	mux.HandleFunc("PUT /api/settings/webhook", s.withAuth(s.handleWebhookSettings))
+	mux.HandleFunc("POST /api/v2/notifications/test/{channel}", s.withAuth(s.handleChannelTest))
 
 	// ---- 维护 ----
 	mux.HandleFunc("/api/database/clean-orphaned", s.withAuth(s.handleCleanOrphaned))
@@ -66,6 +73,7 @@ func (s *Server) routes() http.Handler {
 	// ---- v2 ----
 	mux.HandleFunc("GET /api/v2/overview", s.withAuth(s.handleOverview))
 	mux.HandleFunc("GET /api/v2/meta", s.withAuth(s.handleMeta))
+	mux.HandleFunc("GET /api/v2/facets", s.withAuth(s.handleFacets))
 	mux.HandleFunc("GET /api/v2/domains", s.withAuth(s.handleDomainsV2))
 	mux.HandleFunc("POST /api/v2/domains", s.withAuth(s.handleDomainAdd))
 	mux.HandleFunc("POST /api/v2/domains/batch-add", s.withAuth(

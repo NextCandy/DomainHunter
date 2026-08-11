@@ -154,6 +154,18 @@ function HistoryCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             onChange={(event) => setForm({ ...form, max_per_domain: Number(event.target.value) })}
           />
         </Field>
+        <Field
+          label="心跳间隔（小时）"
+          hint="状态没变化时两条观测的最小间隔；0 表示每次查询都记录（数据库会涨得很快）"
+        >
+          <input
+            className="input"
+            type="number"
+            min={0}
+            value={form.heartbeat_hours}
+            onChange={(event) => setForm({ ...form, heartbeat_hours: Number(event.target.value) })}
+          />
+        </Field>
         <Field label="原始报文">
           <select
             className="input"

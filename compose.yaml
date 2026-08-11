@@ -1,11 +1,11 @@
-services:
+﻿services:
   domainhunter:
     build:
       context: .
       dockerfile: dockerfile
       args:
         VERSION: ${DOMAINHUNTER_VERSION:-v2.0.0}
-    image: domainhunter-go:latest
+    image: domainhunter:latest
     container_name: DomainHunter
     restart: unless-stopped
     ports:

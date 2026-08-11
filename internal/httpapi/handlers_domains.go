@@ -379,6 +379,16 @@ func (s *Server) handleDomainWhoisRaw(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleFacets 返回完整的筛选项清单（后缀、注册商、查询源、状态、标签）
+func (s *Server) handleFacets(w http.ResponseWriter, r *http.Request) {
+	facets, err := s.deps.Domains.Facets(r.Context())
+	if err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, facets)
+}
+
 // handleRecentObservations 返回全局最近的状态变化，用于查询历史页
 func (s *Server) handleRecentObservations(w http.ResponseWriter, r *http.Request) {
 	limit := 100
