@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-11 · 已合并进 `main` · 线上版本 `v2.2.0`
+> 最后更新：2026-08-11 · P0–P2 已合并进 `main` · 线上版本 `v2.4.0`
 
 ## 本次目标
 
@@ -30,7 +30,7 @@
 | 历史 | domain_observations / query_attempts + 保留策略 + 心跳去重 |
 | 安全 | bcrypt + 旧密码自动迁移、Cookie 加固、CORS 收敛、CSRF、退出即撤销免登录令牌 |
 | 通知 | 邮件 / Telegram / **Bark** / **飞书机器人** / **自定义 Webhook** |
-| 前端 | React 18 + TS + Vite + Tailwind，7 个页面，go:embed 进单容器 |
+| 前端 | React 18 + TS + Vite + Tailwind，7 个页面，文件夹/导入导出/通知规则/Token 管理，go:embed 进单容器 |
 | 文档 | README / ARCHITECTURE.md / MIGRATION.md / 本文件 |
 | 改名 | 仓库、镜像、树莓派部署目录与 compose 项目名统一为 DomainHunter |
 
@@ -55,7 +55,7 @@
 
 ## 数据库变化
 
-新增 `schema_migrations` 并按版本执行 5 条迁移，**全部是新增，没有任何列被
+新增 `schema_migrations` 并按版本执行 9 条迁移，**全部是新增，没有任何列被
 重命名或删除**：
 
 | 版本 | 内容 |
@@ -65,6 +65,10 @@
 | 003 | 新增 `domain_observations` |
 | 004 | 新增 `query_attempts` |
 | 005 | `app_settings` 预置 server_password_hash / session_secret |
+| 006 | `domain_results.epp_statuses`，保存 EPP 附加状态 |
+| 007 | `folders` 与 `domains.folder_id` |
+| 008 | `api_tokens` |
+| 009 | `notification_rules` / `notification_templates` / `notification_digest` |
 
 因此 **v1 二进制仍能读 v2 的库**，这是回滚能无损进行的前提。
 
@@ -103,6 +107,8 @@ domains.next_check_at → 每 5s 扫描 → 优先级队列(manual>retry>schedul
 - 间隔：正常状态用设置里的检查间隔；error 退避 5min→15min→1h；skipped 24h
 - 升级首次补齐 next_check_at 时把已到期域名**均摊到一个间隔窗口**，避免几百个
   域名同一秒全部到期
+- 每日摘要独立于查询调度器运行，按配置时间聚合前一天变化；发送失败不推进
+  `last_sent_at`，成功或无变化才去重记录
 - 内存从 817 个常驻 goroutine 降到 **10 线程 / 31MB RSS**
 
 ## 前端
@@ -273,42 +279,26 @@ compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
 
 ## 未完成项
 
-- 没有打 Release tag，因此 GHCR 上还没有 v2 镜像；树莓派用的是本地构建。
-  打 `v2.2.0` tag 即可触发 GoReleaser 与 GHCR 多架构镜像。
-- `transfer_locked` 的语义未调整（见下）。
-- 限速目前只有"最小间隔"，没有"每 Provider 并发上限"。`.do` 的本地服务在并发
-  4 时会从 2 秒退化到 20 秒，间隔限速只能缓解不能根治。
-- 前端已完成构建、lint、资源加载与登录页渲染验证，但**登录后的各页面没有由我
-  人工逐页浏览过**（不便代输账号密码）。建议你自己点一遍确认观感。
+- 没有打 Release tag，因此 GHCR 上还没有 v2 镜像；树莓派使用 ARM64 本地构建镜像。
+- 本次 QA 使用本地替身验证通知规则、模板与摘要调度，未向真实外部渠道发送测试消息。
 
 ## 已知问题
 
-1. **605 个域名显示"转移锁定"而不是"已注册"**。这是重构前就有的行为：绝大多数
-   正常 .com 都带 `clientTransferProhibited`，而状态映射把 Hold/转移锁定排在
-   registered 之前。**没有改动**，因为改了会让 605 个域名产生一次状态变化通知。
-   建议后续把"转移锁定"降级成标记而不是主状态（详情页已经能看到 EPP 原始状态）。
+1. **旧库里的转移锁定快照会逐步收敛**。新查询已把
+   `client/serverTransferProhibited` 降级为 EPP 附加标记并将主状态判为
+   `registered`，不会为这次兼容性回归重复通知；现网旧结果随正常调度重查，
+   不做高并发一次性批量重查。
 
 2. **`.do` 域名容易变成 unknown/error**。本地 whois-domain-lookup 服务单实例，
    并发压力下从 2.8 秒退化成 20–90 秒超时。已加 1s 最小间隔缓解。
 
-3. **`epp_statuses` 不会持久化**，只在刚查完的那次响应里出现；
-   `domain_results` 表没有这一列。
-
-4. **`com.cn` / `net.cn` / `org.cn` 会被归类成 `cn`**，因为内置
-   `servers.json` 没有这几个二级后缀条目。筛选清单与筛选行为是一致的，
-   只是无法单独筛出 com.cn。
-
-5. `web/node_modules` 里有个 flatted 包自带 Go 源码，会被 `go build ./...`
+3. `web/node_modules` 里有个 flatted 包自带 Go 源码，会被 `go build ./...`
    扫到（无害，CI 里两个 job 是分开的）。
 
 ## 下一步建议
 
-1. 打 `v2.2.0` tag 触发 GoReleaser 与 GHCR 多架构镜像（分支已合并进 `main`）。
-2. 给 `fallback` / `whois_ls` 加"每 Provider 并发上限"，比最小间隔更能保护
-   单实例服务。
-3. 把"转移锁定"从主状态改成附加标记，让 605 个域名回到"已注册"——需要一次性
-   抑制通知。
-4. 历史表已有 1.9 万条观测；若想立刻瘦身，可把「每域名最多保留」调小后等一次
+1. 可按发布流程打 Release tag，触发 GoReleaser 与 GHCR 多架构镜像。
+2. 历史表已有 1.9 万条观测；若想立刻瘦身，可把「每域名最多保留」调小后等一次
    清理（每 6 小时一轮）。
 
 ## 踩坑记录
