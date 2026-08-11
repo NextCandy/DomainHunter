@@ -3,6 +3,8 @@ package query
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"DomainHunter/internal/domain"
@@ -31,6 +33,15 @@ type Engine struct {
 	policy    *Policy
 	health    *HealthTracker
 	limiter   *Limiter
+	cacheMu   sync.Mutex
+	cache     map[string]cachedOutcome
+	cacheTTL  time.Duration
+	metrics   *Metrics
+}
+
+type cachedOutcome struct {
+	outcome   Outcome
+	expiresAt time.Time
 }
 
 // NewEngine 创建查询引擎
@@ -40,6 +51,9 @@ func NewEngine(providers *Registry, policy *Policy) *Engine {
 		policy:    policy,
 		health:    NewHealthTracker(),
 		limiter:   NewLimiter(),
+		cache:     make(map[string]cachedOutcome),
+		cacheTTL:  5 * time.Minute,
+		metrics:   NewMetrics(),
 	}
 	engine.ApplyPolicy(policy.Config())
 	return engine
@@ -48,7 +62,7 @@ func NewEngine(providers *Registry, policy *Policy) *Engine {
 // ApplyPolicy 在策略变更后同步限速规则
 func (e *Engine) ApplyPolicy(cfg Config) {
 	e.policy.Update(cfg)
-	e.limiter.Apply(cfg.RateLimits, DefaultRateLimits)
+	e.limiter.Apply(cfg.RateLimits, cfg.RateLimitConcurrency, DefaultRateLimits)
 }
 
 // Providers 返回底层 Provider 集合
@@ -63,9 +77,84 @@ func (e *Engine) Health() *HealthTracker { return e.health }
 // Limiter 返回限速器
 func (e *Engine) Limiter() *Limiter { return e.limiter }
 
+// Metrics 返回查询指标快照来源。
+func (e *Engine) Metrics() *Metrics { return e.metrics }
+
+// SetCacheTTL 更新内存缓存时长；<=0 恢复默认五分钟。
+func (e *Engine) SetCacheTTL(ttl time.Duration) {
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+	e.cacheMu.Lock()
+	e.cacheTTL = ttl
+	e.cacheMu.Unlock()
+}
+
+// ClearCache 清空所有查询缓存。
+func (e *Engine) ClearCache() {
+	e.cacheMu.Lock()
+	e.cache = make(map[string]cachedOutcome)
+	e.cacheMu.Unlock()
+}
+
 // Query 查询单个域名
 func (e *Engine) Query(ctx context.Context, name string) Outcome {
 	name = domain.Normalize(name)
+	if cached, ok := e.cached(name); ok {
+		cached.Info.Cached = true
+		return cached
+	}
+	out := e.query(ctx, name)
+	e.storeCached(name, out)
+	return out
+}
+
+// QueryUncached 绕过内存缓存，供用户手动"立即检查"使用。
+func (e *Engine) QueryUncached(ctx context.Context, name string) Outcome {
+	return e.query(ctx, domain.Normalize(name))
+}
+
+func (e *Engine) cached(name string) (Outcome, bool) {
+	e.cacheMu.Lock()
+	defer e.cacheMu.Unlock()
+	entry, ok := e.cache[strings.ToLower(name)]
+	if !ok {
+		return Outcome{}, false
+	}
+	if time.Now().After(entry.expiresAt) {
+		delete(e.cache, strings.ToLower(name))
+		return Outcome{}, false
+	}
+	return cloneOutcome(entry.outcome), true
+}
+
+func (e *Engine) storeCached(name string, out Outcome) {
+	if out.Info == nil || out.Winner.Status == domain.StatusError {
+		return
+	}
+	e.cacheMu.Lock()
+	ttl := e.cacheTTL
+	e.cache[strings.ToLower(name)] = cachedOutcome{outcome: cloneOutcome(out), expiresAt: time.Now().Add(ttl)}
+	e.cacheMu.Unlock()
+}
+
+func cloneOutcome(in Outcome) Outcome {
+	out := in
+	if in.Info != nil {
+		info := *in.Info
+		info.NameServers = append([]string(nil), in.Info.NameServers...)
+		info.EPPStatuses = append([]string(nil), in.Info.EPPStatuses...)
+		info.Evidence = append([]domain.Evidence(nil), in.Info.Evidence...)
+		info.Tags = append([]string(nil), in.Info.Tags...)
+		out.Info = &info
+	}
+	out.Results = append([]Result(nil), in.Results...)
+	out.Evidence = append([]domain.Evidence(nil), in.Evidence...)
+	out.Plan = append([]Step(nil), in.Plan...)
+	return out
+}
+
+func (e *Engine) query(ctx context.Context, name string) Outcome {
 	tld := registry.FindBestTLD(name)
 	req := Request{Domain: name, TLD: tld}
 
@@ -123,14 +212,18 @@ func (e *Engine) Query(ctx context.Context, name string) Outcome {
 		if !ok {
 			continue
 		}
-		if err := e.limiter.Wait(ctx, step.Provider, tld); err != nil {
+		release, err := e.limiter.Acquire(ctx, step.Provider, tld)
+		if err != nil {
 			res := errorResult(step.Provider, name, time.Now(), err)
 			out.Results = append(out.Results, res)
 			out.Evidence = append(out.Evidence, res.Evidence())
 			break
 		}
 
+		started := time.Now()
 		res := provider.Query(ctx, req)
+		release()
+		e.metrics.Observe(step.Provider, time.Since(started), res.Err != nil)
 		if res.Provider == "" {
 			res.Provider = step.Provider
 		}

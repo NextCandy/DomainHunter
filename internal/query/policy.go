@@ -67,6 +67,10 @@ type Config struct {
 	// RateLimits 按 "provider" 或 "provider:tld" 设置两次查询之间的最小间隔，
 	// 取值为 Go duration 字符串（如 "1s"）。"0" 表示不限速。
 	RateLimits map[string]string `json:"rate_limits,omitempty"`
+	// RateLimitConcurrency 按 provider 或 provider:tld 限制同时在途的查询数。
+	// 为兼容旧配置，rate_limits 仍可使用字符串；新配置可使用
+	// {"interval":"1s","concurrency":1}，由 LoadConfig 解析到此字段。
+	RateLimitConcurrency map[string]int `json:"-"`
 }
 
 // DefaultRateLimits 是未配置时的兜底限速。
@@ -137,13 +141,56 @@ func NewPolicy(cfg Config) *Policy { return &Policy{cfg: cfg} }
 
 // LoadConfig 解析策略 JSON；空串返回零值配置
 func LoadConfig(raw string) (Config, error) {
-	var cfg Config
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return cfg, nil
+		return Config{}, nil
 	}
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+	// rate_limits 在 v1 是 map[string]string；v2 允许每项携带
+	// interval/concurrency。先把其余字段解析到一个 wire 结构，避免新旧
+	// 配置互相破坏。
+	var wire struct {
+		Providers  map[string]ProviderSetting `json:"providers,omitempty"`
+		Default    *TLDPolicy                 `json:"default,omitempty"`
+		TLDs       map[string]TLDPolicy       `json:"tlds,omitempty"`
+		RateLimits map[string]json.RawMessage `json:"rate_limits,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(raw), &wire); err != nil {
 		return Config{}, fmt.Errorf("解析查询策略失败: %w", err)
+	}
+	cfg := Config{
+		Providers:            wire.Providers,
+		Default:              wire.Default,
+		TLDs:                 wire.TLDs,
+		RateLimits:           make(map[string]string, len(wire.RateLimits)),
+		RateLimitConcurrency: make(map[string]int, len(wire.RateLimits)),
+	}
+	for key, value := range wire.RateLimits {
+		key = strings.ToLower(strings.TrimSpace(key))
+		if key == "" {
+			continue
+		}
+		var interval string
+		if err := json.Unmarshal(value, &interval); err == nil {
+			cfg.RateLimits[key] = interval
+			continue
+		}
+		var setting struct {
+			Interval    string `json:"interval"`
+			MinInterval string `json:"min_interval"`
+			Concurrency int    `json:"concurrency"`
+		}
+		if err := json.Unmarshal(value, &setting); err != nil {
+			return Config{}, fmt.Errorf("解析查询策略 rate_limits.%s 失败: %w", key, err)
+		}
+		if setting.Interval == "" {
+			setting.Interval = setting.MinInterval
+		}
+		if setting.Interval != "" {
+			cfg.RateLimits[key] = setting.Interval
+		}
+		if setting.Concurrency > 0 {
+			cfg.RateLimitConcurrency[key] = setting.Concurrency
+		}
 	}
 	return cfg, nil
 }

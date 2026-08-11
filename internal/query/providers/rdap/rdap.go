@@ -300,12 +300,13 @@ func ParseStatus(statuses []string) domain.Status {
 		if strings.Contains(status, "hold") {
 			return domain.StatusHold
 		}
-		if strings.Contains(status, "transfer") &&
-			(strings.Contains(status, "prohibited") || strings.Contains(status, "locked")) {
-			return domain.StatusTransferLocked
-		}
 	}
 	for status := range set {
+		if strings.Contains(status, "transfer") &&
+			(strings.Contains(status, "prohibited") || strings.Contains(status, "locked")) {
+			// EPP 转移锁是 registered 的附加状态，不是保留/禁止注册结论。
+			continue
+		}
 		if strings.Contains(status, "reserved") || strings.Contains(status, "prohibited") ||
 			strings.Contains(status, "not allowed") {
 			return domain.StatusUnknown

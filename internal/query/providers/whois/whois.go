@@ -241,13 +241,9 @@ func parseStatus(response string) domain.Status {
 	if matchAny(response, patterns.PendingDeletePatterns) {
 		return domain.StatusPendingDelete
 	}
-	// Hold / 转移锁定必须早于通用 registered_patterns（其中含 "status:"），
-	// 否则标准 EPP 状态会被吞成"已注册"。
+	// Hold 仍然是主状态；转移锁定只作为附加 EPP 证据，主状态应为 registered。
 	if matchAny(response, patterns.HoldPatterns) {
 		return domain.StatusHold
-	}
-	if matchAny(response, patterns.TransferLockPatterns) {
-		return domain.StatusTransferLocked
 	}
 	if matchAny(response, patterns.ExpiredPatterns) && isExpired(response) {
 		return domain.StatusGrace

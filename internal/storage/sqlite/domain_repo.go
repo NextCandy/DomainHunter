@@ -19,7 +19,7 @@ func NewDomainRepo(db *DB) *DomainRepo { return &DomainRepo{db: db} }
 
 const domainColumns = `id, name, enabled, notify, created_at,
 	COALESCE(priority,0), COALESCE(retry_count,0), next_check_at,
-	COALESCE(favorite,0), COALESCE(note,''), COALESCE(tags,'')`
+	COALESCE(favorite,0), COALESCE(note,''), COALESCE(tags,''), folder_id`
 
 func scanDomain(scanner interface{ Scan(...any) error }) (domain.Domain, error) {
 	var (
@@ -27,9 +27,10 @@ func scanDomain(scanner interface{ Scan(...any) error }) (domain.Domain, error) 
 		enabled, notify, favorite int
 		next                      sql.NullTime
 		note, tags                string
+		folderID                  sql.NullInt64
 	)
 	if err := scanner.Scan(&d.ID, &d.Name, &enabled, &notify, &d.CreatedAt,
-		&d.Priority, &d.RetryCount, &next, &favorite, &note, &tags); err != nil {
+		&d.Priority, &d.RetryCount, &next, &favorite, &note, &tags, &folderID); err != nil {
 		return d, err
 	}
 	d.Enabled = enabled == 1
@@ -37,6 +38,10 @@ func scanDomain(scanner interface{ Scan(...any) error }) (domain.Domain, error) 
 	d.Favorite = favorite == 1
 	d.Note = note
 	d.Tags = splitList(tags)
+	if folderID.Valid {
+		value := folderID.Int64
+		d.FolderID = &value
+	}
 	if next.Valid {
 		t := next.Time
 		d.NextCheckAt = &t
@@ -176,6 +181,12 @@ func (r *DomainRepo) Update(ctx context.Context, name string, patch repository.D
 	if patch.Priority != nil {
 		sets = append(sets, "priority = ?")
 		args = append(args, *patch.Priority)
+	}
+	if patch.FolderID != nil {
+		sets = append(sets, "folder_id = ?")
+		args = append(args, *patch.FolderID)
+	} else if patch.ClearFolder {
+		sets = append(sets, "folder_id = NULL")
 	}
 	if len(sets) == 0 {
 		return nil

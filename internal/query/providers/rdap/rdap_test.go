@@ -64,8 +64,8 @@ func TestParseStatusMapsHoldAndTransferLock(t *testing.T) {
 	if got := ParseStatus([]string{"client hold"}); got != domain.StatusHold {
 		t.Fatalf("期望 hold，实际 %s", got)
 	}
-	if got := ParseStatus([]string{"client transfer prohibited"}); got != domain.StatusTransferLocked {
-		t.Fatalf("期望 transfer_locked，实际 %s", got)
+	if got := ParseStatus([]string{"client transfer prohibited"}); got != domain.StatusRegistered {
+		t.Fatalf("转移锁定主状态应为 registered，实际 %s", got)
 	}
 }
 

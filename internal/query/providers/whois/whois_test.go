@@ -37,8 +37,12 @@ func TestParseMapsHoldAndTransferLock(t *testing.T) {
 	if got := Parse("hold.example", "Domain Status: server hold\n").Status; got != domain.StatusHold {
 		t.Fatalf("期望 hold，实际 %s", got)
 	}
-	if got := Parse("locked.example", "Domain Status: clientTransferProhibited\n").Status; got != domain.StatusTransferLocked {
-		t.Fatalf("期望 transfer_locked，实际 %s", got)
+	result := Parse("locked.example", "Domain Status: clientTransferProhibited\n")
+	if result.Status != domain.StatusRegistered {
+		t.Fatalf("转移锁定主状态应为 registered，实际 %s", result.Status)
+	}
+	if len(result.EPPStatuses) != 1 || result.EPPStatuses[0] != "clientTransferProhibited" {
+		t.Fatalf("转移锁定应作为 EPP 附加状态保留: %+v", result.EPPStatuses)
 	}
 }
 

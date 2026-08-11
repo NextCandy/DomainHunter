@@ -19,6 +19,9 @@ type DomainPatch struct {
 	Note     *string
 	Tags     *[]string
 	Priority *int
+	FolderID *int64
+	// ClearFolder 将域名移回根目录；仅在需要清空 folder_id 时设为 true。
+	ClearFolder bool
 }
 
 // DomainRepository 监控域名列表
@@ -110,4 +113,77 @@ type NotificationRepository interface {
 	Last(ctx context.Context, name string) (*NotificationRecord, error)
 	Save(ctx context.Context, name, status, oldStatus string) error
 	ListRecent(ctx context.Context, limit int) ([]NotificationRecord, error)
+}
+
+// FolderRepository 域名文件夹与批量移动。
+type FolderRepository interface {
+	List(ctx context.Context) ([]domain.Folder, error)
+	Get(ctx context.Context, id int64) (*domain.Folder, error)
+	Create(ctx context.Context, name string, parentID *int64) (*domain.Folder, error)
+	Update(ctx context.Context, id int64, name string, parentID *int64) error
+	Delete(ctx context.Context, id int64) error
+	MoveDomains(ctx context.Context, names []string, folderID *int64) (int64, error)
+}
+
+// APIToken 只在创建响应中携带 RawToken；数据库只保存 Hash。
+type APIToken struct {
+	ID         int64      `json:"id"`
+	Name       string     `json:"name"`
+	Scopes     []string   `json:"scopes"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+	RawToken   string     `json:"token,omitempty"`
+}
+
+// APITokenRepository Bearer token 的持久化接口。
+type APITokenRepository interface {
+	Create(ctx context.Context, name string, scopes []string, tokenHash string) (*APIToken, error)
+	List(ctx context.Context) ([]APIToken, error)
+	Validate(ctx context.Context, tokenHash string) (*APIToken, error)
+	Revoke(ctx context.Context, id int64) error
+}
+
+// NotificationRule 通知过滤规则。
+type NotificationRule struct {
+	ID            int64    `json:"id"`
+	Name          string   `json:"name"`
+	Enabled       bool     `json:"enabled"`
+	Statuses      []string `json:"statuses,omitempty"`
+	SilenceStart  string   `json:"silence_start,omitempty"`
+	SilenceEnd    string   `json:"silence_end,omitempty"`
+	PerDomain     bool     `json:"per_domain"`
+	DigestEnabled bool     `json:"digest_enabled"`
+}
+
+// NotificationTemplate 通知模板。
+type NotificationTemplate struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	EventType string `json:"event_type"`
+	Subject   string `json:"subject"`
+	Body      string `json:"body"`
+	Enabled   bool   `json:"enabled"`
+}
+
+// NotificationDigest 摘要调度设置。
+type NotificationDigest struct {
+	Enabled    bool      `json:"enabled"`
+	Hour       int       `json:"hour"`
+	Minute     int       `json:"minute"`
+	LastSentAt time.Time `json:"last_sent_at,omitempty"`
+}
+
+// NotificationConfigRepository 通知规则、模板与摘要配置。
+type NotificationConfigRepository interface {
+	ListRules(ctx context.Context) ([]NotificationRule, error)
+	CreateRule(ctx context.Context, rule NotificationRule) (*NotificationRule, error)
+	UpdateRule(ctx context.Context, rule NotificationRule) error
+	DeleteRule(ctx context.Context, id int64) error
+	ListTemplates(ctx context.Context) ([]NotificationTemplate, error)
+	CreateTemplate(ctx context.Context, template NotificationTemplate) (*NotificationTemplate, error)
+	UpdateTemplate(ctx context.Context, template NotificationTemplate) error
+	DeleteTemplate(ctx context.Context, id int64) error
+	GetDigest(ctx context.Context) (*NotificationDigest, error)
+	UpdateDigest(ctx context.Context, digest NotificationDigest) error
 }

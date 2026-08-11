@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+// Folder 是域名分组节点；parent_id 允许 API 在不改变 v1 语义的情况下构建树。
+type Folder struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	ParentID  *int64    `json:"parent_id,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // Priority 查询任务优先级。数值越大越先执行。
 type Priority int
 
@@ -31,6 +39,7 @@ type Domain struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	NextCheckAt *time.Time `json:"next_check_at"`
 	LastChecked *time.Time `json:"last_checked_at"`
+	FolderID    *int64     `json:"folder_id,omitempty"`
 }
 
 // Info 域名当前状态快照。
@@ -58,6 +67,9 @@ type Info struct {
 	Favorite    bool       `json:"favorite,omitempty"`
 	Tags        []string   `json:"tags,omitempty"`
 	Note        string     `json:"note,omitempty"`
+	FolderID    *int64     `json:"folder_id,omitempty"`
+	FolderName  string     `json:"folder,omitempty"`
+	Cached      bool       `json:"cached,omitempty"`
 }
 
 // HasRegistrationEvidence 判断快照里是否存在"已被注册"的实证信息。

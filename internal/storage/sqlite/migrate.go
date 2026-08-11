@@ -138,6 +138,79 @@ var migrations = []Migration{
 				WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE key = 'session_secret')`,
 		},
 	},
+	{
+		Version: "006",
+		Name:    "epp_statuses",
+		Stmts: []string{
+			`ALTER TABLE domain_results ADD COLUMN epp_statuses TEXT`,
+		},
+	},
+	{
+		Version: "007",
+		Name:    "folders",
+		Stmts: []string{
+			`CREATE TABLE IF NOT EXISTS folders (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name TEXT NOT NULL UNIQUE,
+				parent_id INTEGER,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`ALTER TABLE domains ADD COLUMN folder_id INTEGER`,
+			`CREATE INDEX IF NOT EXISTS idx_domains_folder ON domains(folder_id)`,
+		},
+	},
+	{
+		Version: "008",
+		Name:    "api_tokens",
+		Stmts: []string{
+			`CREATE TABLE IF NOT EXISTS api_tokens (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name TEXT NOT NULL,
+				token_hash TEXT NOT NULL UNIQUE,
+				scopes TEXT NOT NULL DEFAULT 'read,write',
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				last_used_at DATETIME,
+				revoked_at DATETIME
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_api_tokens_active ON api_tokens(token_hash, revoked_at)`,
+		},
+	},
+	{
+		Version: "009",
+		Name:    "notification_rules_templates_digest",
+		Stmts: []string{
+			`CREATE TABLE IF NOT EXISTS notification_rules (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name TEXT NOT NULL,
+				enabled INTEGER NOT NULL DEFAULT 1,
+				statuses TEXT NOT NULL DEFAULT '',
+				silence_start TEXT NOT NULL DEFAULT '',
+				silence_end TEXT NOT NULL DEFAULT '',
+				per_domain INTEGER NOT NULL DEFAULT 1,
+				digest_enabled INTEGER NOT NULL DEFAULT 0,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`CREATE TABLE IF NOT EXISTS notification_templates (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name TEXT NOT NULL,
+				event_type TEXT NOT NULL DEFAULT 'status_change',
+				subject TEXT NOT NULL DEFAULT '',
+				body TEXT NOT NULL DEFAULT '',
+				enabled INTEGER NOT NULL DEFAULT 1,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`CREATE TABLE IF NOT EXISTS notification_digest (
+				id INTEGER PRIMARY KEY CHECK(id = 1),
+				enabled INTEGER NOT NULL DEFAULT 0,
+				hour INTEGER NOT NULL DEFAULT 8,
+				minute INTEGER NOT NULL DEFAULT 0,
+				last_sent_at DATETIME
+			)`,
+			`INSERT INTO notification_digest(id) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM notification_digest WHERE id = 1)`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录

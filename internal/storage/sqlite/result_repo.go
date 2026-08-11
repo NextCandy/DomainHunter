@@ -17,7 +17,8 @@ func NewResultRepo(db *DB) *ResultRepo { return &ResultRepo{db: db} }
 
 const resultColumns = `domain, COALESCE(status,''), COALESCE(registrar,''), last_checked,
 	COALESCE(query_method,''), created_at, expiry_at, updated_at,
-	COALESCE(name_servers,''), COALESCE(whois_raw,''), COALESCE(error_message,'')`
+	COALESCE(name_servers,''), COALESCE(whois_raw,''), COALESCE(error_message,''),
+	COALESCE(epp_statuses,'')`
 
 func scanResult(scanner interface{ Scan(...any) error }) (domain.Info, error) {
 	var (
@@ -28,9 +29,10 @@ func scanResult(scanner interface{ Scan(...any) error }) (domain.Info, error) {
 		expiry      sql.NullTime
 		updated     sql.NullTime
 		lastChecked sql.NullTime
+		eppStatuses string
 	)
 	if err := scanner.Scan(&info.Name, &status, &info.Registrar, &lastChecked, &info.QueryMethod,
-		&created, &expiry, &updated, &nameServers, &info.WhoisRaw, &info.ErrorMessage); err != nil {
+		&created, &expiry, &updated, &nameServers, &info.WhoisRaw, &info.ErrorMessage, &eppStatuses); err != nil {
 		return info, err
 	}
 	info.Status = domain.Status(status)
@@ -50,6 +52,7 @@ func scanResult(scanner interface{ Scan(...any) error }) (domain.Info, error) {
 		info.UpdatedDate = &t
 	}
 	info.NameServers = splitList(nameServers)
+	info.EPPStatuses = splitList(eppStatuses)
 	return info, nil
 }
 
@@ -91,16 +94,17 @@ func (r *ResultRepo) LoadAll(ctx context.Context) (map[string]domain.Info, error
 func (r *ResultRepo) Save(ctx context.Context, info domain.Info) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO domain_results(domain, status, registrar, last_checked, query_method,
-			created_at, expiry_at, updated_at, name_servers, whois_raw, error_message)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_at, expiry_at, updated_at, name_servers, whois_raw, error_message, epp_statuses)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(domain) DO UPDATE SET
 			status=excluded.status, registrar=excluded.registrar, last_checked=excluded.last_checked,
 			query_method=excluded.query_method, created_at=excluded.created_at, expiry_at=excluded.expiry_at,
 			updated_at=excluded.updated_at, name_servers=excluded.name_servers,
-			whois_raw=excluded.whois_raw, error_message=excluded.error_message`,
+			whois_raw=excluded.whois_raw, error_message=excluded.error_message,
+			epp_statuses=excluded.epp_statuses`,
 		domain.Normalize(info.Name), string(info.Status), info.Registrar, info.LastChecked, info.QueryMethod,
 		info.CreatedDate, info.ExpiryDate, info.UpdatedDate, joinList(info.NameServers),
-		info.WhoisRaw, info.ErrorMessage)
+		info.WhoisRaw, info.ErrorMessage, joinList(info.EPPStatuses))
 	return err
 }
 

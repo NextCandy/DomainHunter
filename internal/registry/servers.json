@@ -2186,6 +2186,33 @@
       "server": ""
     }
   },
+  "com.cn": {
+    "whois": {
+      "server": "whois.cnnic.cn",
+      "port": 43
+    },
+    "rdap": {
+      "server": "https://rdap.cnnic.cn/"
+    }
+  },
+  "net.cn": {
+    "whois": {
+      "server": "whois.cnnic.cn",
+      "port": 43
+    },
+    "rdap": {
+      "server": "https://rdap.cnnic.cn/"
+    }
+  },
+  "org.cn": {
+    "whois": {
+      "server": "whois.cnnic.cn",
+      "port": 43
+    },
+    "rdap": {
+      "server": "https://rdap.cnnic.cn/"
+    }
+  },
   "cn.com": {
     "whois": {
       "server": "whois.centralnic.com",
