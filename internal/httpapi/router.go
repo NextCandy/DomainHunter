@@ -77,6 +77,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v2/domains/{domain}/check", s.withAuth(s.handleDomainCheckV2))
 	mux.HandleFunc("GET /api/v2/domains/{domain}/history", s.withAuth(s.handleDomainHistory))
 	mux.HandleFunc("GET /api/v2/domains/{domain}/attempts", s.withAuth(s.handleDomainAttempts))
+	mux.HandleFunc("GET /api/v2/observations", s.withAuth(s.handleRecentObservations))
 	mux.HandleFunc("GET /api/v2/providers", s.withAuth(s.handleProviders))
 	mux.HandleFunc("GET /api/v2/notifications", s.withAuth(s.handleNotificationHistory))
 	mux.HandleFunc("GET /api/v2/settings", s.withAuth(s.handleSettingsV2))

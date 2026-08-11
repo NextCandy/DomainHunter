@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"DomainHunter/internal/domain"
-	"DomainHunter/internal/logger"
 	"DomainHunter/internal/registry"
 	"DomainHunter/internal/repository"
 	"DomainHunter/internal/service"
@@ -89,27 +88,12 @@ func (s *Server) handleDomainDetail(w http.ResponseWriter, r *http.Request) {
 
 // handleDomainDetailV2 新版详情：附带证据、观测历史与查询尝试
 func (s *Server) handleDomainDetailV2(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("domain")
-	info, err := s.deps.Domains.Get(r.Context(), name)
+	detail, err := s.deps.Domains.GetDetail(r.Context(), r.PathValue("domain"), 50, 30)
 	if err != nil {
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	history, err := s.deps.Domains.History(r.Context(), name, 50)
-	if err != nil {
-		s.log.Warn(logger.Fields{"domain": name, "error": err.Error()}, "读取观测历史失败")
-	}
-	attempts, err := s.deps.Domains.Attempts(r.Context(), name, 30)
-	if err != nil {
-		s.log.Warn(logger.Fields{"domain": name, "error": err.Error()}, "读取查询尝试失败")
-	}
-
-	s.writeJSON(w, r, http.StatusOK, map[string]any{
-		"info":     info,
-		"history":  history,
-		"attempts": attempts,
-	})
+	s.writeJSON(w, r, http.StatusOK, detail)
 }
 
 // handleDomainHistory 状态变化历史
@@ -393,6 +377,20 @@ func (s *Server) handleDomainWhoisRaw(w http.ResponseWriter, r *http.Request) {
 		"whois_raw": info.WhoisRaw,
 		"timestamp": info.LastChecked.Format("2006-01-02 15:04:05"),
 	})
+}
+
+// handleRecentObservations 返回全局最近的状态变化，用于查询历史页
+func (s *Server) handleRecentObservations(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
+		limit = v
+	}
+	changes, err := s.deps.Domains.RecentChanges(r.Context(), limit)
+	if err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]any{"observations": changes})
 }
 
 // handleMeta 返回前端需要的静态元数据：状态列表与已知 TLD

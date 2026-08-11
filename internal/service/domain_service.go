@@ -340,6 +340,65 @@ func (s *DomainService) Get(ctx context.Context, name string) (*domain.Info, err
 	return info, nil
 }
 
+// Detail 域名详情：当前状态 + 观测历史 + 查询尝试
+type Detail struct {
+	Info     *domain.Info         `json:"info"`
+	History  []domain.Observation `json:"history"`
+	Attempts []domain.Attempt     `json:"attempts"`
+}
+
+// GetDetail 组装详情页数据。
+//
+// domain_results 只存当前快照，不含证据；这里用最近一次观测把可信度补回去，
+// 并用该次观测的查询尝试还原"每个查询源分别看到了什么"。
+func (s *DomainService) GetDetail(ctx context.Context, name string, historyLimit, attemptLimit int) (*Detail, error) {
+	info, err := s.Get(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	detail := &Detail{Info: info}
+	history, err := s.observations.ListByDomain(ctx, name, historyLimit)
+	if err != nil {
+		s.log.Warn(logger.Fields{"domain": name, "error": err.Error()}, "读取观测历史失败")
+	} else {
+		detail.History = history
+	}
+
+	if attempts, err := s.observations.ListAttempts(ctx, name, attemptLimit); err != nil {
+		s.log.Warn(logger.Fields{"domain": name, "error": err.Error()}, "读取查询尝试失败")
+	} else {
+		detail.Attempts = attempts
+	}
+
+	if len(detail.History) > 0 {
+		latest := detail.History[0]
+		if info.Confidence == "" {
+			info.Confidence = latest.Confidence
+		}
+		if len(info.Evidence) == 0 {
+			if attempts, err := s.observations.ListAttemptsByObservation(ctx, latest.ID); err == nil {
+				info.Evidence = toEvidence(attempts)
+			}
+		}
+	}
+	return detail, nil
+}
+
+func toEvidence(attempts []domain.Attempt) []domain.Evidence {
+	out := make([]domain.Evidence, 0, len(attempts))
+	for _, attempt := range attempts {
+		out = append(out, domain.Evidence{
+			Provider:  attempt.Provider,
+			Status:    attempt.Status,
+			LatencyMS: attempt.LatencyMS,
+			Error:     attempt.ErrorMessage,
+			QueriedAt: attempt.QueriedAt,
+		})
+	}
+	return out
+}
+
 // History 返回域名的状态观测历史
 func (s *DomainService) History(ctx context.Context, name string, limit int) ([]domain.Observation, error) {
 	return s.observations.ListByDomain(ctx, domain.Normalize(name), limit)
@@ -348,6 +407,11 @@ func (s *DomainService) History(ctx context.Context, name string, limit int) ([]
 // Attempts 返回域名的查询尝试历史
 func (s *DomainService) Attempts(ctx context.Context, name string, limit int) ([]domain.Attempt, error) {
 	return s.observations.ListAttempts(ctx, domain.Normalize(name), limit)
+}
+
+// RecentChanges 返回全局最近的状态变化
+func (s *DomainService) RecentChanges(ctx context.Context, limit int) ([]domain.Observation, error) {
+	return s.observations.ListRecentChanges(ctx, limit)
 }
 
 // Add 添加单个域名

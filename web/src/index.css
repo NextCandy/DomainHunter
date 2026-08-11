@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 配色走"专业基础设施后台"路线：中性灰阶 + 单一强调色，
+   不使用大面积渐变、玻璃拟态与夸张阴影。 */
+@layer base {
+  :root {
+    --surface: 250 250 250;
+    --surface-muted: 244 244 245;
+    --surface-raised: 255 255 255;
+    --line: 228 228 231;
+    --ink: 24 24 27;
+    --ink-muted: 82 82 91;
+    --ink-faint: 140 140 148;
+    --accent: 37 99 235;
+    --accent-soft: 219 234 254;
+  }
+
+  .dark {
+    --surface: 12 14 18;
+    --surface-muted: 20 23 28;
+    --surface-raised: 24 27 33;
+    --line: 44 48 56;
+    --ink: 237 238 241;
+    --ink-muted: 163 167 176;
+    --ink-faint: 120 125 134;
+    --accent: 96 154 255;
+    --accent-soft: 30 47 78;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-surface text-ink font-sans antialiased;
+    font-size: 14px;
+    /* 表格与代码块自己滚动，页面整体永远不横向滚动 */
+    overflow-x: hidden;
+  }
+
+  * {
+    border-color: rgb(var(--line));
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.2);
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card border border-line bg-surface-raised;
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md
+      border border-line bg-surface-raised px-3 py-1.5 text-[13px] font-medium text-ink
+      transition-colors hover:bg-surface-muted focus-visible:outline focus-visible:outline-2
+      focus-visible:outline-offset-2 focus-visible:outline-accent
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply border-transparent bg-accent text-white hover:bg-accent/90;
+  }
+
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-surface-muted;
+  }
+
+  .btn-danger {
+    @apply border-transparent bg-red-600 text-white hover:bg-red-600/90;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-line bg-surface-raised px-2.5 py-1.5 text-[13px]
+      text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none
+      focus:ring-1 focus:ring-accent disabled:opacity-60;
+  }
+
+  .label {
+    @apply mb-1 block text-[12px] font-medium text-ink-muted;
+  }
+
+  .table-scroll {
+    @apply w-full overflow-x-auto;
+  }
+
+  .mono {
+    @apply font-mono text-[12px];
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* 滚动条低调一些，避免抢视觉 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--line));
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

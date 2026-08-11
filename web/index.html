@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>DomainHunter</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f172a'/%3E%3Cpath d='M9 20.5 14.2 9h3.6L23 20.5h-3.2l-1-2.4h-5.6l-1 2.4H9Zm4.9-4.9h3.8L16 11.2l-2.1 4.4Z' fill='%23f8fafc'/%3E%3C/svg%3E" />
+    <script>
+      // 首屏前应用主题，避免深色模式下的白屏闪烁
+      (function () {
+        try {
+          var stored = localStorage.getItem("dh-theme") || "system";
+          var dark =
+            stored === "dark" ||
+            (stored === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,197 @@
+import type { DomainInfo } from "../lib/api";
+import { StatusBadge, cx } from "./ui";
+import { formatDate, formatDateTime, formatRelative, providerLabel } from "../lib/format";
+
+interface Props {
+  domains: DomainInfo[];
+  selected: Set<string>;
+  onToggle: (name: string) => void;
+  onToggleAll: (checked: boolean) => void;
+  onOpen: (name: string) => void;
+  onCheck: (name: string) => void;
+  onDelete: (name: string) => void;
+  busy: string | null;
+}
+
+/**
+ * 桌面端用表格，窄屏（<768px）自动切换成卡片列表 —— 表格在手机上缩小后
+ * 只会变得不可读，所以这里不是简单缩放而是换一种布局。
+ */
+export function DomainTable(props: Props) {
+  return (
+    <>
+      <div className="hidden md:block">
+        <DesktopTable {...props} />
+      </div>
+      <div className="md:hidden">
+        <MobileList {...props} />
+      </div>
+    </>
+  );
+}
+
+function DesktopTable({
+  domains,
+  selected,
+  onToggle,
+  onToggleAll,
+  onOpen,
+  onCheck,
+  onDelete,
+  busy,
+}: Props) {
+  const allSelected = domains.length > 0 && domains.every((item) => selected.has(item.name));
+
+  return (
+    <div className="table-scroll card">
+      <table className="w-full min-w-[960px] text-left">
+        <thead className="bg-surface-muted text-[11px] uppercase tracking-wide text-ink-muted">
+          <tr>
+            <th className="w-9 px-3 py-2">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={(event) => onToggleAll(event.target.checked)}
+                aria-label="全选"
+              />
+            </th>
+            <th className="px-3 py-2 font-medium">域名</th>
+            <th className="px-3 py-2 font-medium">状态</th>
+            <th className="px-3 py-2 font-medium">注册商</th>
+            <th className="px-3 py-2 font-medium">到期时间</th>
+            <th className="px-3 py-2 font-medium">查询来源</th>
+            <th className="px-3 py-2 font-medium">最后查询</th>
+            <th className="px-3 py-2 font-medium">下次查询</th>
+            <th className="px-3 py-2 text-right font-medium">操作</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line text-[13px]">
+          {domains.map((item) => (
+            <tr key={item.name} className="hover:bg-surface-muted/60">
+              <td className="px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={selected.has(item.name)}
+                  onChange={() => onToggle(item.name)}
+                  aria-label={`选择 ${item.name}`}
+                />
+              </td>
+              <td className="px-3 py-2">
+                <button
+                  type="button"
+                  className="mono text-left text-ink hover:text-accent hover:underline"
+                  onClick={() => onOpen(item.name)}
+                >
+                  {item.favorite && <span className="mr-1 text-amber-500">★</span>}
+                  {item.name}
+                </button>
+              </td>
+              <td className="px-3 py-2">
+                <StatusBadge status={item.status} />
+              </td>
+              <td className="max-w-[180px] truncate px-3 py-2 text-ink-muted" title={item.registrar}>
+                {item.registrar || "—"}
+              </td>
+              <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">
+                {formatDate(item.expiry_date)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-ink-muted">
+                {providerLabel(item.query_method)}
+              </td>
+              <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">
+                {formatRelative(item.last_checked)}
+              </td>
+              <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">
+                {formatRelative(item.next_check_at)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right">
+                <button
+                  type="button"
+                  className="btn btn-ghost h-7 px-2 text-[12px]"
+                  onClick={() => onCheck(item.name)}
+                  disabled={busy === item.name}
+                >
+                  {busy === item.name ? "查询中…" : "立即检查"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost h-7 px-2 text-[12px] text-red-600 dark:text-red-400"
+                  onClick={() => onDelete(item.name)}
+                >
+                  删除
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MobileList({ domains, selected, onToggle, onOpen, onCheck, onDelete, busy }: Props) {
+  return (
+    <ul className="space-y-2">
+      {domains.map((item) => (
+        <li key={item.name} className="card p-3">
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={selected.has(item.name)}
+              onChange={() => onToggle(item.name)}
+              aria-label={`选择 ${item.name}`}
+            />
+            <div className="min-w-0 flex-1">
+              <button
+                type="button"
+                className="mono block w-full truncate text-left text-[13px] text-ink"
+                onClick={() => onOpen(item.name)}
+              >
+                {item.favorite && <span className="mr-1 text-amber-500">★</span>}
+                {item.name}
+              </button>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-muted">
+                <StatusBadge status={item.status} />
+                <span className="truncate">{item.registrar || "—"}</span>
+              </div>
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-faint">
+                <Row label="到期" value={formatDate(item.expiry_date)} />
+                <Row label="来源" value={providerLabel(item.query_method)} />
+                <Row label="最后查询" value={formatRelative(item.last_checked)} />
+                <Row label="下次查询" value={formatRelative(item.next_check_at)} />
+              </dl>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  className="btn h-7 flex-1 text-[12px]"
+                  onClick={() => onCheck(item.name)}
+                  disabled={busy === item.name}
+                >
+                  {busy === item.name ? "查询中…" : "立即检查"}
+                </button>
+                <button
+                  type="button"
+                  className={cx("btn h-7 px-3 text-[12px] text-red-600 dark:text-red-400")}
+                  onClick={() => onDelete(item.name)}
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="sr-only">{formatDateTime(item.last_checked)}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-1">
+      <dt>{label}</dt>
+      <dd className="tabular truncate text-ink-muted">{value}</dd>
+    </div>
+  );
+}
