@@ -7,6 +7,7 @@ package notification
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,8 @@ type Manager struct {
 	mu        sync.RWMutex
 	notifiers []Notifier
 	enabled   bool
+	rules     []repository.NotificationRule
+	templates []repository.NotificationTemplate
 
 	queue      chan Event
 	wg         sync.WaitGroup
@@ -89,6 +92,20 @@ func (m *Manager) Register(n Notifier) {
 	}
 	m.mu.Lock()
 	m.notifiers = append(m.notifiers, n)
+	m.mu.Unlock()
+}
+
+// SetRules 热更新通知过滤规则。规则为空或没有启用规则时保持原有通知语义。
+func (m *Manager) SetRules(rules []repository.NotificationRule) {
+	m.mu.Lock()
+	m.rules = append([]repository.NotificationRule(nil), rules...)
+	m.mu.Unlock()
+}
+
+// SetTemplates 热更新通知模板。
+func (m *Manager) SetTemplates(templates []repository.NotificationTemplate) {
+	m.mu.Lock()
+	m.templates = append([]repository.NotificationTemplate(nil), templates...)
 	m.mu.Unlock()
 }
 
@@ -174,7 +191,7 @@ func (m *Manager) isEnabled() bool {
 
 // Submit 提交状态变化事件（走聚合器合并）
 func (m *Manager) Submit(event Event) {
-	if !m.isEnabled() {
+	if !m.Allows(event) {
 		return
 	}
 	if event.Type == "status_change" {
@@ -182,6 +199,11 @@ func (m *Manager) Submit(event Event) {
 		return
 	}
 	m.enqueue(event)
+}
+
+// Allows 判断事件是否会通过当前规则过滤器；调用方可在写入通知去重状态前预检。
+func (m *Manager) Allows(event Event) bool {
+	return m.isEnabled() && m.allowed(event)
 }
 
 // RecordQuery 记录域名开始查询，用于聚合器判断"是否还有新查询在进行"
@@ -193,12 +215,100 @@ func (m *Manager) enqueue(event Event) {
 	}
 	event.Subject = formatSubject(event)
 	event.Body = formatBody(event)
+	m.applyTemplate(&event)
 
 	select {
 	case m.queue <- event:
 	default:
 		m.log.Warn(logger.Fields{"domain": event.Domain}, "通知队列已满，丢弃通知")
 	}
+}
+
+func (m *Manager) allowed(event Event) bool {
+	m.mu.RLock()
+	rules := append([]repository.NotificationRule(nil), m.rules...)
+	m.mu.RUnlock()
+	active := false
+	for _, rule := range rules {
+		if !rule.Enabled {
+			continue
+		}
+		active = true
+		if len(rule.Statuses) > 0 && !containsStatus(rule.Statuses, event.Status) {
+			continue
+		}
+		if inSilenceWindow(rule.SilenceStart, rule.SilenceEnd, time.Now()) {
+			continue
+		}
+		return true
+	}
+	return !active
+}
+
+func containsStatus(statuses []string, status string) bool {
+	for _, item := range statuses {
+		if strings.EqualFold(strings.TrimSpace(item), strings.TrimSpace(status)) {
+			return true
+		}
+	}
+	return false
+}
+
+func inSilenceWindow(start, end string, now time.Time) bool {
+	parse := func(raw string) (int, bool) {
+		parts := strings.Split(strings.TrimSpace(raw), ":")
+		if len(parts) != 2 {
+			return 0, false
+		}
+		hour, hourErr := strconv.Atoi(parts[0])
+		minute, minuteErr := strconv.Atoi(parts[1])
+		if hourErr != nil || minuteErr != nil || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+			return 0, false
+		}
+		return hour*60 + minute, true
+	}
+	from, okFrom := parse(start)
+	to, okTo := parse(end)
+	if !okFrom || !okTo {
+		return false
+	}
+	current := now.Hour()*60 + now.Minute()
+	if from <= to {
+		return current >= from && current < to
+	}
+	return current >= from || current < to
+}
+
+func (m *Manager) applyTemplate(event *Event) {
+	if event == nil || len(event.Batch) > 0 {
+		return
+	}
+	m.mu.RLock()
+	templates := append([]repository.NotificationTemplate(nil), m.templates...)
+	m.mu.RUnlock()
+	for _, template := range templates {
+		if !template.Enabled || (template.EventType != "" && template.EventType != event.Type) {
+			continue
+		}
+		if template.Subject != "" {
+			event.Subject = renderTemplate(template.Subject, *event)
+		}
+		if template.Body != "" {
+			event.Body = renderTemplate(template.Body, *event)
+		}
+		return
+	}
+}
+
+func renderTemplate(raw string, event Event) string {
+	replacer := strings.NewReplacer(
+		"{{domain}}", event.Domain,
+		"{{status}}", event.Status,
+		"{{old_status}}", event.OldStatus,
+		"{{message}}", event.Message,
+		"{{time}}", event.Timestamp.Format("2006-01-02 15:04:05"),
+	)
+	return replacer.Replace(raw)
 }
 
 // enqueueBatch 提交合并后的批量通知

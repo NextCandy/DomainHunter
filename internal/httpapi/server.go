@@ -24,17 +24,19 @@ import (
 
 // Deps 组装 HTTP 层需要的全部依赖
 type Deps struct {
-	DB            *sqlite.DB
-	Auth          *auth.Authenticator
-	Settings      *service.SettingsService
-	Domains       *service.DomainService
-	Query         *service.QueryService
-	Monitor       *service.MonitorService
-	Overview      *service.OverviewService
-	Notification  *notification.Manager
-	Engine        *query.Engine
-	Notifications repository.NotificationRepository
-	Version       string
+	DB                 *sqlite.DB
+	Auth               *auth.Authenticator
+	Settings           *service.SettingsService
+	Domains            *service.DomainService
+	Query              *service.QueryService
+	Monitor            *service.MonitorService
+	Overview           *service.OverviewService
+	Notification       *notification.Manager
+	Engine             *query.Engine
+	Notifications      repository.NotificationRepository
+	Tokens             repository.APITokenRepository
+	NotificationConfig repository.NotificationConfigRepository
+	Version            string
 }
 
 // Server HTTP 服务器
@@ -54,6 +56,27 @@ type Server struct {
 
 // NewServer 创建 HTTP 服务器
 func NewServer(deps Deps) *Server {
+	// 旧的 cmd 组装代码不需要感知新增的 Repository；只要提供 DB，HTTP 层
+	// 就能把 P2 存储能力接入现有单体进程。
+	if deps.DB != nil {
+		if deps.Tokens == nil {
+			deps.Tokens = sqlite.NewAPITokenRepo(deps.DB)
+		}
+		if deps.NotificationConfig == nil {
+			deps.NotificationConfig = sqlite.NewNotificationConfigRepo(deps.DB)
+		}
+		if deps.Domains != nil {
+			deps.Domains.SetFolderRepository(sqlite.NewFolderRepo(deps.DB))
+		}
+		if deps.Notification != nil {
+			if rules, err := deps.NotificationConfig.ListRules(context.Background()); err == nil {
+				deps.Notification.SetRules(rules)
+			}
+			if templates, err := deps.NotificationConfig.ListTemplates(context.Background()); err == nil {
+				deps.Notification.SetTemplates(templates)
+			}
+		}
+	}
 	s := &Server{
 		deps:           deps,
 		cfg:            deps.Settings.Config(),

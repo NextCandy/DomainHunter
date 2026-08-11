@@ -58,7 +58,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PUT /api/settings/feishu", s.withAuth(s.handleFeishuSettings))
 	mux.HandleFunc("POST /api/settings/webhook", s.withAuth(s.handleWebhookSettings))
 	mux.HandleFunc("PUT /api/settings/webhook", s.withAuth(s.handleWebhookSettings))
-	mux.HandleFunc("POST /api/v2/notifications/test/{channel}", s.withAuth(s.handleChannelTest))
+	mux.HandleFunc("POST /api/v2/notifications/test/{channel}", s.withAuthScope("write", s.handleChannelTest))
 
 	// ---- 维护 ----
 	mux.HandleFunc("/api/database/clean-orphaned", s.withAuth(s.handleCleanOrphaned))
@@ -69,33 +69,70 @@ func (s *Server) routes() http.Handler {
 	// ---- 历史（规格要求的路径）----
 	mux.HandleFunc("GET /api/domains/{domain}/history", s.withAuth(s.handleDomainHistory))
 	mux.HandleFunc("GET /api/domains/{domain}/attempts", s.withAuth(s.handleDomainAttempts))
+	mux.HandleFunc("GET /metrics", s.handleMetrics)
 
 	// ---- v2 ----
-	mux.HandleFunc("GET /api/v2/overview", s.withAuth(s.handleOverview))
-	mux.HandleFunc("GET /api/v2/meta", s.withAuth(s.handleMeta))
-	mux.HandleFunc("GET /api/v2/facets", s.withAuth(s.handleFacets))
-	mux.HandleFunc("GET /api/v2/domains", s.withAuth(s.handleDomainsV2))
-	mux.HandleFunc("POST /api/v2/domains", s.withAuth(s.handleDomainAdd))
-	mux.HandleFunc("POST /api/v2/domains/batch-add", s.withAuth(
+	mux.HandleFunc("GET /api/v2/overview", s.withAuthScope("read", s.handleOverview))
+	mux.HandleFunc("GET /api/v2/meta", s.withAuthScope("read", s.handleMeta))
+	mux.HandleFunc("GET /api/v2/facets", s.withAuthScope("read", s.handleFacets))
+	mux.HandleFunc("GET /api/v2/domains", s.withAuthScope("read", s.handleDomainsV2))
+	mux.HandleFunc("POST /api/v2/domains", s.withAuthScope("write", s.handleDomainAdd))
+	mux.HandleFunc("POST /api/v2/domains/batch-add", s.withAuthScope("write",
 		s.withRateLimit(s.batchLimiter, "批量添加过于频繁，请1分钟后再试", s.handleDomainBatchAdd)))
-	mux.HandleFunc("POST /api/v2/domains/batch-delete", s.withAuth(s.handleDomainBatchDelete))
-	mux.HandleFunc("POST /api/v2/domains/batch-check", s.withAuth(
+	mux.HandleFunc("POST /api/v2/domains/batch-delete", s.withAuthScope("write", s.handleDomainBatchDelete))
+	mux.HandleFunc("POST /api/v2/domains/batch-check", s.withAuthScope("write",
 		s.withRateLimit(s.batchLimiter, "批量检查过于频繁，请1分钟后再试", s.handleDomainBatchCheck)))
-	mux.HandleFunc("GET /api/v2/domains/{domain}", s.withAuth(s.handleDomainDetailV2))
-	mux.HandleFunc("PATCH /api/v2/domains/{domain}", s.withAuth(s.handleDomainPatch))
-	mux.HandleFunc("DELETE /api/v2/domains/{domain}", s.withAuth(s.handleDomainDeleteV2))
-	mux.HandleFunc("POST /api/v2/domains/{domain}/check", s.withAuth(s.handleDomainCheckV2))
-	mux.HandleFunc("GET /api/v2/domains/{domain}/history", s.withAuth(s.handleDomainHistory))
-	mux.HandleFunc("GET /api/v2/domains/{domain}/attempts", s.withAuth(s.handleDomainAttempts))
-	mux.HandleFunc("GET /api/v2/observations", s.withAuth(s.handleRecentObservations))
-	mux.HandleFunc("GET /api/v2/providers", s.withAuth(s.handleProviders))
-	mux.HandleFunc("GET /api/v2/notifications", s.withAuth(s.handleNotificationHistory))
-	mux.HandleFunc("GET /api/v2/settings", s.withAuth(s.handleSettingsV2))
-	mux.HandleFunc("PUT /api/v2/settings/query-policy", s.withAuth(s.handleQueryPolicy))
-	mux.HandleFunc("PUT /api/v2/settings/history", s.withAuth(s.handleHistorySettings))
-	mux.HandleFunc("PUT /api/v2/settings/log-level", s.withAuth(s.handleLogLevel))
-	mux.HandleFunc("GET /api/v2/backups", s.withAuth(s.handleBackups))
-	mux.HandleFunc("POST /api/v2/backups", s.withAuth(s.handleCreateBackup))
+	mux.HandleFunc("POST /api/v2/domains/batch-move-folder", s.withAuthScope("write", s.handleDomainBatchMoveFolder))
+	mux.HandleFunc("POST /api/v2/domains/batch-retry-failed", s.withAuthScope("write", s.handleDomainBatchRetryFailed))
+	mux.HandleFunc("GET /api/v2/domains/export", s.withAuthScope("read", s.handleDomainExport))
+	mux.HandleFunc("POST /api/v2/domains/import", s.withAuthScope("write", s.handleDomainImport))
+	mux.HandleFunc("GET /api/v2/domains/{domain}", s.withAuthScope("read", s.handleDomainDetailV2))
+	mux.HandleFunc("PATCH /api/v2/domains/{domain}", s.withAuthScope("write", s.handleDomainPatch))
+	mux.HandleFunc("DELETE /api/v2/domains/{domain}", s.withAuthScope("write", s.handleDomainDeleteV2))
+	mux.HandleFunc("POST /api/v2/domains/{domain}/check", s.withAuthScope("write", s.handleDomainCheckV2))
+	mux.HandleFunc("GET /api/v2/domains/{domain}/history", s.withAuthScope("read", s.handleDomainHistory))
+	mux.HandleFunc("GET /api/v2/domains/{domain}/history/export", s.withAuthScope("read", s.handleDomainHistoryExport))
+	mux.HandleFunc("GET /api/v2/domains/{domain}/attempts", s.withAuthScope("read", s.handleDomainAttempts))
+
+	// ---- folders ----
+	mux.HandleFunc("GET /api/v2/folders", s.withAuthScope("read", s.handleFolders))
+	mux.HandleFunc("POST /api/v2/folders", s.withAuthScope("write", s.handleFolderCreate))
+	mux.HandleFunc("GET /api/v2/folders/{id}", s.withAuthScope("read", s.handleFolderGet))
+	mux.HandleFunc("PUT /api/v2/folders/{id}", s.withAuthScope("write", s.handleFolderUpdate))
+	mux.HandleFunc("PATCH /api/v2/folders/{id}", s.withAuthScope("write", s.handleFolderUpdate))
+	mux.HandleFunc("DELETE /api/v2/folders/{id}", s.withAuthScope("write", s.handleFolderDelete))
+	mux.HandleFunc("GET /api/v2/observations", s.withAuthScope("read", s.handleRecentObservations))
+	mux.HandleFunc("GET /api/v2/providers", s.withAuthScope("read", s.handleProviders))
+	mux.HandleFunc("GET /api/v2/notifications", s.withAuthScope("read", s.handleNotificationHistory))
+	mux.HandleFunc("GET /api/v2/settings", s.withAuthScope("read", s.handleSettingsV2))
+	mux.HandleFunc("PUT /api/v2/settings/query-policy", s.withAuthScope("write", s.handleQueryPolicy))
+	mux.HandleFunc("PUT /api/v2/settings/history", s.withAuthScope("write", s.handleHistorySettings))
+	mux.HandleFunc("PUT /api/v2/settings/log-level", s.withAuthScope("write", s.handleLogLevel))
+	mux.HandleFunc("GET /api/v2/backups", s.withAuthScope("read", s.handleBackups))
+	mux.HandleFunc("POST /api/v2/backups", s.withAuthScope("write", s.handleCreateBackup))
+
+	// ---- API tokens ----
+	mux.HandleFunc("GET /api/v2/tokens", s.withAuthScope("read", s.handleTokens))
+	mux.HandleFunc("POST /api/v2/tokens", s.withAuthScope("write", s.handleTokenCreate))
+	mux.HandleFunc("DELETE /api/v2/tokens/{id}", s.withAuthScope("write", s.handleTokenRevoke))
+
+	// ---- notification rules/templates/digest ----
+	for _, prefix := range []string{"/api/v2/notifications/rules", "/api/v2/notification-rules", "/api/v2/settings/notification-rules"} {
+		mux.HandleFunc("GET "+prefix, s.withAuthScope("read", s.handleNotificationRules))
+		mux.HandleFunc("POST "+prefix, s.withAuthScope("write", s.handleNotificationRuleCreate))
+		mux.HandleFunc("PUT "+prefix+"/{id}", s.withAuthScope("write", s.handleNotificationRuleUpdate))
+		mux.HandleFunc("DELETE "+prefix+"/{id}", s.withAuthScope("write", s.handleNotificationRuleDelete))
+	}
+	for _, prefix := range []string{"/api/v2/notifications/templates", "/api/v2/notification-templates", "/api/v2/settings/notification-templates"} {
+		mux.HandleFunc("GET "+prefix, s.withAuthScope("read", s.handleNotificationTemplates))
+		mux.HandleFunc("POST "+prefix, s.withAuthScope("write", s.handleNotificationTemplateCreate))
+		mux.HandleFunc("PUT "+prefix+"/{id}", s.withAuthScope("write", s.handleNotificationTemplateUpdate))
+		mux.HandleFunc("DELETE "+prefix+"/{id}", s.withAuthScope("write", s.handleNotificationTemplateDelete))
+	}
+	mux.HandleFunc("GET /api/v2/notifications/digest", s.withAuthScope("read", s.handleNotificationDigest))
+	mux.HandleFunc("PUT /api/v2/notifications/digest", s.withAuthScope("write", s.handleNotificationDigestUpdate))
+	mux.HandleFunc("GET /api/v2/settings/notification-digest", s.withAuthScope("read", s.handleNotificationDigest))
+	mux.HandleFunc("PUT /api/v2/settings/notification-digest", s.withAuthScope("write", s.handleNotificationDigestUpdate))
 
 	return securityHeaders(s.withGlobalRateLimit(mux))
 }

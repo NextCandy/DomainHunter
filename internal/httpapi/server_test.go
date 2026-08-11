@@ -3,10 +3,12 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -302,5 +304,104 @@ func TestSPAFallbackServesIndex(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("GET %s 应返回前端页面，实际 %d", path, resp.StatusCode)
 		}
+	}
+}
+
+func TestV2FoldersExportsMetricsAndTokenScopes(t *testing.T) {
+	ts, db := newTestServer(t)
+	c := newClient(t, ts)
+	if resp := c.login("domainhunter", "domainhunter123"); resp.StatusCode != http.StatusOK {
+		t.Fatalf("登录失败: %d", resp.StatusCode)
+	}
+
+	resp := c.do(http.MethodPost, "/api/v2/folders", `{"name":"重点域名"}`, nil)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("创建文件夹应返回 201，实际 %d", resp.StatusCode)
+	}
+	var folder struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&folder); err != nil || folder.ID <= 0 {
+		t.Fatalf("文件夹响应无效: %+v %v", folder, err)
+	}
+	if _, err := db.Exec(`INSERT INTO domains(name, enabled, notify, folder_id) VALUES(?, 1, 1, NULL)`, "example.com"); err != nil {
+		t.Fatalf("插入测试域名失败: %v", err)
+	}
+
+	resp = c.do(http.MethodPost, "/api/v2/domains/batch-move-folder",
+		`{"domains":["example.com"],"folder_id":`+strconv.FormatInt(folder.ID, 10)+`}`, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("批量移动应返回 200，实际 %d", resp.StatusCode)
+	}
+	var assigned int64
+	if err := db.QueryRow(`SELECT folder_id FROM domains WHERE name = 'example.com'`).Scan(&assigned); err != nil || assigned != folder.ID {
+		t.Fatalf("域名未移动到文件夹: %d %v", assigned, err)
+	}
+
+	resp = c.do(http.MethodGet, "/api/v2/domains/export?format=csv", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("CSV 导出应返回 200，实际 %d", resp.StatusCode)
+	}
+	data, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(data), "example.com") {
+		t.Fatalf("CSV 导出缺少测试域名: %s", data)
+	}
+	resp = c.do(http.MethodPost, "/api/v2/domains/import?format=json&mode=overwrite",
+		`{"domains":[{"domain":"example.com","note":"updated"}]}`, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("JSON 导入应返回 200，实际 %d", resp.StatusCode)
+	}
+	resp = c.do(http.MethodGet, "/api/v2/domains/example.com/history/export?format=json", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("历史 JSON 导出应返回 200，实际 %d", resp.StatusCode)
+	}
+	resp = c.do(http.MethodPost, "/api/v2/notifications/rules",
+		`{"name":"available-only","enabled":true,"statuses":["available"]}`, nil)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("创建通知规则应返回 201，实际 %d", resp.StatusCode)
+	}
+	resp = c.do(http.MethodPost, "/api/v2/notifications/templates",
+		`{"name":"simple","event_type":"status_change","subject":"{{domain}}","body":"{{status}}","enabled":true}`, nil)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("创建通知模板应返回 201，实际 %d", resp.StatusCode)
+	}
+	resp = c.do(http.MethodGet, "/api/v2/notifications/digest", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("读取通知摘要应返回 200，实际 %d", resp.StatusCode)
+	}
+	resp = c.do(http.MethodPost, "/api/v2/domains/batch-retry-failed", `{}`, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("失败重查 API 应返回 200，实际 %d", resp.StatusCode)
+	}
+
+	metricsClient := newClient(t, ts)
+	resp = metricsClient.do(http.MethodGet, "/metrics", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("/metrics 应无需认证并返回 200，实际 %d", resp.StatusCode)
+	}
+	metrics, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(metrics), "domainhunter_domains_total") {
+		t.Fatalf("metrics 缺少域名指标: %s", metrics)
+	}
+
+	resp = c.do(http.MethodPost, "/api/v2/tokens", `{"name":"read-only","scopes":["read"]}`, nil)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("创建 token 应返回 201，实际 %d", resp.StatusCode)
+	}
+	var token struct {
+		Raw string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil || token.Raw == "" {
+		t.Fatalf("token 只显示一次的响应无效: %+v %v", token, err)
+	}
+	tokenClient := newClient(t, ts)
+	resp = tokenClient.do(http.MethodGet, "/api/v2/folders", "", map[string]string{"Authorization": "Bearer " + token.Raw})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("read scope 应能读取文件夹，实际 %d", resp.StatusCode)
+	}
+	resp = tokenClient.do(http.MethodPost, "/api/v2/folders", `{"name":"blocked"}`,
+		map[string]string{"Authorization": "Bearer " + token.Raw})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("read scope 不应写入文件夹，实际 %d", resp.StatusCode)
 	}
 }

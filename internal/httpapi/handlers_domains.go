@@ -331,24 +331,28 @@ func (s *Server) handleDomainPatch(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("domain")
 
 	var req struct {
-		Favorite *bool     `json:"favorite"`
-		Notify   *bool     `json:"notify"`
-		Enabled  *bool     `json:"enabled"`
-		Note     *string   `json:"note"`
-		Tags     *[]string `json:"tags"`
-		Priority *int      `json:"priority"`
+		Favorite    *bool     `json:"favorite"`
+		Notify      *bool     `json:"notify"`
+		Enabled     *bool     `json:"enabled"`
+		Note        *string   `json:"note"`
+		Tags        *[]string `json:"tags"`
+		Priority    *int      `json:"priority"`
+		FolderID    *int64    `json:"folder_id"`
+		ClearFolder bool      `json:"clear_folder"`
 	}
 	if !s.decodeJSON(w, r, &req) {
 		return
 	}
 
 	patch := repository.DomainPatch{
-		Favorite: req.Favorite,
-		Notify:   req.Notify,
-		Enabled:  req.Enabled,
-		Note:     req.Note,
-		Tags:     req.Tags,
-		Priority: req.Priority,
+		Favorite:    req.Favorite,
+		Notify:      req.Notify,
+		Enabled:     req.Enabled,
+		Note:        req.Note,
+		Tags:        req.Tags,
+		Priority:    req.Priority,
+		FolderID:    req.FolderID,
+		ClearFolder: req.ClearFolder,
 	}
 	if err := s.deps.Domains.Update(r.Context(), name, patch); err != nil {
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())

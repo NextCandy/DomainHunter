@@ -311,3 +311,27 @@ func TestLoadConfigAcceptsBooleanAndString(t *testing.T) {
 		t.Fatal("非法取值应当报错")
 	}
 }
+
+func TestQueryCacheAndUncachedRefresh(t *testing.T) {
+	rdap := provider(ProviderRDAP, domain.StatusRegistered)
+	engine := newEngine(Config{}, disabled(ProviderWhoisLS), disabled(ProviderFallback), rdap)
+
+	first := engine.Query(context.Background(), "cache.example.com")
+	if first.Info == nil || first.Info.Cached {
+		t.Fatalf("首次查询不应命中缓存: %+v", first.Info)
+	}
+	second := engine.Query(context.Background(), "cache.example.com")
+	if second.Info == nil || !second.Info.Cached {
+		t.Fatalf("第二次查询应标记 cached: %+v", second.Info)
+	}
+	if rdap.callCount != 1 {
+		t.Fatalf("缓存命中时 Provider 应只调用一次，实际 %d", rdap.callCount)
+	}
+	refreshed := engine.QueryUncached(context.Background(), "cache.example.com")
+	if refreshed.Info == nil || refreshed.Info.Cached {
+		t.Fatalf("绕过缓存的查询不应标记 cached: %+v", refreshed.Info)
+	}
+	if rdap.callCount != 2 {
+		t.Fatalf("绕过缓存应再次查询 Provider，实际 %d", rdap.callCount)
+	}
+}

@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+var metricBucketBounds = [...]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
+
 // Metrics 保存查询侧的轻量 Prometheus 指标，不引入额外运行时依赖。
 type Metrics struct {
 	mu        sync.RWMutex
@@ -20,6 +22,7 @@ type providerMetrics struct {
 	errors   atomic.Uint64
 	// duration is stored as nanoseconds to retain sub-second precision.
 	duration atomic.Uint64
+	buckets  [len(metricBucketBounds)]atomic.Uint64
 }
 
 // NewMetrics 创建指标采集器。
@@ -44,6 +47,12 @@ func (m *Metrics) Observe(provider string, duration time.Duration, failed bool) 
 	}
 	pm.requests.Add(1)
 	pm.duration.Add(uint64(duration))
+	seconds := duration.Seconds()
+	for i, bound := range metricBucketBounds {
+		if seconds <= bound {
+			pm.buckets[i].Add(1)
+		}
+	}
 	if failed {
 		pm.errors.Add(1)
 	}
@@ -65,7 +74,14 @@ func (m *Metrics) ProviderSnapshot() map[string]MetricSnapshot {
 	sort.Strings(keys)
 	for _, key := range keys {
 		pm := m.providers[key]
-		out[key] = MetricSnapshot{Requests: pm.requests.Load(), Errors: pm.errors.Load(), DurationSeconds: float64(pm.duration.Load()) / float64(time.Second)}
+		snapshot := MetricSnapshot{
+			Requests: pm.requests.Load(), Errors: pm.errors.Load(),
+			DurationSeconds: float64(pm.duration.Load()) / float64(time.Second),
+		}
+		for i := range metricBucketBounds {
+			snapshot.Buckets[i] = pm.buckets[i].Load()
+		}
+		out[key] = snapshot
 	}
 	m.mu.RUnlock()
 	return out
@@ -76,6 +92,12 @@ type MetricSnapshot struct {
 	Requests        uint64
 	Errors          uint64
 	DurationSeconds float64
+	Buckets         [len(metricBucketBounds)]uint64
+}
+
+// DurationBucketBounds 返回 histogram bucket 上界。
+func DurationBucketBounds() []float64 {
+	return append([]float64(nil), metricBucketBounds[:]...)
 }
 
 // Snapshot 返回总查询数与累计耗时。

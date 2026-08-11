@@ -1,12 +1,16 @@
 package httpapi
 
 import (
+	"context"
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"DomainHunter/internal/auth"
 	"DomainHunter/internal/config"
+	"DomainHunter/internal/repository"
 )
 
 const (
@@ -16,9 +20,35 @@ const (
 	csrfHeader     = "X-CSRF-Token"
 )
 
-// withAuth 校验会话；必要时用"记住登录"令牌重建会话
+type apiTokenContextKey struct{}
+
+// withAuth 校验会话或 Bearer token。
 func (s *Server) withAuth(handler http.HandlerFunc) http.HandlerFunc {
+	return s.withAuthScope("", handler)
+}
+
+// withAuthScope 在 API token 请求上额外校验 scope；会话请求不受 scope 限制。
+func (s *Server) withAuthScope(required string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if raw, ok := bearerFromRequest(r); ok {
+			if s.deps.Tokens == nil {
+				s.writeError(w, r, http.StatusUnauthorized, "Bearer token 未启用")
+				return
+			}
+			hash := sha256.Sum256([]byte(raw))
+			token, err := s.deps.Tokens.Validate(r.Context(), fmt.Sprintf("%x", hash[:]))
+			if err != nil || token == nil {
+				s.writeError(w, r, http.StatusUnauthorized, "无效的 Bearer token")
+				return
+			}
+			if required != "" && !scopeAllowed(token.Scopes, required) {
+				s.writeError(w, r, http.StatusForbidden, "Bearer token 缺少所需 scope")
+				return
+			}
+			ctx := context.WithValue(r.Context(), apiTokenContextKey{}, token)
+			handler(w, r.WithContext(ctx))
+			return
+		}
 		if !s.deps.Auth.RequireAuth() {
 			handler(w, r)
 			return
@@ -42,6 +72,37 @@ func (s *Server) withAuth(handler http.HandlerFunc) http.HandlerFunc {
 		}
 		handler(w, r)
 	}
+}
+
+func bearerFromRequest(r *http.Request) (string, bool) {
+	value := strings.TrimSpace(r.Header.Get("Authorization"))
+	parts := strings.Fields(value)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return "", false
+	}
+	return parts[1], true
+}
+
+func scopeAllowed(scopes []string, required string) bool {
+	for _, scope := range scopes {
+		scope = strings.ToLower(strings.TrimSpace(scope))
+		if scope == "*" || scope == strings.ToLower(required) {
+			return true
+		}
+		if required == "read" && (scope == "read:*" || strings.HasSuffix(scope, ":read")) {
+			return true
+		}
+		if required == "write" && (scope == "write:*" || strings.HasSuffix(scope, ":write")) {
+			return true
+		}
+	}
+	return false
+}
+
+// apiTokenFromContext 返回当前 Bearer token，仅供审计/测试使用。
+func apiTokenFromContext(ctx context.Context) *repository.APIToken {
+	token, _ := ctx.Value(apiTokenContextKey{}).(*repository.APIToken)
+	return token
 }
 
 // withRateLimit 通用限流

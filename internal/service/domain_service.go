@@ -67,6 +67,7 @@ type DomainService struct {
 	domains      repository.DomainRepository
 	results      repository.ResultRepository
 	observations repository.ObservationRepository
+	folders      repository.FolderRepository
 	log          *logger.Logger
 	enqueue      func(name string, priority domain.Priority)
 }
@@ -76,13 +77,24 @@ func NewDomainService(
 	domains repository.DomainRepository,
 	results repository.ResultRepository,
 	observations repository.ObservationRepository,
+	folders ...repository.FolderRepository,
 ) *DomainService {
+	var folderRepo repository.FolderRepository
+	if len(folders) > 0 {
+		folderRepo = folders[0]
+	}
 	return &DomainService{
 		domains:      domains,
 		results:      results,
 		observations: observations,
+		folders:      folderRepo,
 		log:          logger.Component("domain"),
 	}
+}
+
+// SetFolderRepository 在应用组装阶段注入可选的文件夹仓储，保持旧构造调用兼容。
+func (s *DomainService) SetFolderRepository(folders repository.FolderRepository) {
+	s.folders = folders
 }
 
 // SetEnqueuer 注入调度入队回调（新增域名后立刻排队查询）
@@ -147,8 +159,11 @@ func (s *DomainService) List(ctx context.Context, filter ListFilter) (*ListResul
 	}
 
 	all := make([]*domain.Info, 0, len(entries))
+	folderNames := s.folderNames(ctx)
 	for i := range entries {
-		all = append(all, mergeEntry(entries[i], results))
+		info := mergeEntry(entries[i], results)
+		info.FolderName = folderNames[folderIDKey(entries[i].FolderID)]
+		all = append(all, info)
 	}
 
 	filtered := applyFilter(all, filter)
@@ -207,6 +222,7 @@ func mergeEntry(entry domain.Domain, results map[string]domain.Info) *domain.Inf
 		info.Tags = entry.Tags
 		info.Note = entry.Note
 		info.NextCheckAt = entry.NextCheckAt
+		info.FolderID = entry.FolderID
 		return &info
 	}
 	return &domain.Info{
@@ -219,6 +235,7 @@ func mergeEntry(entry domain.Domain, results map[string]domain.Info) *domain.Inf
 		Tags:        entry.Tags,
 		Note:        entry.Note,
 		NextCheckAt: entry.NextCheckAt,
+		FolderID:    entry.FolderID,
 	}
 }
 
@@ -454,6 +471,12 @@ func (s *DomainService) Get(ctx context.Context, name string) (*domain.Info, err
 		info.Tags = entry.Tags
 		info.Note = entry.Note
 		info.NextCheckAt = entry.NextCheckAt
+		info.FolderID = entry.FolderID
+		if s.folders != nil && entry.FolderID != nil {
+			if folder, folderErr := s.folders.Get(ctx, *entry.FolderID); folderErr == nil && folder != nil {
+				info.FolderName = folder.Name
+			}
+		}
 	}
 	return info, nil
 }

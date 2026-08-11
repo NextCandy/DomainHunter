@@ -82,3 +82,12 @@ func TestSimplifyError(t *testing.T) {
 		t.Fatalf("错误前缀未去除: %q", got)
 	}
 }
+
+func TestSuppressesLegacyTransferLockNotification(t *testing.T) {
+	if !suppressLegacyTransferNotification(domain.StatusTransferLocked, domain.StatusRegistered) {
+		t.Fatal("旧 transfer_locked 回归 registered 应抑制通知")
+	}
+	if suppressLegacyTransferNotification(domain.StatusRegistered, domain.StatusAvailable) {
+		t.Fatal("普通状态变化不应被抑制")
+	}
+}

@@ -114,7 +114,8 @@ func (s *QueryService) Execute(ctx context.Context, task scheduler.Task) (*domai
 	}
 
 	started := time.Now()
-	outcome := s.runWithRetry(ctx, name)
+	forceRefresh := task.Priority >= domain.PriorityManual || task.Reason == scheduler.ReasonManual
+	outcome := s.runWithRetry(ctx, name, forceRefresh)
 	info := outcome.Info
 	info.AddedAt = &record.CreatedAt
 	info.Favorite = record.Favorite
@@ -166,7 +167,7 @@ func (s *QueryService) CheckNow(ctx context.Context, name string) (*domain.Info,
 }
 
 // runWithRetry 执行查询并在可重试的错误上做有限次退避重试
-func (s *QueryService) runWithRetry(ctx context.Context, name string) query.Outcome {
+func (s *QueryService) runWithRetry(ctx context.Context, name string, forceRefresh bool) query.Outcome {
 	var (
 		last    query.Outcome
 		reasons []string
@@ -183,7 +184,11 @@ func (s *QueryService) runWithRetry(ctx context.Context, name string) query.Outc
 			return last
 		}
 
-		last = s.engine.Query(ctx, name)
+		if forceRefresh {
+			last = s.engine.QueryUncached(ctx, name)
+		} else {
+			last = s.engine.Query(ctx, name)
+		}
 		if last.Winner.Status != domain.StatusError {
 			return last
 		}
@@ -387,6 +392,11 @@ func (s *QueryService) maybeNotify(ctx context.Context, record *domain.Domain, p
 	if previous == domain.StatusUnknown || previous == domain.StatusError {
 		return
 	}
+	// 旧版本把 EPP 转移锁误存成 transfer_locked；新版本只保留
+	// epp_statuses 并把主状态纠正为 registered。这个兼容性回归不应再发通知。
+	if suppressLegacyTransferNotification(previous, current) {
+		return
+	}
 	if !domain.ShouldNotify(current) {
 		return
 	}
@@ -402,7 +412,7 @@ func (s *QueryService) maybeNotify(ctx context.Context, record *domain.Domain, p
 		return
 	}
 
-	s.notifier.Submit(notification.Event{
+	event := notification.Event{
 		Type:      "status_change",
 		Domain:    record.Name,
 		Status:    string(current),
@@ -410,10 +420,18 @@ func (s *QueryService) maybeNotify(ctx context.Context, record *domain.Domain, p
 		Message:   domain.GetStatusChangeMessage(record.Name, previous, current),
 		Timestamp: time.Now(),
 		WhoisRaw:  outcome.Info.WhoisRaw,
-	})
+	}
+	if !s.notifier.Allows(event) {
+		return
+	}
+	s.notifier.Submit(event)
 	if err := s.domains.SetLastNotifiedStatus(ctx, record.Name, string(current)); err != nil {
 		s.log.Warn(logger.Fields{"domain": record.Name, "error": err.Error()}, "记录已通知状态失败")
 	}
+}
+
+func suppressLegacyTransferNotification(previous, current domain.Status) bool {
+	return previous == domain.StatusTransferLocked && current == domain.StatusRegistered
 }
 
 func toCST(t *time.Time) *time.Time {
