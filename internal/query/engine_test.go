@@ -310,6 +310,18 @@ func TestLoadConfigAcceptsBooleanAndString(t *testing.T) {
 	if _, err := LoadConfig(`{"tlds":{"do":{"validate_available":"nonsense"}}}`); err == nil {
 		t.Fatal("非法取值应当报错")
 	}
+
+	cfg, err = LoadConfig(`{"rate_limits":{"fallback":{"concurrency":0}}}`)
+	if err != nil {
+		t.Fatalf("解析显式不限并发配置失败: %v", err)
+	}
+	if limit, ok := cfg.RateLimitConcurrency[ProviderFallback]; !ok || limit != 0 {
+		t.Fatalf("显式 concurrency=0 应保留为不限并发，实际 %+v", cfg.RateLimitConcurrency)
+	}
+	engine := NewEngine(NewRegistry(), NewPolicy(cfg))
+	if limit := engine.Limiter().ConcurrencyRules()[ProviderFallback]; limit != 0 {
+		t.Fatalf("显式不限并发不应继承默认值 1，实际 %d", limit)
+	}
 }
 
 func TestQueryCacheAndUncachedRefresh(t *testing.T) {

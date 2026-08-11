@@ -6,6 +6,7 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,6 +17,10 @@ import (
 	"DomainHunter/internal/logger"
 	"DomainHunter/internal/repository"
 )
+
+// ErrNoEnabledNotifiers 表示当前没有可发送的通知渠道。
+// 每日摘要遇到此错误不会写入 last_sent_at，待渠道配置好后会重试。
+var ErrNoEnabledNotifiers = errors.New("没有启用的通知渠道")
 
 // Event 一次通知事件
 type Event struct {
@@ -201,6 +206,64 @@ func (m *Manager) Submit(event Event) {
 	m.enqueue(event)
 }
 
+// SendDigest 同步发送一条每日摘要。
+//
+// 状态变化通知继续走异步聚合队列；每日摘要需要确认各渠道发送结果后才能
+// 持久化 last_sent_at，因此单独提供同步入口。它仍然复用 Manager 当前已注册
+// 渠道、启用状态、摘要专用规则与模板配置，不占用查询调度器的 worker。
+func (m *Manager) SendDigest(ctx context.Context, event Event) error {
+	if !m.isEnabled() {
+		return errors.New("通知管理器已停止")
+	}
+	if event.Type == "" {
+		event.Type = "notification_digest"
+	}
+	if !m.allowsDigest(event) {
+		m.log.Info(nil, "每日通知摘要被通知规则抑制")
+		return nil
+	}
+
+	notifiers := m.Notifiers()
+	enabled := make([]Notifier, 0, len(notifiers))
+	for _, n := range notifiers {
+		if n.Enabled() {
+			enabled = append(enabled, n)
+		}
+	}
+	if len(enabled) == 0 {
+		return ErrNoEnabledNotifiers
+	}
+
+	event.Subject = formatSubject(event)
+	event.Body = formatBody(event)
+	m.applyTemplate(&event)
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		errs []error
+	)
+	for _, n := range enabled {
+		wg.Add(1)
+		go func(n Notifier) {
+			defer wg.Done()
+			if err := n.Send(ctx, event); err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("%s: %w", n.Name(), err))
+				mu.Unlock()
+			}
+		}(n)
+	}
+	wg.Wait()
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
 // Allows 判断事件是否会通过当前规则过滤器；调用方可在写入通知去重状态前预检。
 func (m *Manager) Allows(event Event) bool {
 	return m.isEnabled() && m.allowed(event)
@@ -245,6 +308,37 @@ func (m *Manager) allowed(event Event) bool {
 	return !active
 }
 
+// allowsDigest 只应用明确标记为 digest_enabled 的规则；若没有摘要专用规则，
+// 保持摘要设置原有语义，避免普通状态通知规则意外吞掉每日摘要。
+func (m *Manager) allowsDigest(event Event) bool {
+	m.mu.RLock()
+	rules := append([]repository.NotificationRule(nil), m.rules...)
+	m.mu.RUnlock()
+
+	hasDigestRule := false
+	for _, rule := range rules {
+		if !rule.Enabled || !rule.DigestEnabled {
+			continue
+		}
+		hasDigestRule = true
+		if inSilenceWindow(rule.SilenceStart, rule.SilenceEnd, time.Now()) {
+			continue
+		}
+		if len(rule.Statuses) == 0 {
+			return true
+		}
+		if containsStatus(rule.Statuses, event.Status) {
+			return true
+		}
+		for _, item := range event.Batch {
+			if containsStatus(rule.Statuses, item.Status) {
+				return true
+			}
+		}
+	}
+	return !hasDigestRule
+}
+
 func containsStatus(statuses []string, status string) bool {
 	for _, item := range statuses {
 		if strings.EqualFold(strings.TrimSpace(item), strings.TrimSpace(status)) {
@@ -280,7 +374,7 @@ func inSilenceWindow(start, end string, now time.Time) bool {
 }
 
 func (m *Manager) applyTemplate(event *Event) {
-	if event == nil || len(event.Batch) > 0 {
+	if event == nil {
 		return
 	}
 	m.mu.RLock()
@@ -376,6 +470,9 @@ func (m *Manager) Stats() map[string]any {
 }
 
 func formatSubject(event Event) string {
+	if event.Type == "notification_digest" {
+		return fmt.Sprintf("域名每日状态摘要 (%d个域名)", len(event.Batch))
+	}
 	if len(event.Batch) > 0 {
 		return fmt.Sprintf("域名状态变化通知 (%d个域名)", len(event.Batch))
 	}
@@ -397,6 +494,21 @@ func formatSubject(event Event) string {
 
 func formatBody(event Event) string {
 	var b strings.Builder
+
+	if event.Type == "notification_digest" {
+		b.WriteString(fmt.Sprintf("前一天检测到 %d 个域名状态发生变化\n", len(event.Batch)))
+		b.WriteString(fmt.Sprintf("时间: %s\n\n", event.Timestamp.Format("2006-01-02 15:04:05")))
+		for i, item := range event.Batch {
+			b.WriteString(fmt.Sprintf("%d. %s\n", i+1, item.Domain))
+			if item.OldStatus != "" {
+				b.WriteString(fmt.Sprintf("   状态变化: %s → %s\n", item.OldStatus, item.Status))
+			} else {
+				b.WriteString(fmt.Sprintf("   当前状态: %s\n", item.Status))
+			}
+		}
+		b.WriteString("\n---\n此消息由 DomainHunter 自动发送")
+		return b.String()
+	}
 
 	if len(event.Batch) > 0 {
 		b.WriteString(fmt.Sprintf("检测到 %d 个域名状态发生变化\n", len(event.Batch)))

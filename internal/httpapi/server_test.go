@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"DomainHunter/internal/auth"
 	"DomainHunter/internal/config"
@@ -266,6 +267,7 @@ func TestFrontendRoutesAreRegistered(t *testing.T) {
 		"/api/stats",
 		"/api/domains",
 		"/api/v2/overview",
+		"/api/v2/overview/trend?days=7",
 		"/api/v2/meta",
 		"/api/v2/facets",
 		"/api/v2/domains",
@@ -284,6 +286,49 @@ func TestFrontendRoutesAreRegistered(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("GET %s 应返回 200，实际 %d", path, resp.StatusCode)
 		}
+	}
+}
+
+func TestOverviewTrendEndpointReturnsStableContract(t *testing.T) {
+	ts, db := newTestServer(t)
+	c := newClient(t, ts)
+	if resp := c.login("domainhunter", "domainhunter123"); resp.StatusCode != http.StatusOK {
+		t.Fatalf("登录失败: %d", resp.StatusCode)
+	}
+	if _, err := db.Exec(`INSERT INTO domain_observations(domain_id, domain, status, provider, confidence, changed, observed_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?)`, 1, "trend.com", "available", "rdap", "high", 1, time.Now().In(time.Local)); err != nil {
+		t.Fatalf("插入趋势观测失败: %v", err)
+	}
+
+	resp := c.do(http.MethodGet, "/api/v2/overview/trend?days=2", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("趋势接口应返回 200，实际 %d", resp.StatusCode)
+	}
+	var payload struct {
+		Days   int `json:"days"`
+		Points []struct {
+			Day          string         `json:"day"`
+			Total        int            `json:"total"`
+			Available    int            `json:"available"`
+			HighScore    int            `json:"high_score"`
+			Changes      int            `json:"changes"`
+			StatusCounts map[string]int `json:"status_counts"`
+		} `json:"points"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("趋势响应不是合法 JSON: %v", err)
+	}
+	if payload.Days != 2 || len(payload.Points) != 2 {
+		t.Fatalf("趋势天数/点数契约错误: %+v", payload)
+	}
+	last := payload.Points[len(payload.Points)-1]
+	if last.Total != 1 || last.Available != 1 || last.HighScore != 1 || last.Changes != 1 || last.StatusCounts["available"] != 1 {
+		t.Fatalf("趋势聚合字段错误: %+v", last)
+	}
+
+	resp = c.do(http.MethodGet, "/api/v2/overview/trend?days=0", "", nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("非法 days 应返回 400，实际 %d", resp.StatusCode)
 	}
 }
 

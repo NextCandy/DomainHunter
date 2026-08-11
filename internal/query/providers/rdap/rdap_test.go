@@ -69,6 +69,19 @@ func TestParseStatusMapsHoldAndTransferLock(t *testing.T) {
 	}
 }
 
+func TestParseResponseKeepsTransferLockAsEPPStatusOnRegisteredDomain(t *testing.T) {
+	result := ParseResponse("locked.example", &Response{
+		Status: []string{"active", "client transfer prohibited"},
+	}, `{"objectClassName":"domain","status":["active","client transfer prohibited"]}`)
+
+	if result.Status != domain.StatusRegistered {
+		t.Fatalf("转移锁状态不应覆盖 registered 主状态，实际 %s", result.Status)
+	}
+	if len(result.EPPStatuses) != 2 || result.EPPStatuses[1] != "client transfer prohibited" {
+		t.Fatalf("EPP 状态应与 registered 组合保留: %+v", result.EPPStatuses)
+	}
+}
+
 func TestParseResponseKeepsRegisteredWhenEventsPresent(t *testing.T) {
 	result := ParseResponse("registered.example", &Response{
 		Status: []string{"active"},

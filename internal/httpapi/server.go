@@ -41,8 +41,9 @@ type Deps struct {
 
 // Server HTTP 服务器
 type Server struct {
-	deps Deps
-	log  *logger.Logger
+	deps   Deps
+	log    *logger.Logger
+	digest *service.NotificationDigestService
 
 	mu  sync.RWMutex
 	cfg *config.Config
@@ -77,10 +78,21 @@ func NewServer(deps Deps) *Server {
 			}
 		}
 	}
+	var digestService *service.NotificationDigestService
+	if deps.DB != nil && deps.Notification != nil {
+		if digestRepo, ok := deps.NotificationConfig.(repository.NotificationDigestRepository); ok {
+			digestService = service.NewNotificationDigestService(
+				digestRepo,
+				sqlite.NewObservationRepo(deps.DB),
+				deps.Notification,
+			)
+		}
+	}
 	s := &Server{
 		deps:           deps,
 		cfg:            deps.Settings.Config(),
 		log:            logger.Component("http"),
+		digest:         digestService,
 		loginLimiter:   NewRateLimiter(5, 5*time.Minute),
 		batchLimiter:   NewRateLimiter(10, time.Minute),
 		generalLimiter: NewRateLimiter(600, time.Minute),
@@ -101,6 +113,9 @@ func (s *Server) config() *config.Config {
 
 // Start 启动 HTTP 服务
 func (s *Server) Start() error {
+	if s.digest != nil {
+		s.digest.Start(context.Background())
+	}
 	s.httpServer = &http.Server{
 		Addr:              ":" + s.config().Server.Port,
 		Handler:           s.routes(),
@@ -122,6 +137,9 @@ func (s *Server) Stop(ctx context.Context) error {
 	s.loginLimiter.Stop()
 	s.batchLimiter.Stop()
 	s.generalLimiter.Stop()
+	if s.digest != nil {
+		s.digest.Stop()
+	}
 
 	if s.httpServer == nil {
 		return nil

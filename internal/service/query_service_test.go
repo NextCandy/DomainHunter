@@ -1,10 +1,13 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"DomainHunter/internal/domain"
+	"DomainHunter/internal/notification"
+	"DomainHunter/internal/query"
 	"DomainHunter/internal/repository"
 )
 
@@ -89,5 +92,40 @@ func TestSuppressesLegacyTransferLockNotification(t *testing.T) {
 	}
 	if suppressLegacyTransferNotification(domain.StatusRegistered, domain.StatusAvailable) {
 		t.Fatal("普通状态变化不应被抑制")
+	}
+}
+
+type notificationSuppressionRepo struct {
+	repository.DomainRepository
+	lastReads int
+}
+
+func (r *notificationSuppressionRepo) LastNotifiedStatus(context.Context, string) (string, error) {
+	r.lastReads++
+	return "", nil
+}
+
+func (r *notificationSuppressionRepo) SetLastNotifiedStatus(context.Context, string, string) error {
+	return nil
+}
+
+func TestMaybeNotifySuppressesLegacyTransferLockTransition(t *testing.T) {
+	repo := &notificationSuppressionRepo{}
+	service := &QueryService{
+		domains:  repo,
+		notifier: notification.NewManager(nil),
+	}
+	record := &domain.Domain{Name: "locked.example", Notify: true}
+	outcome := query.Outcome{
+		Info: &domain.Info{Name: record.Name, Status: domain.StatusRegistered},
+		Winner: query.Result{
+			Domain: record.Name, Status: domain.StatusRegistered,
+			Confidence: domain.ConfidenceHigh,
+		},
+	}
+
+	service.maybeNotify(context.Background(), record, domain.StatusTransferLocked, outcome)
+	if repo.lastReads != 0 {
+		t.Fatal("旧 transfer_locked 恢复 registered 时应在去重查询前抑制通知")
 	}
 }

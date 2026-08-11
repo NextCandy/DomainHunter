@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -35,6 +36,31 @@ type Overview struct {
 	Monitor         map[string]any         `json:"monitor"`
 	History         map[string]int64       `json:"history"`
 }
+
+// OverviewTrendPoint 是概览趋势图的一天数据。
+//
+// total / available / high_score / changes 保持前端当前契约；status_counts
+// 是完整的逐状态计数，便于前端或 API 客户端按任意状态扩展展示。
+type OverviewTrendPoint struct {
+	Day          string                `json:"day"`
+	Total        int                   `json:"total"`
+	Available    int                   `json:"available"`
+	HighScore    int                   `json:"high_score"`
+	Changes      int                   `json:"changes"`
+	StatusCounts map[domain.Status]int `json:"status_counts"`
+}
+
+// OverviewTrend 是 /api/v2/overview/trend 的稳定响应契约。
+type OverviewTrend struct {
+	Days   int                  `json:"days"`
+	Points []OverviewTrendPoint `json:"points"`
+}
+
+const (
+	defaultTrendDays = 7
+	maxTrendDays     = 366
+	trendDayLayout   = "2006-01-02"
+)
 
 // OverviewService 汇总概览页需要的数据
 type OverviewService struct {
@@ -154,6 +180,77 @@ func (s *OverviewService) Build(ctx context.Context) (*Overview, error) {
 		overview.History = map[string]int64{"observations": observations, "attempts": attempts}
 	}
 	return overview, nil
+}
+
+// Trend 返回最近 days 个自然日的观测趋势，包含没有观测记录的零值日期。
+// 趋势查询是历史分析的可选扩展；旧的 ObservationRepository 实现没有实现
+// ObservationAnalyticsRepository 时返回明确错误，不影响旧概览接口。
+func (s *OverviewService) Trend(ctx context.Context, days int) (*OverviewTrend, error) {
+	days = normalizeTrendDays(days)
+	analytics, ok := s.observations.(repository.ObservationAnalyticsRepository)
+	if !ok {
+		return nil, fmt.Errorf("观测仓储不支持趋势分析")
+	}
+
+	now := time.Now().In(time.Local)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	start := today.AddDate(0, 0, 1-days)
+	fromDay := start.Format(trendDayLayout)
+	toDay := today.Format(trendDayLayout)
+	counts, err := analytics.DailyStatusCounts(ctx, fromDay, toDay)
+	if err != nil {
+		return nil, fmt.Errorf("读取趋势数据失败: %w", err)
+	}
+
+	points := make([]OverviewTrendPoint, days)
+	byDay := make(map[string]*OverviewTrendPoint, days)
+	for i := range points {
+		day := start.AddDate(0, 0, i).Format(trendDayLayout)
+		points[i] = OverviewTrendPoint{
+			Day:          day,
+			StatusCounts: make(map[domain.Status]int, len(domain.AllStatuses())),
+		}
+		for _, status := range domain.AllStatuses() {
+			points[i].StatusCounts[status] = 0
+		}
+		byDay[day] = &points[i]
+	}
+
+	for _, count := range counts {
+		point := byDay[count.Day]
+		if point == nil {
+			continue
+		}
+		if count.Count < 0 {
+			continue
+		}
+		point.Total += count.Count
+		point.Changes += maxInt(count.Changed)
+		point.HighScore += maxInt(count.HighConfidence)
+		point.StatusCounts[count.Status] += count.Count
+		if count.Status == domain.StatusAvailable {
+			point.Available += count.Count
+		}
+	}
+
+	return &OverviewTrend{Days: days, Points: points}, nil
+}
+
+func normalizeTrendDays(days int) int {
+	if days <= 0 {
+		return defaultTrendDays
+	}
+	if days > maxTrendDays {
+		return maxTrendDays
+	}
+	return days
+}
+
+func maxInt(value int) int {
+	if value < 0 {
+		return 0
+	}
+	return value
 }
 
 func limitItems(items []OverviewItem, n int) []OverviewItem {

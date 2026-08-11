@@ -73,6 +73,7 @@ func (s *Server) routes() http.Handler {
 
 	// ---- v2 ----
 	mux.HandleFunc("GET /api/v2/overview", s.withAuthScope("read", s.handleOverview))
+	mux.HandleFunc("GET /api/v2/overview/trend", s.withAuthScope("read", s.handleOverviewTrend))
 	mux.HandleFunc("GET /api/v2/meta", s.withAuthScope("read", s.handleMeta))
 	mux.HandleFunc("GET /api/v2/facets", s.withAuthScope("read", s.handleFacets))
 	mux.HandleFunc("GET /api/v2/domains", s.withAuthScope("read", s.handleDomainsV2))

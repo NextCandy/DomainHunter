@@ -59,15 +59,25 @@ const observationColumns = `id, domain_id, domain, status, COALESCE(registrar,''
 	COALESCE(changed,0), observed_at`
 
 func scanObservation(scanner interface{ Scan(...any) error }) (domain.Observation, error) {
+	obs, _, err := scanObservationWithOldStatus(scanner, false)
+	return obs, err
+}
+
+func scanObservationWithOldStatus(scanner interface{ Scan(...any) error }, withOldStatus bool) (domain.Observation, string, error) {
 	var (
 		obs                         domain.Observation
 		status, confidence, ns      string
 		registered, updated, expiry sql.NullTime
 		changed                     int
+		oldStatus                   string
 	)
-	if err := scanner.Scan(&obs.ID, &obs.DomainID, &obs.Domain, &status, &obs.Registrar,
-		&registered, &updated, &expiry, &ns, &obs.Provider, &confidence, &changed, &obs.ObservedAt); err != nil {
-		return obs, err
+	args := []any{&obs.ID, &obs.DomainID, &obs.Domain, &status, &obs.Registrar,
+		&registered, &updated, &expiry, &ns, &obs.Provider, &confidence, &changed, &obs.ObservedAt}
+	if withOldStatus {
+		args = append(args, &oldStatus)
+	}
+	if err := scanner.Scan(args...); err != nil {
+		return obs, "", err
 	}
 	obs.Status = domain.Status(status)
 	obs.Confidence = domain.Confidence(confidence)
@@ -85,7 +95,7 @@ func scanObservation(scanner interface{ Scan(...any) error }) (domain.Observatio
 		t := expiry.Time
 		obs.ExpiryAt = &t
 	}
-	return obs, nil
+	return obs, oldStatus, nil
 }
 
 // ListByDomain 按时间倒序返回某个域名的观测历史
@@ -133,6 +143,76 @@ func (r *ObservationRepo) ListRecentChanges(ctx context.Context, limit int) ([]d
 			return nil, err
 		}
 		out = append(out, obs)
+	}
+	return out, rows.Err()
+}
+
+// DailyStatusCounts 按自然日与状态聚合观测记录。
+//
+// observed_at 由查询服务以应用本地时区写入，截取日期部分可以保持历史记录
+// 的本地日历语义，也不会受 SQLite 进程时区变化影响。调用方传入的日期均为
+// YYYY-MM-DD，且范围为左闭右闭。
+func (r *ObservationRepo) DailyStatusCounts(ctx context.Context, fromDay, toDay string) ([]repository.DailyStatusCount, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT substr(observed_at, 1, 10) AS day,
+		       status,
+		       COUNT(*) AS total,
+		       SUM(CASE WHEN changed = 1 THEN 1 ELSE 0 END) AS changes,
+		       SUM(CASE WHEN lower(COALESCE(confidence, '')) = 'high' THEN 1 ELSE 0 END) AS high_confidence
+		FROM domain_observations
+		WHERE substr(observed_at, 1, 10) >= ? AND substr(observed_at, 1, 10) <= ?
+		GROUP BY day, status
+		ORDER BY day ASC, status ASC`, fromDay, toDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []repository.DailyStatusCount
+	for rows.Next() {
+		var item repository.DailyStatusCount
+		if err := rows.Scan(&item.Day, &item.Status, &item.Count, &item.Changed, &item.HighConfidence); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+// ChangesBetween 返回指定日期范围内的状态变化，按观测时间正序排列。
+// 同时查出同一域名此前最近一次观测的状态，供每日摘要生成可读的状态转移。
+func (r *ObservationRepo) ChangesBetween(ctx context.Context, fromDay, toDay string) ([]repository.ObservationChange, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+observationColumns+`,
+		       COALESCE((
+			       SELECT previous.status
+			       FROM domain_observations AS previous
+			       WHERE lower(previous.domain) = lower(current.domain)
+			         AND (previous.observed_at < current.observed_at OR
+			              (previous.observed_at = current.observed_at AND previous.id < current.id))
+			       ORDER BY previous.observed_at DESC, previous.id DESC
+			       LIMIT 1
+		       ), '') AS old_status
+		FROM domain_observations AS current
+		WHERE current.changed = 1
+		  AND substr(current.observed_at, 1, 10) >= ?
+		  AND substr(current.observed_at, 1, 10) <= ?
+		ORDER BY current.observed_at ASC, current.id ASC`, fromDay, toDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []repository.ObservationChange
+	for rows.Next() {
+		obs, oldStatus, err := scanObservationWithOldStatus(rows, true)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, repository.ObservationChange{
+			Observation: obs,
+			OldStatus:   domain.Status(oldStatus),
+		})
 	}
 	return out, rows.Err()
 }

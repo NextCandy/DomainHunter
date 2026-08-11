@@ -188,7 +188,19 @@ func LoadConfig(raw string) (Config, error) {
 		if setting.Interval != "" {
 			cfg.RateLimits[key] = setting.Interval
 		}
-		if setting.Concurrency > 0 {
+		// concurrency=0 是显式的"不限并发"，不能与字段缺失混为一谈，
+		// 否则会错误继承 fallback/whois_ls 的默认上限 1。
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(value, &fields); err != nil {
+			return Config{}, fmt.Errorf("解析查询策略 rate_limits.%s 失败: %w", key, err)
+		}
+		if rawConcurrency, present := fields["concurrency"]; present {
+			if err := json.Unmarshal(rawConcurrency, &setting.Concurrency); err != nil {
+				return Config{}, fmt.Errorf("解析查询策略 rate_limits.%s.concurrency 失败: %w", key, err)
+			}
+			if setting.Concurrency < 0 {
+				return Config{}, fmt.Errorf("查询策略 rate_limits.%s.concurrency 不能为负数", key)
+			}
 			cfg.RateLimitConcurrency[key] = setting.Concurrency
 		}
 	}

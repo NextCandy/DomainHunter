@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"DomainHunter/internal/logger"
@@ -31,6 +32,31 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, r, http.StatusOK, overview)
+}
+
+// handleOverviewTrend 返回按自然日聚合的历史观测趋势。
+func (s *Server) handleOverviewTrend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.writeError(w, r, http.StatusMethodNotAllowed, "不允许的请求方法")
+		return
+	}
+
+	days := 7
+	if raw := r.URL.Query().Get("days"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 366 {
+			s.writeError(w, r, http.StatusBadRequest, "days 必须是 1 到 366 之间的整数")
+			return
+		}
+		days = parsed
+	}
+
+	trend, err := s.deps.Overview.Trend(r.Context(), days)
+	if err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, trend)
 }
 
 // handleMonitorStart 启动监控

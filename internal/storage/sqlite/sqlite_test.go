@@ -245,6 +245,63 @@ func TestObservationHistoryAndPrune(t *testing.T) {
 	}
 }
 
+func TestObservationAnalyticsAggregatesDailyStatusCountsAndChanges(t *testing.T) {
+	db := newTestDB(t)
+	domains := NewDomainRepo(db)
+	observations := NewObservationRepo(db)
+	ctx := context.Background()
+	if err := domains.Create(ctx, "trend.com", true, true); err != nil {
+		t.Fatalf("创建域名失败: %v", err)
+	}
+	entry, err := domains.Get(ctx, "trend.com")
+	if err != nil || entry == nil {
+		t.Fatalf("读取域名失败: %v %v", entry, err)
+	}
+
+	zone := time.FixedZone("CST", 8*60*60)
+	observationsToSave := []domain.Observation{
+		{DomainID: entry.ID, Domain: entry.Name, Status: domain.StatusRegistered,
+			Provider: "rdap", Confidence: domain.ConfidenceHigh,
+			ObservedAt: time.Date(2026, 8, 9, 23, 0, 0, 0, zone)},
+		{DomainID: entry.ID, Domain: entry.Name, Status: domain.StatusAvailable,
+			Provider: "rdap", Confidence: domain.ConfidenceHigh, Changed: true,
+			ObservedAt: time.Date(2026, 8, 10, 8, 0, 0, 0, zone)},
+		{DomainID: entry.ID, Domain: entry.Name, Status: domain.StatusError,
+			Provider: "rdap", Confidence: domain.ConfidenceLow, Changed: true,
+			ObservedAt: time.Date(2026, 8, 10, 9, 0, 0, 0, zone)},
+		{DomainID: entry.ID, Domain: entry.Name, Status: domain.StatusRegistered,
+			Provider: "rdap", Confidence: domain.ConfidenceHigh, Changed: true,
+			ObservedAt: time.Date(2026, 8, 11, 8, 0, 0, 0, zone)},
+	}
+	for _, obs := range observationsToSave {
+		if _, err := observations.Save(ctx, obs, nil); err != nil {
+			t.Fatalf("保存观测失败: %v", err)
+		}
+	}
+
+	counts, err := observations.DailyStatusCounts(ctx, "2026-08-10", "2026-08-11")
+	if err != nil {
+		t.Fatalf("读取每日状态计数失败: %v", err)
+	}
+	if len(counts) != 3 {
+		t.Fatalf("应返回 3 个日状态分组，实际 %d: %+v", len(counts), counts)
+	}
+	if counts[0].Day != "2026-08-10" || counts[0].Status != domain.StatusAvailable || counts[0].Count != 1 || counts[0].Changed != 1 {
+		t.Fatalf("8 月 10 日可注册分组错误: %+v", counts[0])
+	}
+
+	changes, err := observations.ChangesBetween(ctx, "2026-08-10", "2026-08-10")
+	if err != nil {
+		t.Fatalf("读取状态变化失败: %v", err)
+	}
+	if len(changes) != 2 {
+		t.Fatalf("8 月 10 日应有 2 条状态变化，实际 %d", len(changes))
+	}
+	if changes[0].Observation.Status != domain.StatusAvailable || changes[0].OldStatus != domain.StatusRegistered {
+		t.Fatalf("第一条变化的前后状态错误: %+v", changes[0])
+	}
+}
+
 func TestScheduleAndBackfill(t *testing.T) {
 	db := newTestDB(t)
 	repo := NewDomainRepo(db)
@@ -418,5 +475,28 @@ func TestNotificationHistory(t *testing.T) {
 	records, err := repo.ListRecent(ctx, 10)
 	if err != nil || len(records) != 1 {
 		t.Fatalf("通知历史数量不对: %d %v", len(records), err)
+	}
+}
+
+func TestNotificationDigestConfigDefaultsAndPersistsLastSentAt(t *testing.T) {
+	db := newTestDB(t)
+	repo := NewNotificationConfigRepo(db)
+	ctx := context.Background()
+
+	digest, err := repo.GetDigest(ctx)
+	if err != nil {
+		t.Fatalf("读取默认摘要配置失败: %v", err)
+	}
+	if digest.Hour != 8 || digest.Minute != 0 || digest.Enabled {
+		t.Fatalf("摘要默认配置错误: %+v", digest)
+	}
+
+	when := time.Date(2026, 8, 11, 8, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	if err := repo.MarkDigestSent(ctx, when); err != nil {
+		t.Fatalf("保存摘要发送时间失败: %v", err)
+	}
+	digest, err = repo.GetDigest(ctx)
+	if err != nil || digest.LastSentAt.IsZero() || !digest.LastSentAt.Equal(when) {
+		t.Fatalf("摘要发送时间持久化错误: %+v %v", digest, err)
 	}
 }

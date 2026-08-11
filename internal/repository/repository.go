@@ -91,6 +91,32 @@ type ObservationRepository interface {
 	Stats(ctx context.Context) (observations int64, attempts int64, err error)
 }
 
+// DailyStatusCount 是某个自然日内单个状态的观测计数。
+// Day 使用 YYYY-MM-DD，按应用保存观测时采用的本地日历计算。
+type DailyStatusCount struct {
+	Day            string
+	Status         domain.Status
+	Count          int
+	Changed        int
+	HighConfidence int
+}
+
+// ObservationChange 是一条状态变化观测，以及它之前最近一次观测的状态。
+// OldStatus 为空表示数据库中没有更早的观测（例如首次查询）。
+type ObservationChange struct {
+	Observation domain.Observation
+	OldStatus   domain.Status
+}
+
+// ObservationAnalyticsRepository 是历史观测的分析查询扩展接口。
+//
+// 它独立于 ObservationRepository，避免给已有的替代实现增加必须实现的方法；
+// SQLite 实现同时提供两者，趋势与每日摘要在不破坏旧接口的前提下使用它。
+type ObservationAnalyticsRepository interface {
+	DailyStatusCounts(ctx context.Context, fromDay, toDay string) ([]DailyStatusCount, error)
+	ChangesBetween(ctx context.Context, fromDay, toDay string) ([]ObservationChange, error)
+}
+
 // SettingsRepository 键值配置（app_settings）
 type SettingsRepository interface {
 	All(ctx context.Context) (map[string]string, error)
@@ -186,4 +212,11 @@ type NotificationConfigRepository interface {
 	DeleteTemplate(ctx context.Context, id int64) error
 	GetDigest(ctx context.Context) (*NotificationDigest, error)
 	UpdateDigest(ctx context.Context, digest NotificationDigest) error
+}
+
+// NotificationDigestRepository 是每日摘要调度所需的最小配置接口。
+// 单独定义以保持旧的 NotificationConfigRepository 替代实现兼容。
+type NotificationDigestRepository interface {
+	GetDigest(ctx context.Context) (*NotificationDigest, error)
+	MarkDigestSent(ctx context.Context, when time.Time) error
 }
