@@ -8,10 +8,12 @@
 
 ## 结论先说
 
-- **数据库文件路径不变**：仍然是 `data/puff.db`。不要重命名。
+- **既有的 `data/puff.db` 会被自动识别并继续使用，不会被改名**。全新安装才创建
+  `data/domainhunter.db`。想手工改名见 §2.6。
 - **不需要重建域名列表、账号或通知设置**，全部沿用数据库里的值。
 - **旧的 `PUFF_*` 环境变量继续有效**，可以先升级程序、再逐步改环境变量。
 - 升级时会**自动生成一份数据库备份**再执行迁移；备份失败则中止升级。
+- 仓库与镜像已从 `DomainHunter-go` 改名为 `DomainHunter`，见 §2.7。
 
 ---
 
@@ -100,6 +102,50 @@ Telegram Bot Token 的明文，改为 `password_set` / `bot_token_set` 布尔值
 保存设置时把对应字段留空即表示"保持不变"。
 
 新增能力放在 `/api/v2/*` 与 `/api/domains/{domain}/history`。
+
+### 2.6 数据库文件名
+
+选择顺序：
+
+1. `DOMAINHUNTER_DB_FILE` 环境变量
+2. 已存在的 `puff.db`（**既有部署走这条，不会被改名**）
+3. 已存在的 `domainhunter.db`
+4. 都不存在（全新安装）→ 创建 `domainhunter.db`
+
+想把既有部署改成新名字（可选，程序两种名字都支持）：
+
+```bash
+docker compose stop domainhunter
+cd data && mv puff.db domainhunter.db
+rm -f puff.db-wal puff.db-shm
+docker compose up -d
+```
+
+> 注意：改名后如果要回滚到 v1，需要先把文件名改回 `puff.db`。
+
+### 2.7 仓库与镜像改名
+
+| 项目 | 原 | 现 |
+| --- | --- | --- |
+| GitHub 仓库 | `NextCandy/DomainHunter-go` | `NextCandy/DomainHunter` |
+| 本地镜像 | `domainhunter-go` | `domainhunter` |
+| GHCR 镜像 | `ghcr.io/nextcandy/domainhunter` | 不变 |
+
+GitHub 会自动把旧仓库地址重定向到新地址，但建议更新本地 remote：
+
+```bash
+git remote set-url origin https://github.com/NextCandy/DomainHunter.git
+```
+
+Compose 里如果写的是 `image: domainhunter-go:latest`，改成 `domainhunter:latest`
+并重新 build 即可；旧镜像仍在本地，可作为回滚点。
+
+### 2.8 通知渠道
+
+除邮件与 Telegram 外新增 Bark、飞书机器人、自定义 Webhook。
+
+**原 Puff 的 `bark_url` / `bark_enabled` 设置会直接生效**，格式完全一致
+（完整推送地址，含设备 key，自建服务器同样适用），无需重新配置。
 
 ---
 
