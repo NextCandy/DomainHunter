@@ -96,7 +96,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
           <h1 className="text-[18px] font-semibold tracking-tight">概览</h1>
           <p className="text-[12px] text-ink-muted">
             共 {data.total} 个域名 · 调度器
-            <span className={cx("ml-1", monitorRunning ? "text-emerald-600" : "text-amber-600")}>
+            <span className={cx("ml-1", monitorRunning ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>
               {monitorRunning ? "运行中" : "已停止"}
             </span>
             （{workers} worker，队列 {queued}）
