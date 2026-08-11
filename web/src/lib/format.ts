@@ -53,6 +53,19 @@ export const STATUS_CLASSES: Record<DomainStatus, string> = {
     "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/25",
 };
 
+export function hasTransferLock(statuses?: string[] | null): boolean {
+  return Boolean(
+    statuses?.some((status) => {
+      const normalized = status.toLowerCase().replace(/[\s_-]+/g, "");
+      return (
+        normalized.includes("transferprohibited") ||
+        normalized.includes("transferlock") ||
+        normalized.includes("transferlocked")
+      );
+    }),
+  );
+}
+
 export const CONFIDENCE_LABELS: Record<string, string> = {
   high: "高",
   medium: "中",

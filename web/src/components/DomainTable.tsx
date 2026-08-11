@@ -1,5 +1,5 @@
 import type { DomainInfo } from "../lib/api";
-import { StatusBadge, cx } from "./ui";
+import { DomainName, StatusBadge, cx, useStatusChangeHighlights } from "./ui";
 import { formatDate, formatDateTime, formatRelative, providerLabel } from "../lib/format";
 
 interface Props {
@@ -18,13 +18,19 @@ interface Props {
  * 只会变得不可读，所以这里不是简单缩放而是换一种布局。
  */
 export function DomainTable(props: Props) {
+  const highlighted = useStatusChangeHighlights(
+    props.domains,
+    (item) => item.name,
+    (item) => item.status,
+  );
+
   return (
     <>
       <div className="hidden md:block">
-        <DesktopTable {...props} />
+        <DesktopTable {...props} highlighted={highlighted} />
       </div>
       <div className="md:hidden">
-        <MobileList {...props} />
+        <MobileList {...props} highlighted={highlighted} />
       </div>
     </>
   );
@@ -39,7 +45,8 @@ function DesktopTable({
   onCheck,
   onDelete,
   busy,
-}: Props) {
+  highlighted,
+}: Props & { highlighted: Set<string> }) {
   const allSelected = domains.length > 0 && domains.every((item) => selected.has(item.name));
 
   return (
@@ -67,7 +74,10 @@ function DesktopTable({
         </thead>
         <tbody className="divide-y divide-line text-[13px]">
           {domains.map((item) => (
-            <tr key={item.name} className="hover:bg-surface-muted/60">
+            <tr
+              key={item.name}
+              className={cx("hover:bg-surface-muted/60", highlighted.has(item.name) && "status-change-highlight")}
+            >
               <td className="px-3 py-2">
                 <input
                   type="checkbox"
@@ -77,17 +87,10 @@ function DesktopTable({
                 />
               </td>
               <td className="px-3 py-2">
-                <button
-                  type="button"
-                  className="mono text-left text-ink hover:text-accent hover:underline"
-                  onClick={() => onOpen(item.name)}
-                >
-                  {item.favorite && <span className="mr-1 text-amber-500">★</span>}
-                  {item.name}
-                </button>
+                <DomainName name={item.name} favorite={item.favorite} onClick={() => onOpen(item.name)} />
               </td>
               <td className="px-3 py-2">
-                <StatusBadge status={item.status} />
+                <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
               </td>
               <td className="max-w-[180px] truncate px-3 py-2 text-ink-muted" title={item.registrar}>
                 {item.registrar || "—"}
@@ -129,11 +132,23 @@ function DesktopTable({
   );
 }
 
-function MobileList({ domains, selected, onToggle, onOpen, onCheck, onDelete, busy }: Props) {
+function MobileList({
+  domains,
+  selected,
+  onToggle,
+  onOpen,
+  onCheck,
+  onDelete,
+  busy,
+  highlighted,
+}: Props & { highlighted: Set<string> }) {
   return (
     <ul className="space-y-2">
       {domains.map((item) => (
-        <li key={item.name} className="card p-3">
+        <li
+          key={item.name}
+          className={cx("card p-3", highlighted.has(item.name) && "status-change-highlight")}
+        >
           <div className="flex items-start gap-2">
             <input
               type="checkbox"
@@ -143,16 +158,9 @@ function MobileList({ domains, selected, onToggle, onOpen, onCheck, onDelete, bu
               aria-label={`选择 ${item.name}`}
             />
             <div className="min-w-0 flex-1">
-              <button
-                type="button"
-                className="mono block w-full truncate text-left text-[13px] text-ink"
-                onClick={() => onOpen(item.name)}
-              >
-                {item.favorite && <span className="mr-1 text-amber-500">★</span>}
-                {item.name}
-              </button>
+              <DomainName name={item.name} favorite={item.favorite} onClick={() => onOpen(item.name)} />
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-muted">
-                <StatusBadge status={item.status} />
+                <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
                 <span className="truncate">{item.registrar || "—"}</span>
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-faint">
