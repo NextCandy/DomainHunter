@@ -1,15 +1,12 @@
-# This is an example .goreleaser.yml file with some sensible defaults.
-# Make sure to check the documentation at https://goreleaser.com
+# GoReleaser 直接编译 ./cmd/domainhunter；前端产物 web/dist 已随仓库提交，
+# 通过 go:embed 打进二进制，因此这里不需要 Node 环境。
+version: 2
 project_name: DomainHunter
-before:
-  hooks:
-    # You may remove this if you don't use go modules.
-    #- go mod tidy
-    # you may remove this if you don't need go generate
-    #- go generate ./...
+
 builds:
   - id: domainhunter
     binary: domainhunter
+    main: ./cmd/domainhunter
     ldflags:
       - -s -w -X main.AppVersion=v{{ .Version }}
     env:
@@ -19,22 +16,22 @@ builds:
       - windows
       - darwin
     goarch:
-      - 386
+      - "386"
       - amd64
       - arm
       - arm64
     ignore:
       - goos: windows
-        goarch: 386
+        goarch: "386"
       - goos: windows
         goarch: arm
       - goos: darwin
-        goarch: 386
+        goarch: "386"
       - goos: darwin
         goarch: arm
+
 archives:
-  - format: tar.gz
-    # this name template makes the OS and Arch compatible with the results of uname.
+  - formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -42,28 +39,30 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # use zip for windows archives
     format_overrides:
-    - goos: windows
-      format: zip
+      - goos: windows
+        formats: [zip]
     files:
       - LICENSE
       - README.md
+      - MIGRATION.md
+
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
+
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
+
 changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
+      - "^docs:"
+      - "^test:"
+
 release:
   github:
     owner: NextCandy
     name: DomainHunter-go
-# The lines beneath this are called `modelines`. See `:help modeline`
-# Feel free to remove those if you don't want/use them.
+
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj

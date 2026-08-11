@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: dockerfile
       args:
-        VERSION: ${DOMAINHUNTER_VERSION:-v1.0.0}
+        VERSION: ${DOMAINHUNTER_VERSION:-v2.0.0}
     image: domainhunter-go:latest
     container_name: DomainHunter
     restart: unless-stopped
@@ -22,5 +22,13 @@ services:
       DOMAINHUNTER_WHOIS_LS_URL: ${DOMAINHUNTER_WHOIS_LS_URL:-https://whois.ls/json/}
       DOMAINHUNTER_WHOIS_LS_TLDS: ${DOMAINHUNTER_WHOIS_LS_TLDS:-im}
       DOMAINHUNTER_WHOIS_LS_TIMEOUT: ${DOMAINHUNTER_WHOIS_LS_TIMEOUT:-20s}
+      # Cookie Secure：auto 会识别反向代理的 X-Forwarded-Proto
+      DOMAINHUNTER_COOKIE_SECURE: ${DOMAINHUNTER_COOKIE_SECURE:-auto}
+      DOMAINHUNTER_LOG_FORMAT: ${DOMAINHUNTER_LOG_FORMAT:-text}
     extra_hosts:
       - host.docker.internal:host-gateway
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"

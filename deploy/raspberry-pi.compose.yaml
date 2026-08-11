@@ -1,3 +1,6 @@
+# 树莓派上的实际部署配置。
+# compose 项目名固定为 puff（历史原因），目录 /opt/docker-migrated/puff。
+# 该目录同时是数据目录，直接挂到 /app/data，puff.db 就在其中。
 services:
   domainhunter:
     image: domainhunter-go:latest
@@ -17,6 +20,7 @@ services:
       DOMAINHUNTER_WHOIS_LS_URL: https://whois.ls/json/
       DOMAINHUNTER_WHOIS_LS_TLDS: im
       DOMAINHUNTER_WHOIS_LS_TIMEOUT: "20s"
+      DOMAINHUNTER_COOKIE_SECURE: auto
     extra_hosts:
       - host.docker.internal:host-gateway
     cpu_shares: 512

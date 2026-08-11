@@ -1,13 +1,21 @@
-# Runtime data and local secrets
-data/*.db
-data/*.db-shm
-data/*.db-wal
+# 运行期数据与本地密钥
+/data/
+*.db
+*.db-shm
+*.db-wal
 *.log
 .env
+.env.*
 
-# Local build artifacts
-domainhunter
-puff
-Puff
+# 构建产物
+/domainhunter
+/domainhunter.exe
+/puff
+/Puff
 *.exe
-dist/
+/dist/
+
+# 前端依赖（web/dist 是构建产物，需要提交，见 web/embed.go 的说明）
+node_modules/
+web/node_modules/
+.vite/

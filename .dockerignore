@@ -4,7 +4,22 @@ data
 *.db
 *.db-shm
 *.db-wal
-dist
+*.log
+.env
 domainhunter
+domainhunter.exe
 puff
 Puff
+
+# 前端只需要构建产物 web/dist，源码与依赖不进镜像上下文
+web/node_modules
+web/src
+web/index.html
+web/package.json
+web/package-lock.json
+web/tsconfig.json
+web/tsconfig.tsbuildinfo
+web/vite.config.ts
+web/tailwind.config.js
+web/postcss.config.js
+web/.eslintrc.cjs
