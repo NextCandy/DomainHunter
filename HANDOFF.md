@@ -337,6 +337,10 @@ compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
   就是它。构建后一定要 `curl /health` 看 `version` 字段对不对。
 - **PowerShell 的 `-Encoding UTF8` 会写 UTF-8 BOM**：给 `.go` 文件加 BOM 会让
   `gofmt -l` 报未格式化。改文件用 Edit 工具，不要用 `Set-Content -Encoding UTF8`。
-- **Windows 检出是 CRLF（`core.autocrlf=true`）**：把工作区打包传到树莓派跑
-  `gofmt -l .` 会把所有文件都列出来。校验前先把 `\r\n` 归一化成 `\n`，
-  否则真正的格式问题会被淹没在噪音里。
+- **Windows 检出是 CRLF（`core.autocrlf=true`）**，踩了两次：
+  1. 把工作区打包传到树莓派跑 `gofmt -l .` 会把所有 `.go` 都列出来，
+     真正的格式问题淹没在噪音里。校验前先把 `\r\n` 归一化成 `\n`。
+  2. vite 生成的 `web/dist/index.html` 带 CRLF 进了索引（git 把它判成
+     `-text` 所以 autocrlf 没转），CI 在 Linux 上重新 build 出的是 LF，
+     "dist 是否与源码一致"整文件报差异。已加 `.gitattributes`
+     （`* text=auto eol=lf`）根治。

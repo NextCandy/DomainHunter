@@ -1,0 +1,10 @@
+# 仓库内一律以 LF 存储、以 LF 检出。
+#
+# 起因：Windows 上 core.autocrlf=true 时，vite 生成的 web/dist/index.html 带着
+# CRLF 进了索引，而 CI 在 Linux 上重新 npm run build 出来的是 LF，
+# "dist 是否与源码一致"这一步就把整个文件报成差异。顺带也解决了把工作区打包到
+# 树莓派跑 gofmt -l 时所有 .go 文件都被列出来的问题。
+* text=auto eol=lf
+
+# 前端构建产物，diff 没有阅读价值
+web/dist/** linguist-generated=true
