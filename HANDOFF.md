@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-11 · 分支 `refactor/domainhunter-v2` · 线上版本 `v2.1.0`
+> 最后更新：2026-08-11 · 已合并进 `main`（`refactor/domainhunter-v2` 保留） · 线上版本 `v2.2.0`
 
 ## 本次目标
 
@@ -248,7 +248,7 @@ docker compose -p domainhunter -f compose.yaml up -d
 **回滚点清单**
 
 ```
-分支        refactor/domainhunter-v2
+分支        main（已由 refactor/domainhunter-v2 快进合并，分支保留未删）
 tag         backup-before-domainhunter-refactor-20260811-0852
 改动前 commit 1f989c7f02bf7303696112a217cdde4fa5313581
 旧镜像      domainhunter-go:v1-rollback (31cc46c9b25f)
@@ -261,9 +261,8 @@ compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
 
 ## 未完成项
 
-- **`refactor/domainhunter-v2` 尚未合并到 `main`**。线上跑的就是这个分支的构建，
-  但仓库默认分支仍是改名前的 `main`。建议 review 后开 PR 合并。
 - 没有打 Release tag，因此 GHCR 上还没有 v2 镜像；树莓派用的是本地构建。
+  打 `v2.2.0` tag 即可触发 GoReleaser 与 GHCR 多架构镜像。
 - `transfer_locked` 的语义未调整（见下）。
 - 限速目前只有"最小间隔"，没有"每 Provider 并发上限"。`.do` 的本地服务在并发
   4 时会从 2 秒退化到 20 秒，间隔限速只能缓解不能根治。
