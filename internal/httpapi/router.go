@@ -18,7 +18,9 @@ func (s *Server) routes() http.Handler {
 	// ---- 认证 ----
 	mux.HandleFunc("POST /api/login", s.withRateLimit(s.loginLimiter, "登录尝试过于频繁，请5分钟后再试", s.handleLogin))
 	mux.HandleFunc("POST /login", s.withRateLimit(s.loginLimiter, "登录尝试过于频繁，请5分钟后再试", s.handleLogin))
+	// /logout 供旧前端的链接跳转使用，/api/logout 供新前端的 fetch 使用
 	mux.HandleFunc("/logout", s.handleLogout)
+	mux.HandleFunc("/api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/session", s.handleSession)
 	mux.HandleFunc("GET /api/csrf", s.handleCSRFToken)
 
