@@ -111,14 +111,14 @@ export function Card({
   bodyClassName?: string;
 }) {
   return (
-    <section className={cx("card", className)}>
+    <section className={cx("card min-w-0", className)}>
       {(title || action) && (
-        <header className="density-card-header flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-          <h2 className="text-[13px] font-semibold text-ink">{title}</h2>
+        <header className="density-card-header flex min-w-0 items-center justify-between gap-3 border-b border-line px-4 py-2.5">
+          <h2 className="min-w-0 truncate text-[13px] font-semibold text-ink">{title}</h2>
           {action}
         </header>
       )}
-      <div className={cx("density-card-body p-4", bodyClassName)}>{children}</div>
+      <div className={cx("density-card-body min-w-0 p-4", bodyClassName)}>{children}</div>
     </section>
   );
 }

@@ -90,7 +90,7 @@
   }
 
   .table-scroll {
-    @apply w-full overflow-x-auto;
+    @apply min-w-0 w-full overflow-x-auto;
   }
 
   .mono {

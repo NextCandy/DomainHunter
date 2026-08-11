@@ -12,7 +12,7 @@ const NAV = [
   { to: "/history", label: "查询历史" },
   { to: "/providers", label: "查询源" },
   { to: "/notifications", label: "通知" },
-  { to: "/automation", label: "自动化" },
+  { to: "/automation", label: "AI 与自动化" },
   { to: "/settings", label: "系统设置" },
 ];
 
@@ -32,7 +32,7 @@ const MOBILE_NAV = [
   { to: "/", label: "概览", icon: "home", end: true },
   { to: "/domains", label: "域名", icon: "search" },
   { to: "/watchlist", label: "抢注", icon: "eye" },
-  { to: "/history", label: "历史", icon: "history" },
+  { to: "/automation", label: "AI", icon: "spark" },
   { to: "/settings", label: "设置", icon: "settings" },
 ] as const;
 
@@ -50,12 +50,12 @@ export function Layout({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-full min-w-0 flex-col">
       <header className="sticky top-0 z-30 border-b border-line bg-surface-raised/95 backdrop-blur">
-        <div className="mx-auto flex h-12 max-w-[1600px] items-center gap-3 px-3 sm:px-5">
-          <div className="flex items-center gap-2">
-            <Logo className="h-6 w-6" />
-            <span className="text-[14px] font-semibold tracking-tight">DomainHunter</span>
+        <div className="mx-auto flex h-12 min-w-0 max-w-[1600px] items-center gap-3 px-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-2">
+            <Logo className="h-6 w-6 shrink-0" />
+            <span className="truncate text-[14px] font-semibold tracking-tight">DomainHunter</span>
           </div>
 
           <nav className="ml-4 hidden items-center gap-0.5 lg:flex">
@@ -78,9 +78,9 @@ export function Layout({
             ))}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <select
-              className="input h-7 w-[104px] py-0 text-[12px]"
+              className="input hidden h-7 w-[104px] py-0 text-[12px] sm:block"
               value={mode}
               onChange={(event) => setMode(event.target.value as ThemeMode)}
               aria-label="主题"
@@ -105,7 +105,7 @@ export function Layout({
               ))}
             </select>
             <span className="hidden text-[12px] text-ink-muted sm:inline">{username}</span>
-            <button type="button" className="btn h-7 px-2 text-[12px]" onClick={onLogout}>
+            <button type="button" className="btn hidden h-7 px-2 text-[12px] sm:inline-flex" onClick={onLogout}>
               退出
             </button>
             <button
@@ -154,11 +154,38 @@ export function Layout({
                 ))}
               </select>
             </label>
+            <label className="col-span-2 flex items-center gap-2 text-[12px] text-ink-muted sm:col-span-4">
+              <span>主题</span>
+              <select
+                className="input h-7 w-[104px] py-0 text-[12px]"
+                value={mode}
+                onChange={(event) => setMode(event.target.value as ThemeMode)}
+                aria-label="主题"
+              >
+                {THEME_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="col-span-2 flex justify-end border-t border-line pt-2 sm:col-span-4">
+              <button
+                type="button"
+                className="btn h-7 px-2 text-[12px]"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLogout();
+                }}
+              >
+                退出登录
+              </button>
+            </div>
           </nav>
         )}
       </header>
 
-      <main className="mx-auto w-full max-w-[1600px] flex-1 px-3 pb-20 pt-4 sm:px-5 sm:py-6 lg:pb-6">
+      <main className="mx-auto min-w-0 w-full max-w-[1600px] flex-1 px-3 pb-20 pt-4 sm:px-5 sm:py-6 lg:pb-6">
         <Outlet />
       </main>
 
@@ -172,6 +199,7 @@ export function Layout({
               key={item.to}
               to={item.to}
               end={"end" in item ? item.end : undefined}
+              onClick={() => setMenuOpen(false)}
               className={({ isActive }) =>
                 cx(
                   "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[10px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent",
@@ -239,12 +267,11 @@ function NavIcon({ name }: { name: (typeof MOBILE_NAV)[number]["icon"] }) {
       </svg>
     );
   }
-  if (name === "history") {
+  if (name === "spark") {
     return (
       <svg {...common}>
-        <path d="M3 5.25A5.3 5.3 0 1 1 2.75 9" />
-        <path d="M2.25 3.5v2.75H5" />
-        <path d="M8 5.25V8l1.75 1" />
+        <path d="m8 1.75.95 4.3 4.3.95-4.3.95L8 12.25l-.95-4.3-4.3-.95 4.3-.95Z" />
+        <path d="m12.25 10.75.45 2.05 2.05.45-2.05.45-.45 2.05-.45-2.05-2.05-.45 2.05-.45Z" />
       </svg>
     );
   }
