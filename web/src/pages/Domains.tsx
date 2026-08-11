@@ -19,15 +19,7 @@ const SORT_OPTIONS = [
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
-export function DomainsPage({
-  onUnauthorized,
-  favoriteOnly = false,
-  title = "域名",
-}: {
-  onUnauthorized: () => void;
-  favoriteOnly?: boolean;
-  title?: string;
-}) {
+export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [params, setParams] = useSearchParams();
   const toast = useToast();
 
@@ -38,6 +30,7 @@ export function DomainsPage({
   const provider = params.get("provider") ?? "";
   const sort = params.get("sort") ?? "";
   const order = params.get("order") ?? "asc";
+  const favoriteOnly = params.get("favorite") === "true";
   const page = Number(params.get("page") ?? "1") || 1;
   const limit = Number(params.get("limit") ?? "20") || 20;
 
@@ -153,7 +146,7 @@ export function DomainsPage({
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-[18px] font-semibold tracking-tight">域名</h1>
           <p className="text-[12px] text-ink-muted">
             共 {data?.total ?? 0} 个域名
             {data && data.total_filtered !== data.total ? ` · 筛选出 ${data.total_filtered} 个` : ""}
@@ -244,6 +237,15 @@ export function DomainsPage({
             aria-label="切换排序方向"
           >
             {order === "asc" ? "↑" : "↓"}
+          </button>
+          <button
+            type="button"
+            className={cx("btn shrink-0", favoriteOnly && "border-accent text-accent")}
+            onClick={() => updateParams({ favorite: favoriteOnly ? "" : "true" })}
+            title="只看收藏"
+            aria-pressed={favoriteOnly}
+          >
+            ★
           </button>
         </div>
       </div>

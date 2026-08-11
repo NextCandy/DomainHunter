@@ -52,6 +52,7 @@ func parseListFilter(r *http.Request) service.ListFilter {
 	filter := service.ListFilter{
 		Search:    strings.TrimSpace(q.Get("search")),
 		Status:    strings.TrimSpace(q.Get("status")),
+		Statuses:  splitCSV(q.Get("statuses")),
 		TLD:       strings.TrimSpace(q.Get("tld")),
 		Registrar: strings.TrimSpace(q.Get("registrar")),
 		Provider:  strings.TrimSpace(q.Get("provider")),
@@ -69,6 +70,17 @@ func parseListFilter(r *http.Request) service.ListFilter {
 		filter.Limit = v
 	}
 	return filter
+}
+
+func splitCSV(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 // handleDomainDetail 旧版域名详情：GET /api/domain/{name}

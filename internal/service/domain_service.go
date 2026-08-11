@@ -15,8 +15,12 @@ import (
 
 // ListFilter 域名列表筛选条件
 type ListFilter struct {
-	Search    string
-	Status    string
+	Search string
+	// Status 单个状态（旧参数，保持兼容）
+	Status string
+	// Statuses 多个状态取并集；非空时优先于 Status。
+	// 抢注看板要一次看齐"处于掉落流程"的全部状态。
+	Statuses  []string
 	TLD       string
 	Registrar string
 	Provider  string
@@ -229,7 +233,11 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 		if search != "" && !strings.Contains(strings.ToLower(item.Name), search) {
 			continue
 		}
-		if filter.Status != "" && string(item.Status) != filter.Status {
+		if len(filter.Statuses) > 0 {
+			if !containsFold(filter.Statuses, string(item.Status)) {
+				continue
+			}
+		} else if filter.Status != "" && string(item.Status) != filter.Status {
 			continue
 		}
 		// 后缀精确匹配：选 cn 不会把 com.cn 也带进来，与筛选项列表一一对应
@@ -251,6 +259,15 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 		out = append(out, item)
 	}
 	return out
+}
+
+func containsFold(values []string, want string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), want) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasTag(tags []string, want string) bool {

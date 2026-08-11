@@ -7,7 +7,7 @@ import { cx } from "./ui";
 const NAV = [
   { to: "/", label: "概览", end: true },
   { to: "/domains", label: "域名" },
-  { to: "/watchlist", label: "观察列表" },
+  { to: "/watchlist", label: "抢注看板" },
   { to: "/history", label: "查询历史" },
   { to: "/providers", label: "查询源" },
   { to: "/notifications", label: "通知" },
