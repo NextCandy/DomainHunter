@@ -1,0 +1,102 @@
+// Package sqlite 提供 DomainHunter 的 SQLite 存储实现。
+//
+// 数据文件固定为 data/puff.db —— 这是为了无损兼容既有 Puff/DomainHunter 部署，
+// 与项目已经更名为 DomainHunter 无关。任何改名都需要一套可回滚的迁移机制，
+// 目前不值得为此冒险。
+package sqlite
+
+import (
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	_ "github.com/glebarez/sqlite"
+)
+
+// DefaultDir 默认数据目录
+const DefaultDir = "data"
+
+// DefaultFile 默认数据库文件名（保持 puff.db 以兼容既有部署）
+const DefaultFile = "puff.db"
+
+// DB 封装底层连接与路径信息
+type DB struct {
+	*sql.DB
+	dir  string
+	path string
+
+	migrateOnce sync.Once
+	migrateErr  error
+}
+
+// Open 打开（必要时创建）数据库。dir 为空时使用 DefaultDir。
+func Open(dir string) (*DB, error) {
+	if strings.TrimSpace(dir) == "" {
+		dir = DefaultDir
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("创建数据目录失败: %w", err)
+	}
+
+	path := filepath.Join(dir, DefaultFile)
+	// busy_timeout 让并发写入等待而不是立刻报 database is locked。
+	dsn := path + "?_pragma=busy_timeout(10000)&_pragma=foreign_keys(0)"
+
+	conn, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("打开数据库失败: %w", err)
+	}
+	// SQLite 单写者；限制为 1 条连接可以避免锁冲突，这与重构前一致。
+	conn.SetMaxOpenConns(1)
+	conn.SetMaxIdleConns(1)
+
+	if err := conn.Ping(); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("连接数据库失败: %w", err)
+	}
+	return &DB{DB: conn, dir: dir, path: path}, nil
+}
+
+// Path 返回数据库文件路径
+func (d *DB) Path() string { return d.path }
+
+// Dir 返回数据目录
+func (d *DB) Dir() string { return d.dir }
+
+// BackupDir 返回备份目录
+func (d *DB) BackupDir() string { return filepath.Join(d.dir, "backups") }
+
+func boolToInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+func splitList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func joinList(items []string) string {
+	cleaned := make([]string, 0, len(items))
+	for _, item := range items {
+		if item = strings.TrimSpace(item); item != "" {
+			cleaned = append(cleaned, item)
+		}
+	}
+	return strings.Join(cleaned, ",")
+}

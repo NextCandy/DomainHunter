@@ -1,0 +1,113 @@
+// Package repository 定义存储层接口。
+//
+// 业务代码只依赖这些接口，不再直接调用全局的 storage.XxxDomain() 函数，
+// 这样存储实现可替换、可在测试中替身，也不会出现 config → storage 这类反向依赖。
+package repository
+
+import (
+	"context"
+	"time"
+
+	"DomainHunter/internal/domain"
+)
+
+// DomainPatch 域名可更新字段；nil 表示不改动
+type DomainPatch struct {
+	Enabled  *bool
+	Notify   *bool
+	Favorite *bool
+	Note     *string
+	Tags     *[]string
+	Priority *int
+}
+
+// DomainRepository 监控域名列表
+type DomainRepository interface {
+	List(ctx context.Context, enabledOnly bool) ([]domain.Domain, error)
+	Get(ctx context.Context, name string) (*domain.Domain, error)
+	Create(ctx context.Context, name string, enabled, notify bool) error
+	Delete(ctx context.Context, name string) error
+	DeleteMany(ctx context.Context, names []string) (int64, error)
+	Update(ctx context.Context, name string, patch DomainPatch) error
+	IsEnabled(ctx context.Context, name string) (bool, error)
+
+	// DueForCheck 返回到期待查询的域名，按优先级与到期时间排序
+	DueForCheck(ctx context.Context, now time.Time, limit int) ([]domain.Domain, error)
+	// ScheduleNext 写回下次检查时间与重试计数
+	ScheduleNext(ctx context.Context, name string, next time.Time, retryCount int) error
+	// BackfillSchedule 为 next_check_at 为空的域名补一个初始时间
+	BackfillSchedule(ctx context.Context, defaultInterval time.Duration) (int64, error)
+	// LastNotifiedStatus 读取/写入最近一次已通知的状态，用于抑制重复通知
+	LastNotifiedStatus(ctx context.Context, name string) (string, error)
+	SetLastNotifiedStatus(ctx context.Context, name, status string) error
+
+	CleanOrphaned(ctx context.Context) (results int64, notifications int64, err error)
+	Count(ctx context.Context, enabledOnly bool) (int, error)
+}
+
+// ResultRepository 当前状态快照（domain_results）
+type ResultRepository interface {
+	Get(ctx context.Context, name string) (*domain.Info, error)
+	LoadAll(ctx context.Context) (map[string]domain.Info, error)
+	Save(ctx context.Context, info domain.Info) error
+	UpdateRaw(ctx context.Context, name, raw string) error
+}
+
+// Retention 历史数据保留策略
+type Retention struct {
+	// Days 保留天数，<=0 表示不按时间清理
+	Days int
+	// MaxPerDomain 每个域名最多保留的观测条数，<=0 表示不限制
+	MaxPerDomain int
+	// RawMaxBytes 单条原始报文最大保存字节数，超出截断
+	RawMaxBytes int
+	// RawMode 原始报文保存策略：change_only / always / never
+	RawMode string
+}
+
+// 原始报文保存策略取值
+const (
+	RawModeChangeOnly = "change_only"
+	RawModeAlways     = "always"
+	RawModeNever      = "never"
+)
+
+// DefaultRetention 默认保留策略：兼顾"有历史价值"与"树莓派上不会无限增长"
+func DefaultRetention() Retention {
+	return Retention{Days: 180, MaxPerDomain: 200, RawMaxBytes: 16 * 1024, RawMode: RawModeChangeOnly}
+}
+
+// ObservationRepository 历史观测与查询尝试
+type ObservationRepository interface {
+	Save(ctx context.Context, obs domain.Observation, attempts []domain.Attempt) (int64, error)
+	ListByDomain(ctx context.Context, name string, limit int) ([]domain.Observation, error)
+	ListAttempts(ctx context.Context, name string, limit int) ([]domain.Attempt, error)
+	ListAttemptsByObservation(ctx context.Context, observationID int64) ([]domain.Attempt, error)
+	ListRecentChanges(ctx context.Context, limit int) ([]domain.Observation, error)
+	Prune(ctx context.Context, retention Retention) (observations int64, attempts int64, err error)
+	Stats(ctx context.Context) (observations int64, attempts int64, err error)
+}
+
+// SettingsRepository 键值配置（app_settings）
+type SettingsRepository interface {
+	All(ctx context.Context) (map[string]string, error)
+	Get(ctx context.Context, key string) (string, bool, error)
+	Upsert(ctx context.Context, values map[string]string) error
+}
+
+// NotificationRecord 通知历史
+type NotificationRecord struct {
+	ID        int64     `json:"id"`
+	Domain    string    `json:"domain"`
+	Status    string    `json:"status"`
+	OldStatus string    `json:"old_status"`
+	SentAt    time.Time `json:"sent_at"`
+	Type      string    `json:"type"`
+}
+
+// NotificationRepository 通知历史
+type NotificationRepository interface {
+	Last(ctx context.Context, name string) (*NotificationRecord, error)
+	Save(ctx context.Context, name, status, oldStatus string) error
+	ListRecent(ctx context.Context, limit int) ([]NotificationRecord, error)
+}
