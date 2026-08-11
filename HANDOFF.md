@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-12 · P0–P2 与 P1 研究/自动化已合并 · Pi 版本 `v2.5.0-p1-83ed1f2`
+> 最后更新：2026-08-12 · P0–P2 与 P1 研究/自动化已合并 · Pi 版本 `v2.5.0-p1-3cb9599`
 
 ## 本次目标
 
@@ -188,11 +188,11 @@ Bark 精简正文回归测试                            PASS
 未配置渠道给出明确提示                          PASS
 /health                                        PASS
 P1 migration 010–011 / 新增表与索引                     PASS
-P1 ARM64 image build / version v2.5.0-p1-83ed1f2         PASS
+P1 ARM64 image build / version v2.5.0-p1-3cb9599         PASS
 P1 health / schema integrity / 550 domains               PASS
 P1 未登录访问 AI/视图/高级列表接口 → 401                  PASS
 P1 未登录访问批量审计接口 → 401                           PASS
-P1 前端 go:embed 新资产 index-DxJ8fYuw.js                PASS
+P1 前端 go:embed 新资产 index-BV0B_DpN.js                PASS
 ```
 
 ## 测试结果
@@ -206,7 +206,7 @@ go vet ./...          PASS
 前端 npm run build    PASS（gzip JS 94KB）
 前端 npm ci            PASS（npm audit 报现有依赖树 4 个漏洞，未执行 audit fix）
 docker compose config PASS
-docker build          PASS（Pi arm64，镜像 `domainhunter:p1-83ed1f2`）
+docker build          PASS（Pi arm64，镜像 `domainhunter:p1-3cb9599`）
 ```
 
 > `go test -race` **无法在树莓派上运行**：该机内核是 47 位 VMA，
@@ -218,7 +218,7 @@ docker build          PASS（Pi arm64，镜像 `domainhunter:p1-83ed1f2`）
 
 ```
 docker compose -p domainhunter -f compose.yaml config -q   PASS
-docker build --build-arg VERSION=v2.5.0-p1-83ed1f2 -t domainhunter:p1-83ed1f2   PASS（Pi arm64）
+docker build --build-arg VERSION=v2.5.0-p1-3cb9599 -t domainhunter:p1-3cb9599   PASS（Pi arm64）
 docker compose -p domainhunter up -d                        PASS
 HEALTHCHECK                                                 healthy
 ```
@@ -227,15 +227,15 @@ HEALTHCHECK                                                 healthy
 
 ```
 主机        树莓派 Pi (aarch64)，SSH 192.168.50.180:22370
-容器        DomainHunter        镜像 domainhunter:latest (= v2.5.0-p1-83ed1f2)
+容器        DomainHunter        镜像 domainhunter:latest (= v2.5.0-p1-3cb9599)
 端口        22334 → 8080        网络 domainhunter_default
 compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/compose.yaml
 数据目录    /opt/docker-migrated/domainhunter （即容器内 /app/data）
 数据库      domainhunter.db（约16MB，550 个域名）—— 2026-08-11 停机由 puff.db 改名
 资源        内存限制 0 / cpu_shares 512 / 重启 0 / 当前健康
 容器总数    35（与改动前一致，未影响任何其他项目）
-备份        backups/domainhunter-20260812-025530-pre-p1-events.db
-回滚镜像    domainhunter:rollback-p1-events-20260812
+备份        backups/domainhunter-20260812-070555-pre-mobile.db
+回滚镜像    domainhunter:rollback-p1-mobile-20260812
 ```
 
 ## 回滚方式
@@ -246,7 +246,7 @@ compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/co
 
 ```bash
 cd /opt/docker-migrated/domainhunter
-docker tag domainhunter:rollback-p1-events-20260812 domainhunter:latest
+docker tag domainhunter:rollback-p1-mobile-20260812 domainhunter:latest
 docker compose -p domainhunter -f compose.yaml up -d
 curl -f http://127.0.0.1:22334/health
 ```
@@ -291,7 +291,7 @@ tag         backup-before-domainhunter-refactor-20260811-0852  ← 回滚到重�
             domainhunter:v2.1.0-rollback、domainhunter:v2.2.0  ← v2 各阶段
             domainhunter:v2.4.0-rollback-20260812-0003  ← Bark 修复前
 数据库备份  /opt/docker-migrated/domainhunter/backups/
-              domainhunter-20260812-025530-pre-p1-events.db  （P1 事件桥接部署前）
+              domainhunter-20260812-070555-pre-mobile.db  （移动端响应式修复部署前）
               domainhunter-20260812-0003-pre-bark.db
               puff-20260811-100852-pre-v2-manual.db      （重构前基线，817 域名）
               puff-20260811-143159-pre-owned-cleanup.db  （清理已拥有域名前，695）
