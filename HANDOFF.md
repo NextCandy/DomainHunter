@@ -203,7 +203,7 @@ HEALTHCHECK                                                 healthy
 
 ```
 主机        树莓派 Pi (aarch64)，SSH 100.116.187.99:22370
-容器        DomainHunter        镜像 domainhunter:latest (= v2.2.0)
+容器        DomainHunter        镜像 domainhunter:latest (= v2.2.1)
 端口        22334 → 8080        网络 domainhunter_default
 compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/compose.yaml
 数据目录    /opt/docker-migrated/domainhunter （即容器内 /app/data）
@@ -261,12 +261,14 @@ docker compose -p domainhunter -f compose.yaml up -d
 分支        main（refactor/domainhunter-v2 已快进合并进来并删除）
 tag         backup-before-domainhunter-refactor-20260811-0852  ← 回滚到重构前用它
 改动前 commit 1f989c7f02bf7303696112a217cdde4fa5313581
-旧镜像      domainhunter-go:v1-rollback (31cc46c9b25f)
+旧镜像      domainhunter-go:v1-rollback (31cc46c9b25f)  ← v1
+            domainhunter:v2.1.0-rollback、domainhunter:v2.2.0  ← v2 各阶段
 数据库备份  /opt/docker-migrated/domainhunter/backups/
               puff-20260811-100852-pre-v2-manual.db      （重构前基线，817 域名）
               puff-20260811-143159-pre-owned-cleanup.db  （清理已拥有域名前，695）
               puff-20260811-153045-pre-db-rename.db      （改名前冷拷贝，551）
 compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
+             /opt/docker-migrated/domainhunter/compose.yaml.pre-dbrename-comment
 ```
 
 ## 未完成项
@@ -330,3 +332,11 @@ compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
   `.do` 域名变成 unknown。已改成补齐调度时间时均摊到一个间隔窗口。
 - **PowerShell 不支持 heredoc**：给树莓派传脚本要用 base64 编码，直接拼字符串
   会被反复转义搞坏。
+- **`docker build` 忘了 `--build-arg VERSION=` 会把版本号退回 `v2.0.0`**：
+  dockerfile 的 `ARG VERSION=v2.0.0` 是兜底默认值，`-X main.AppVersion` 取的
+  就是它。构建后一定要 `curl /health` 看 `version` 字段对不对。
+- **PowerShell 的 `-Encoding UTF8` 会写 UTF-8 BOM**：给 `.go` 文件加 BOM 会让
+  `gofmt -l` 报未格式化。改文件用 Edit 工具，不要用 `Set-Content -Encoding UTF8`。
+- **Windows 检出是 CRLF（`core.autocrlf=true`）**：把工作区打包传到树莓派跑
+  `gofmt -l .` 会把所有文件都列出来。校验前先把 `\r\n` 归一化成 `\n`，
+  否则真正的格式问题会被淹没在噪音里。
