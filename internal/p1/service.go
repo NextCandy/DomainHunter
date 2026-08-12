@@ -401,6 +401,17 @@ func (r richDomain) field(name string) (any, bool) {
 			return nil, true
 		}
 		return r.AI.Confidence, true
+	case "review_required":
+		return r.Info.Review != nil && r.Info.Review.Required, true
+	case "review_reason":
+		if r.Info.Review == nil {
+			return []string(nil), true
+		}
+		reasons := make([]string, 0, len(r.Info.Review.Reasons))
+		for _, reason := range r.Info.Review.Reasons {
+			reasons = append(reasons, string(reason))
+		}
+		return reasons, true
 	default:
 		return nil, false
 	}
@@ -414,7 +425,7 @@ func (s *Service) loadDomains(ctx context.Context) ([]richDomain, error) {
 		       r.updated_at, r.last_checked, COALESCE(r.query_method,''),
 		       COALESCE(r.whois_raw,''), COALESCE(r.error_message,''),
 		       COALESCE(r.name_servers,''), COALESCE(r.epp_statuses,''),
-		       v.result_json
+		       COALESCE(r.confidence,''), v.result_json
 		FROM domains d
 		LEFT JOIN domain_results r ON lower(r.domain) = lower(d.name)
 		LEFT JOIN ai_domain_valuations v ON lower(v.domain) = lower(d.name)
@@ -426,16 +437,16 @@ func (s *Service) loadDomains(ctx context.Context) ([]richDomain, error) {
 	var out []richDomain
 	for rows.Next() {
 		var (
-			item                                                                       richDomain
-			name, note, tags, status, registrar, method, raw, errMessage, servers, epp string
-			enabled, notify, favorite                                                  int
-			folderID                                                                   sql.NullInt64
-			createdAt, createdDate, expiryDate, updatedDate, lastChecked               sql.NullTime
-			resultJSON                                                                 sql.NullString
+			item                                                                                   richDomain
+			name, note, tags, status, registrar, method, raw, errMessage, servers, epp, confidence string
+			enabled, notify, favorite                                                              int
+			folderID                                                                               sql.NullInt64
+			createdAt, createdDate, expiryDate, updatedDate, lastChecked                           sql.NullTime
+			resultJSON                                                                             sql.NullString
 		)
 		if err := rows.Scan(&name, &enabled, &notify, &favorite, &note, &tags, &folderID,
 			&createdAt, &status, &registrar, &createdDate, &expiryDate, &updatedDate,
-			&lastChecked, &method, &raw, &errMessage, &servers, &epp, &resultJSON); err != nil {
+			&lastChecked, &method, &raw, &errMessage, &servers, &epp, &confidence, &resultJSON); err != nil {
 			return nil, fmt.Errorf("解析 P1 域名数据失败: %w", err)
 		}
 		item.Info.Name = name
@@ -448,6 +459,7 @@ func (s *Service) loadDomains(ctx context.Context) ([]richDomain, error) {
 		item.Info.Tags, item.Info.Note = splitCSV(tags), note
 		item.Info.NameServers = splitCSV(servers)
 		item.Info.EPPStatuses = splitCSV(epp)
+		item.Info.Confidence = domain.Confidence(confidence)
 		item.Enabled, item.Notify = enabled == 1, notify == 1
 		item.Info.Favorite = favorite == 1
 		item.Info.AddedAt = nullTimePtr(createdAt)
@@ -463,6 +475,7 @@ func (s *Service) loadDomains(ctx context.Context) ([]richDomain, error) {
 		if lastChecked.Valid {
 			item.Info.LastChecked = lastChecked.Time
 		}
+		item.Info.Review = domain.BuildReviewState(&item.Info, time.Now())
 		if resultJSON.Valid {
 			var valuation Valuation
 			if json.Unmarshal([]byte(resultJSON.String), &valuation) == nil {

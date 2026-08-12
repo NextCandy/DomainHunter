@@ -6,29 +6,37 @@
    不使用大面积渐变、玻璃拟态与夸张阴影。 */
 @layer base {
   :root {
-    --surface: 250 250 250;
-    --surface-muted: 244 244 245;
-    --surface-raised: 255 255 255;
-    --line: 228 228 231;
-    --ink: 24 24 27;
-    --ink-muted: 82 82 91;
-    --ink-faint: 105 105 112;
-    --accent: 37 99 235;
-    --accent-soft: 219 234 254;
+	--canvas: 247 248 250;
+	--surface: 255 255 255;
+	--surface-subtle: 241 244 245;
+	--surface-muted: 241 244 245;
+	--surface-raised: 255 255 255;
+	--line: 220 227 232;
+	--ink: 22 32 42;
+	--ink-muted: 91 104 117;
+	--ink-faint: 123 135 148;
+	--accent: 8 126 122;
+	--accent-soft: 229 244 242;
+	--review: 112 87 181;
+	--danger: 191 60 53;
     --density-card-pad: 1rem;
     --density-card-header-pad: 0.625rem;
   }
 
   .dark {
-    --surface: 12 14 18;
-    --surface-muted: 20 23 28;
-    --surface-raised: 24 27 33;
-    --line: 44 48 56;
-    --ink: 237 238 241;
-    --ink-muted: 163 167 176;
-    --ink-faint: 164 169 180;
-    --accent: 96 154 255;
-    --accent-soft: 30 47 78;
+	--canvas: 16 18 20;
+	--surface: 23 26 30;
+	--surface-subtle: 32 36 42;
+	--surface-muted: 32 36 42;
+	--surface-raised: 23 26 30;
+	--line: 48 55 64;
+	--ink: 240 244 248;
+	--ink-muted: 168 179 190;
+	--ink-faint: 125 137 149;
+	--accent: 54 183 175;
+	--accent-soft: 18 60 59;
+	--review: 183 161 246;
+	--danger: 241 128 120;
   }
 
   html,
@@ -38,7 +46,8 @@
   }
 
   body {
-    @apply bg-surface text-ink font-sans antialiased;
+    @apply text-ink font-sans antialiased;
+    background: rgb(var(--canvas));
     font-size: 14px;
     /* 表格与代码块自己滚动，页面整体永远不横向滚动 */
     overflow-x: hidden;
@@ -55,7 +64,8 @@
 
 @layer components {
   .card {
-    @apply rounded-card border border-line bg-surface-raised;
+	@apply rounded-card border border-line bg-surface-raised;
+	box-shadow: 0 1px 0 rgb(var(--ink) / 0.04);
   }
 
   .btn {
@@ -65,6 +75,29 @@
       focus-visible:outline-offset-2 focus-visible:outline-accent
       focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised
       disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .workspace-header {
+    @apply border-b border-line bg-surface-raised px-0 py-3;
+  }
+
+  .workspace-kicker {
+    @apply mono text-[10px] font-semibold tracking-[0.16em] text-accent;
+  }
+
+  .review-badge {
+    @apply inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium leading-4;
+    border-color: rgb(var(--review) / 0.35);
+    background: rgb(var(--review) / 0.09);
+    color: rgb(var(--review));
+  }
+
+  .data-table-refined tbody tr {
+    @apply border-line transition-colors;
+  }
+
+  .data-table-refined tbody tr:hover {
+    background: rgb(var(--accent-soft) / 0.55);
   }
 
   .btn-primary {

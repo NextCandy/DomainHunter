@@ -20,8 +20,8 @@ import {
   formatRelative,
   providerLabel,
 } from "../lib/format";
-import { AIDomainValuationCard } from "./AIDomainValuationCard";
 import { RegistrarLookupMenu } from "./RegistrarLookupMenu";
+import { DomainValuationPanel } from "../features/ai-valuation";
 
 interface DetailResponse {
   info: DomainInfo;
@@ -149,6 +149,7 @@ export function DomainDrawer({
           <span className="flex flex-wrap items-center gap-2">
             <StatusBadge status={info.status} eppStatuses={info.epp_statuses} />
             {info.confidence && <Pill>可信度 {CONFIDENCE_LABELS[info.confidence] ?? info.confidence}</Pill>}
+            {info.review?.required && <span className="review-badge">数据需复核</span>}
             <Pill>{providerLabel(info.query_method)}</Pill>
             {info.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
           </span>
@@ -193,7 +194,16 @@ export function DomainDrawer({
             ))}
           </nav>
 
-          {tab === "overview" && <OverviewTab info={info} />}
+          {tab === "overview" && (
+            <OverviewTab
+              info={info}
+              onUnauthorized={onUnauthorized}
+              onCompleted={() => {
+                onChanged?.();
+                void load();
+              }}
+            />
+          )}
           {tab === "evidence" && <EvidenceTab info={info} attempts={detail?.attempts ?? null} />}
           {tab === "timeline" && <TimelineTab history={detail?.history ?? null} />}
           {tab === "raw" && <RawTab info={info} />}
@@ -212,10 +222,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function OverviewTab({ info }: { info: DomainInfo }) {
+function OverviewTab({ info, onUnauthorized, onCompleted }: { info: DomainInfo; onUnauthorized: () => void; onCompleted: () => void }) {
   return (
     <div>
-      <AIDomainValuationCard domain={info.name} />
+      {info.review?.required && (
+        <div className="mb-3 rounded-md border border-review/35 bg-review/8 px-3 py-2 text-[12px] leading-5">
+          <div className="font-semibold text-review">数据需复核</div>
+          <p className="mt-0.5 text-ink-muted">{info.review.explanation ?? "请先查看查询证据并重新检查；这不是新的域名生命周期状态。"}</p>
+        </div>
+      )}
+      <DomainValuationPanel
+        domain={info.name}
+        status={info.status}
+        confidence={info.confidence}
+        reviewRequired={Boolean(info.review?.required)}
+        onUnauthorized={onUnauthorized}
+        onCompleted={onCompleted}
+        compact
+      />
       <Field label="状态">
         <StatusBadge status={info.status} eppStatuses={info.epp_statuses} />
       </Field>

@@ -4,6 +4,20 @@
   <img src="web/public/DomainHunter.svg" alt="DomainHunter" width="180" />
 </p>
 
+<h1 align="center">DomainHunter</h1>
+
+<p align="center">
+  RDAP-first 域名监控与研究工作台：保守判断可注册状态，保留可追溯证据，<br />
+  提供复核队列与只读研究性的 AI 域名估价。
+</p>
+
+<p align="center">
+  <a href="https://github.com/NextCandy/DomainHunter/actions/workflows/ci.yml"><img src="https://github.com/NextCandy/DomainHunter/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/NextCandy/DomainHunter/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-0f766e.svg" alt="MIT License" /></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg" alt="Go 1.24+" /></a>
+  <a href="https://github.com/NextCandy/DomainHunter"><img src="https://img.shields.io/badge/architecture-Go%20%2B%20SQLite-4a4636.svg" alt="Go and SQLite" /></a>
+</p>
+
 DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。查询链路建立在
 "RDAP 优先、WHOIS 兼容、**无法确认就不报告可注册**"的安全模型上，
 并为每个结论保留可追溯的查询证据。
@@ -27,6 +41,10 @@ DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。查�
   详情页据此回答"当前状态为什么是这个结果"。
 - 状态流转有历史：`registered → grace → redemption → pending_delete → available`
   全程可回溯。
+- 低可信度、Provider 冲突、未来到期和过期证据进入复核，不会改变原始状态，
+  也不会进入高可信抢注排序或可注册通知。
+- AI 估价只生成研究性排序、区间和解释，不能改变 `available`、可信度或审核结论。
+- AI 输入只包含最小化结构化事实，不发送 WHOIS/RDAP 原文、联系人、备注、密码或 Token。
 - 旧版遗留的 `data/puff.db` 与 `PUFF_*` 环境变量仍被接受，升级无需重建任何数据。
 
 ## 快速开始
@@ -74,7 +92,7 @@ React + TypeScript + Vite + Tailwind，构建产物经 `go:embed` 打进同一�
 
 | 页面 | 作用 |
 | --- | --- |
-| 概览 | 状态统计、最近状态变化、即将到期、最近可注册、查询失败、查询源健康 |
+| 概览 | 今日工作台、可注册 / 掉落窗口 / 续费风险 / 待复核行动队列、查询源健康 |
 | 域名 | 全量列表：搜索、状态 / 后缀 / 注册商 / 查询源筛选、排序、分页、批量检查与删除、★ 只看收藏 |
 | 抢注看板 | **只**显示处于掉落流程的域名（可注册 / 待删除 / 赎回期 / 已过期 / 宽限期），按抢注紧迫度排序并给出距今天数 |
 | 查询历史 | 全局状态变化 + 按域名查看完整状态时间线与各查询源历史 |
@@ -85,6 +103,21 @@ React + TypeScript + Vite + Tailwind，构建产物经 `go:embed` 打进同一�
 域名详情是右侧抽屉，分四个标签页：概览 / 查询证据 / 状态时间线 / 原始报文。
 「查询证据」会列出本次结论里**每个查询源分别看到了什么**（状态、耗时、错误），
 这是回答"当前状态为什么是这个结果"的地方。
+
+AI 与自动化页面提供 DeepSeek 档案、模型、Thinking、推理强度、超时、并发、每日额度和缓存
+TTL 配置。域名详情的「概览」标签页提供研究性估价面板；复核中的域名会安全禁用入队操作。
+
+## 复核与行动队列
+
+概览页把需要处理的对象集中成四类行动队列：
+
+- **可注册**：仅纳入高可信、非复核状态。
+- **掉落窗口**：仅纳入高可信且到期日处于策略窗口内的掉落状态。
+- **续费风险**：临近到期且证据足够的域名。
+- **待复核**：查询错误、未知状态、低可信度、未来到期、Provider 冲突或证据过期。
+
+复核不会偷偷覆盖查询结果。完成「立即检查」并获得一致的结构化证据后，域名才可能重新进入
+排序、通知和 AI 研究估价流程。
 
 ## Docker Compose
 
@@ -147,7 +180,8 @@ data/
 | `DOMAINHUNTER_WHOIS_LS_TIMEOUT` | `20s` | 支持 `20` 或 `20s` |
 | `DOMAINHUNTER_AI_API_KEY` | 空 | 默认 AI 配置的运行时 Key；不会写入仓库 |
 | `DOMAINHUNTER_SECRET_KEY` | 空 | UI 保存多个 AI Key 时使用 AES-GCM 加密 |
-| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | `api.deepseek.com,opencode.ai` | AI Base URL 主机 allowlist |
+| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | `api.deepseek.com` | 严格 AI 估价的额外出站主机 allowlist，逗号分隔 |
+| `DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL` | `false` | 仅本地开发时允许 localhost HTTP；生产环境必须为 `false` |
 | `DOMAINHUNTER_QUERY_POLICY_FILE` | 空 | 查询策略 JSON 文件（优先于数据库设置） |
 | `DOMAINHUNTER_COOKIE_SECURE` | `auto` | `auto` / `true` / `false` |
 | `DOMAINHUNTER_COOKIE_SAMESITE` | `lax` | `lax` / `strict` / `none` |
@@ -157,6 +191,8 @@ data/
 | `DOMAINHUNTER_LOG_FORMAT` | `text` | 设为 `json` 输出结构化日志 |
 
 对应的 `PUFF_*` 旧变量名仍然有效（已废弃，但不会被删除）。
+旧版 P1 AI 的 `DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL` 仅为兼容保留；严格研究性估价读取的是
+`DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL`。
 
 ## 查询 Provider
 
@@ -304,14 +340,34 @@ POST   /api/v2/automation/evaluate                       事件评估（默认�
 > 安全调整：`GET /api/settings` 不再回吐 SMTP 密码与 Telegram Bot Token 明文，
 > 改为 `password_set` / `bot_token_set` 布尔值；保存时对应字段留空表示不修改。
 
-## P1 高级筛选、AI 研究与自动化
+严格研究性估价使用独立的安全链路：
+
+```text
+GET    /api/v2/ai/valuation-policy
+GET    /api/v2/ai/profiles
+POST   /api/v2/ai/profiles
+PUT    /api/v2/ai/profiles/{id}
+DELETE /api/v2/ai/profiles/{id}
+POST   /api/v2/ai/profiles/test-connection
+
+GET    /api/v2/domains/{domain}/valuation
+POST   /api/v2/domains/{domain}/valuation
+GET    /api/v2/ai/jobs/{id}
+POST   /api/v2/ai/jobs/{id}/cancel
+```
+
+严格估价档案读取只返回 `api_key_set` / `api_key_source`，永远不回显明文或密文。
+域名列表使用脱敏 DTO，不返回 `whois_raw`、联系人、完整 nameserver 或私密备注；原始报文
+只在受保护的详情路径按需读取。
+
+## P1 高级筛选、兼容 AI 与自动化
 
 P1 的高级条件以版本化 JSON 条件树编码进 URL，支持状态、TLD、注册商、标签、
 日期和 AI 结果条件；智能视图只保存条件，不保存私密凭据。批量标签、优先级、
 文件夹、通知、监控和 AI 估价都先通过 `/bulk-actions/preview` 返回实际匹配数、
 样例、任务数、缓存命中和每日限额，再执行后端批量动作。
 
-AI 支持多个 OpenAI-compatible 配置档案，默认显示提供商为 `OpenAI Compatible`；
+兼容版 P1 AI 支持多个 OpenAI-compatible 配置档案，默认显示提供商为 `OpenAI Compatible`；
 新安装默认使用 `https://opencode.ai/zen/v1` 与 `deepseek-v4-flash-free`，并通过
 `/api/v2/ai/providers` 管理多个配置。Job 写入 SQLite，
 包含 `queued/running/succeeded/failed/deferred/cancelled` 状态、租约恢复、指数退避、
@@ -319,11 +375,14 @@ AI 支持多个 OpenAI-compatible 配置档案，默认显示提供商为 `OpenA
 确认状态、可信度、日期、注册商及可选标签/优先级，绝不包含 WHOIS/RDAP 原文、备注、
 通知配置、Token 或密码。模型返回的严格 JSON Schema 未通过时不会伪造估价。
 
-密钥优先从 `DOMAINHUNTER_AI_API_KEY` 读取；UI 保存 Key 需要
-`DOMAINHUNTER_SECRET_KEY`，数据库只保存 AES-GCM 密文。读取接口只返回
-`api_key_set` 与 `key_source`。Base URL 默认仅 HTTPS，拒绝 loopback、私有/链路本地、
-元数据地址，解析 DNS 后再次检查；`DOMAINHUNTER_AI_ALLOWED_HOSTS` 可收紧主机范围，
-只有显式 `DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL=true` 才允许受控本机 HTTP。
+严格研究性估价优先从 `DOMAINHUNTER_AI_API_KEY` 读取；UI 保存 Key 需要
+`DOMAINHUNTER_SECRET_KEY`，数据库只保存 AES-GCM 密文。Base URL 默认仅 HTTPS，拒绝
+loopback、私有/链路本地、元数据、CGNAT 和组播地址，解析 DNS 后再次检查；
+`DOMAINHUNTER_AI_ALLOWED_HOSTS` 可增加自定义主机，只有显式
+`DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL=true` 才允许受控本机 HTTP。
+
+严格 AI 的模型输出必须通过固定 JSON schema、状态 guard 和免责声明校验；估价结果仅供研究性
+排序与解释，不构成估值、投资、购买或法律建议。
 
 自动化以“触发器 → 条件 → 安全动作 → 冷却/每日上限”构建，服务端只允许标签、
 优先级、文件夹、通知开关、监控开关、加入 AI 队列、已有检查/通知等动作；规则不得
@@ -381,6 +440,38 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 | 数据库越来越大 | 「系统设置 → 历史数据保留」下调心跳间隔以外的项，或确认心跳间隔不是 0 |
 | `sqlite3` 命令行报 `database is locked` | 应用正在写。加 `-cmd '.timeout 15000'` 即可；应用自身有 10 秒 busy timeout，不受影响 |
 | 退出登录后其他设备也要重新登录 | 这是有意的：退出与改密码都会轮换签名密钥，撤销所有设备的免登录令牌 |
+
+## 树莓派部署
+
+生产实例使用 ARM64 本机构建，部署目录为 `/opt/docker-migrated/domainhunter`，对外端口为
+`22334 -> 8080`。建议每次发布遵循以下顺序：
+
+1. 记录当前镜像并备份 Compose 文件。
+2. 使用 SQLite `.backup` 创建数据库备份，并确认 `PRAGMA integrity_check` 为 `ok`。
+3. 将源码传到隔离目录，在 Pi 上构建带明确版本号的 ARM64 镜像。
+4. 用临时容器验证 `/health`，再运行 `docker compose config -q`。
+5. 只重建 `DomainHunter` 服务，不触碰 who-dat、whois-domain-lookup、FRP 或其他项目。
+6. 验证 HTTP 200、容器健康、重启次数、OOM 状态、数据库完整性和 fatal 日志。
+
+详细升级、迁移和回滚步骤见 [MIGRATION.md](MIGRATION.md)；项目历史交接与实例记录见
+[HANDOFF.md](HANDOFF.md)。
+
+## 项目结构
+
+```text
+cmd/domainhunter/              程序入口与依赖组装
+internal/domain/               域名模型、状态、证据和复核
+internal/query/                查询引擎、策略和 Provider 健康
+internal/service/              域名、概览、监控和通知服务
+internal/storage/sqlite/       SQLite 仓储与追加式迁移
+internal/ai/                   严格研究性 AI 估价链路
+internal/p1/                   兼容版 P1 AI、自动化和批量审计
+internal/httpapi/              旧版与 v2 HTTP API
+web/src/features/ai-valuation/ AI 估价前端模块
+web/public/DomainHunter.svg    项目 Logo
+web/dist/                      go:embed 使用的生产前端产物
+deploy/                        Compose 与 ARM64 部署模板
+```
 
 ## 发布
 

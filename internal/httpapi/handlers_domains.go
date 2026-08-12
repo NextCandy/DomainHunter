@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"DomainHunter/internal/domain"
 	"DomainHunter/internal/p1"
@@ -59,7 +60,7 @@ func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.writeJSON(w, r, http.StatusOK, result)
+		s.writeJSON(w, r, http.StatusOK, newDomainListPage(result.Domains, result.Total, result.TotalFiltered, result.Page, result.Limit, result.TotalPages, result.HasNext, result.HasPrev, result.DataStatus))
 		return
 	}
 	result, err := s.deps.Domains.List(r.Context(), parseListFilter(r))
@@ -67,7 +68,66 @@ func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.writeJSON(w, r, http.StatusOK, result)
+	s.writeJSON(w, r, http.StatusOK, newDomainListPage(result.Domains, result.Total, result.TotalFiltered, result.Page, result.Limit, result.TotalPages, result.HasNext, result.HasPrev, result.DataStatus))
+}
+
+// domainListItem 是 v2 列表的最小 DTO：列表只服务于筛选和扫读，不扩散
+// WHOIS/RDAP 原文、联系人、备注或完整名称服务器。详情和专门 raw endpoint
+// 继续使用完整的 domain.Info。
+type domainListItem struct {
+	Name         string              `json:"name"`
+	Status       domain.Status       `json:"status"`
+	Registrar    string              `json:"registrar"`
+	CreatedDate  *time.Time          `json:"created_date"`
+	ExpiryDate   *time.Time          `json:"expiry_date"`
+	UpdatedDate  *time.Time          `json:"updated_date"`
+	LastChecked  time.Time           `json:"last_checked"`
+	QueryMethod  string              `json:"query_method"`
+	ErrorMessage string              `json:"error_message"`
+	AddedAt      *time.Time          `json:"added_at"`
+	Confidence   domain.Confidence   `json:"confidence,omitempty"`
+	EPPStatuses  []string            `json:"epp_statuses,omitempty"`
+	NextCheckAt  *time.Time          `json:"next_check_at,omitempty"`
+	Favorite     bool                `json:"favorite,omitempty"`
+	Tags         []string            `json:"tags,omitempty"`
+	Priority     int                 `json:"priority,omitempty"`
+	FolderID     *int64              `json:"folder_id,omitempty"`
+	FolderName   string              `json:"folder,omitempty"`
+	Cached       bool                `json:"cached,omitempty"`
+	Review       *domain.ReviewState `json:"review,omitempty"`
+}
+
+type domainListPage struct {
+	Domains       []*domainListItem `json:"domains"`
+	Total         int               `json:"total"`
+	TotalFiltered int               `json:"total_filtered"`
+	Page          int               `json:"page"`
+	Limit         int               `json:"limit"`
+	TotalPages    int               `json:"total_pages"`
+	HasNext       bool              `json:"has_next"`
+	HasPrev       bool              `json:"has_prev"`
+	DataStatus    string            `json:"data_status"`
+}
+
+func newDomainListPage(domains []*domain.Info, total, totalFiltered, page, limit, totalPages int, hasNext, hasPrev bool, dataStatus string) domainListPage {
+	items := make([]*domainListItem, 0, len(domains))
+	for _, info := range domains {
+		if info == nil {
+			continue
+		}
+		copyInfo := *info
+		copyInfo.Review = domain.BuildReviewState(&copyInfo, time.Now())
+		items = append(items, &domainListItem{
+			Name: copyInfo.Name, Status: copyInfo.Status, Registrar: copyInfo.Registrar,
+			CreatedDate: copyInfo.CreatedDate, ExpiryDate: copyInfo.ExpiryDate, UpdatedDate: copyInfo.UpdatedDate,
+			LastChecked: copyInfo.LastChecked, QueryMethod: copyInfo.QueryMethod, ErrorMessage: copyInfo.ErrorMessage,
+			AddedAt: copyInfo.AddedAt, Confidence: copyInfo.Confidence, EPPStatuses: copyInfo.EPPStatuses,
+			NextCheckAt: copyInfo.NextCheckAt, Favorite: copyInfo.Favorite, Tags: copyInfo.Tags,
+			Priority: copyInfo.Priority, FolderID: copyInfo.FolderID, FolderName: copyInfo.FolderName,
+			Cached: copyInfo.Cached, Review: copyInfo.Review,
+		})
+	}
+	return domainListPage{Domains: items, Total: total, TotalFiltered: totalFiltered, Page: page, Limit: limit, TotalPages: totalPages, HasNext: hasNext, HasPrev: hasPrev, DataStatus: dataStatus}
 }
 
 func (s *Server) advancedFilterFromRequest(r *http.Request) (p1.FilterNode, error) {

@@ -1,0 +1,67 @@
+/*
+ * DomainHunter AI valuation visual layer
+ * Import once from the feature entry point or DomainValuationPanel.
+ * Token definitions intentionally have fallbacks so the module can land before the global theme refactor.
+ */
+/* A quiet framed surface: depth comes from a fine highlight and 1px border, never a heavy shadow. */
+.ai-valuation-panel {
+  position: relative;
+  background: rgb(var(--surface-raised));
+  box-shadow: 0 1px 0 rgb(var(--ink) / 0.08);
+}
+
+.ai-valuation-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: rgb(var(--accent));
+}
+
+.ai-valuation-panel .mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-valuation-score {
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Project-wide polish utilities. Apply deliberately to page shells rather than globally replacing every card. */
+.workspace-header {
+  background: rgb(var(--surface-raised));
+  border-bottom: 1px solid rgb(var(--line));
+}
+
+.workspace-kicker {
+  color: rgb(var(--accent));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+}
+
+.data-table-refined tbody tr {
+  border-color: rgb(var(--line) / 0.78);
+}
+
+.data-table-refined tbody tr:hover {
+  background: rgb(var(--accent-soft) / 0.65);
+}
+
+.review-badge {
+  border: 1px solid rgb(var(--review) / 0.34);
+  background: rgb(var(--review) / 0.09);
+  color: rgb(var(--review));
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1.1rem;
+}
+
+.action-queue-item {
+  border-bottom: 1px solid rgb(var(--line));
+}
+
+.action-queue-item:last-child {
+  border-bottom: 0;
+}

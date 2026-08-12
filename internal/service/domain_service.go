@@ -162,6 +162,7 @@ func (s *DomainService) List(ctx context.Context, filter ListFilter) (*ListResul
 	folderNames := s.folderNames(ctx)
 	for i := range entries {
 		info := mergeEntry(entries[i], results)
+		applyReview(info)
 		info.FolderName = folderNames[folderIDKey(entries[i].FolderID)]
 		all = append(all, info)
 	}
@@ -221,6 +222,7 @@ func mergeEntry(entry domain.Domain, results map[string]domain.Info) *domain.Inf
 		info.Favorite = entry.Favorite
 		info.Tags = entry.Tags
 		info.Note = entry.Note
+		info.Priority = entry.Priority
 		info.NextCheckAt = entry.NextCheckAt
 		info.FolderID = entry.FolderID
 		return &info
@@ -234,9 +236,17 @@ func mergeEntry(entry domain.Domain, results map[string]domain.Info) *domain.Inf
 		Favorite:    entry.Favorite,
 		Tags:        entry.Tags,
 		Note:        entry.Note,
+		Priority:    entry.Priority,
 		NextCheckAt: entry.NextCheckAt,
 		FolderID:    entry.FolderID,
 	}
+}
+
+func applyReview(info *domain.Info) {
+	if info == nil {
+		return
+	}
+	info.Review = domain.BuildReviewState(info, time.Now())
 }
 
 func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
@@ -470,6 +480,7 @@ func (s *DomainService) Get(ctx context.Context, name string) (*domain.Info, err
 		info.Favorite = entry.Favorite
 		info.Tags = entry.Tags
 		info.Note = entry.Note
+		info.Priority = entry.Priority
 		info.NextCheckAt = entry.NextCheckAt
 		info.FolderID = entry.FolderID
 		if s.folders != nil && entry.FolderID != nil {
@@ -478,6 +489,7 @@ func (s *DomainService) Get(ctx context.Context, name string) (*domain.Info, err
 			}
 		}
 	}
+	applyReview(info)
 	return info, nil
 }
 
@@ -523,6 +535,7 @@ func (s *DomainService) GetDetail(ctx context.Context, name string, historyLimit
 			}
 		}
 	}
+	applyReview(info)
 	return detail, nil
 }
 

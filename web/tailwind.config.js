@@ -21,9 +21,11 @@ export default {
       colors: {
         surface: {
           DEFAULT: "rgb(var(--surface) / <alpha-value>)",
+          subtle: "rgb(var(--surface-subtle) / <alpha-value>)",
           muted: "rgb(var(--surface-muted) / <alpha-value>)",
           raised: "rgb(var(--surface-raised) / <alpha-value>)",
         },
+        canvas: "rgb(var(--canvas) / <alpha-value>)",
         line: "rgb(var(--line) / <alpha-value>)",
         ink: {
           DEFAULT: "rgb(var(--ink) / <alpha-value>)",
@@ -34,6 +36,8 @@ export default {
           DEFAULT: "rgb(var(--accent) / <alpha-value>)",
           soft: "rgb(var(--accent-soft) / <alpha-value>)",
         },
+        review: "rgb(var(--review) / <alpha-value>)",
+        danger: "rgb(var(--danger) / <alpha-value>)",
       },
       borderRadius: {
         card: "10px",

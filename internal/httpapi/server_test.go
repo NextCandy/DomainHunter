@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"DomainHunter/internal/ai"
 	"DomainHunter/internal/auth"
 	"DomainHunter/internal/config"
 	"DomainHunter/internal/notification"
@@ -62,6 +63,8 @@ func newTestServer(t *testing.T) (*httptest.Server, *sqlite.DB) {
 	sched := scheduler.New(domainRepo, querySvc, scheduler.Options{Workers: 1})
 	monitorSvc := service.NewMonitorService(sched, querySvc, domainRepo, observationRepo, cfg)
 	overviewSvc := service.NewOverviewService(domainRepo, resultRepo, observationRepo, engine, monitorSvc, domainSvc)
+	strictPolicy := ai.BaseURLPolicyFromEnv()
+	strictAI := ai.NewService(sqlite.NewAIRepo(db), domainRepo, resultRepo, ai.DeepSeekCompatibleClient{Policy: strictPolicy}, nil, strictPolicy)
 
 	authenticator, err := auth.New(ctx, cfg.Server, settingsSvc.Persist)
 	if err != nil {
@@ -80,6 +83,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *sqlite.DB) {
 		Notification:  notifier,
 		Engine:        engine,
 		Notifications: notificationRepo,
+		AI:            strictAI,
 		Version:       "test",
 	})
 
@@ -271,6 +275,8 @@ func TestFrontendRoutesAreRegistered(t *testing.T) {
 		"/api/v2/meta",
 		"/api/v2/facets",
 		"/api/v2/domains",
+		"/api/v2/ai/valuation-policy",
+		"/api/v2/ai/profiles",
 		"/api/v2/observations",
 		"/api/v2/providers",
 		"/api/v2/notifications",
@@ -287,6 +293,45 @@ func TestFrontendRoutesAreRegistered(t *testing.T) {
 			t.Errorf("GET %s 应返回 200，实际 %d", path, resp.StatusCode)
 		}
 	}
+}
+
+func TestV2DomainListOmitsSensitiveFields(t *testing.T) {
+	ts, db := newTestServer(t)
+	c := newClient(t, ts)
+	if resp := c.login("domainhunter", "domainhunter123"); resp.StatusCode != http.StatusOK {
+		t.Fatalf("登录失败: %d", resp.StatusCode)
+	}
+	checked := time.Now().UTC()
+	if _, err := db.Exec(`INSERT INTO domains(name, enabled, notify, note, tags) VALUES(?, 1, 1, ?, ?)`, "secret.example", "不要发送给 AI", "重点"); err != nil {
+		t.Fatalf("插入测试域名失败: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO domain_results(domain, status, registrar, last_checked, query_method, name_servers, whois_raw, error_message, epp_statuses, confidence) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, "secret.example", "registered", "Example Registrar", checked, "rdap", "ns1.example,ns2.example", "Registrant Email: private@example", "", "clientTransferProhibited", "high"); err != nil {
+		t.Fatalf("插入测试结果失败: %v", err)
+	}
+
+	assertListSafe := func(path string) {
+		resp := c.do(http.MethodGet, path, "", nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s 应返回 200，实际 %d", path, resp.StatusCode)
+		}
+		var payload struct {
+			Domains []map[string]json.RawMessage `json:"domains"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			t.Fatalf("列表响应不是合法 JSON: %v", err)
+		}
+		if len(payload.Domains) != 1 {
+			t.Fatalf("应返回 1 条列表数据，实际 %d", len(payload.Domains))
+		}
+		for _, forbidden := range []string{"whois_raw", "name_servers", "note"} {
+			if _, ok := payload.Domains[0][forbidden]; ok {
+				t.Errorf("列表 JSON 不应包含 %s", forbidden)
+			}
+		}
+	}
+
+	assertListSafe("/api/v2/domains")
+	assertListSafe("/api/v2/domains?filter=" + url.QueryEscape(`{"version":1,"logic":"and","conditions":[]}`))
 }
 
 func TestOverviewTrendEndpointReturnsStableContract(t *testing.T) {

@@ -197,9 +197,10 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
+      <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">域名</h1>
+          <span className="workspace-kicker">DOMAIN OPERATIONS</span>
+          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">域名资产</h1>
           <p className="text-[12px] text-ink-muted">
             {folderSelection === "all" ? `共 ${data?.total ?? 0} 个域名` : `当前文件夹 ${domains.length} 个域名`}
             {folderSelection === "all" && data && data.total_filtered !== data.total

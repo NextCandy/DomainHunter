@@ -17,6 +17,7 @@ var allowedFilterFields = map[string]bool{
 	"created_at": true, "last_checked": true, "expiry_at": true,
 	"ai_quality": true, "ai_liquidity": true, "ai_risk": true,
 	"ai_value_low": true, "ai_value_high": true, "ai_confidence": true,
+	"review_required": true, "review_reason": true,
 	"event": true, "event_type": true,
 }
 

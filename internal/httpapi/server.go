@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"DomainHunter/internal/ai"
 	"DomainHunter/internal/auth"
 	"DomainHunter/internal/config"
 	"DomainHunter/internal/logger"
@@ -38,6 +39,7 @@ type Deps struct {
 	Tokens             repository.APITokenRepository
 	NotificationConfig repository.NotificationConfigRepository
 	P1                 *p1.Service
+	AI                 *ai.Service
 	Version            string
 }
 

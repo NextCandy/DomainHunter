@@ -67,9 +67,10 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
+      <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">查询源</h1>
+          <span className="workspace-kicker">PROVIDER HEALTH</span>
+          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">查询源</h1>
           <p className="text-[12px] text-ink-muted">
             Pi who-dat → Pi whois-domain-lookup → rdap.re → 注册局 RDAP → rdap.org → 默认 AI 兜底
           </p>
@@ -99,9 +100,13 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
                 <dl className="mt-2 space-y-1 text-[12px] text-ink-muted">
                   <Row label="近 30 分钟请求" value={String(provider.requests)} />
                   <Row label="失败" value={String(provider.errors)} />
+                  <Row label="错误率" value={provider.error_rate == null ? "—" : `${(provider.error_rate * 100).toFixed(1)}%`} />
                   <Row label="平均耗时" value={formatLatency(provider.avg_latency_ms)} />
+                  <Row label="P95 耗时" value={formatLatency(provider.p95_latency_ms ?? 0)} />
+                  <Row label="连续失败" value={String(provider.consecutive_failures ?? 0)} />
                   <Row label="最近成功" value={formatDateTime(provider.last_success)} />
                 </dl>
+                {provider.state_reason && <p className="mt-2 text-[11px] text-ink-faint">{provider.state_reason}</p>}
                 {provider.last_error && (
                   <p
                     className="mt-2 truncate text-[11px] text-red-600 dark:text-red-400"

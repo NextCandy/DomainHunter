@@ -121,6 +121,7 @@ func (s *QueryService) Execute(ctx context.Context, task scheduler.Task) (*domai
 	info.Favorite = record.Favorite
 	info.Tags = record.Tags
 	info.Note = record.Note
+	info.Priority = record.Priority
 
 	s.log.Info(logger.Fields{
 		"domain":     name,
@@ -401,6 +402,12 @@ func (s *QueryService) maybeNotify(ctx context.Context, record *domain.Domain, p
 		return
 	}
 	// 可注册是最重要也最容易误报的结论：证据不足时不发通知。
+	review := domain.BuildReviewState(outcome.Info, time.Now())
+	if review != nil && review.Required && (current == domain.StatusAvailable || domain.IsDropStatus(current)) {
+		s.log.Warn(logger.Fields{"domain": record.Name, "reasons": review.Reasons},
+			"域名需要复核，不发送可注册或掉落机会通知")
+		return
+	}
 	if current == domain.StatusAvailable && outcome.Winner.Confidence == domain.ConfidenceLow {
 		s.log.Warn(logger.Fields{"domain": record.Name, "provider": outcome.Winner.Provider},
 			"可注册结论证据不足，不发送通知")

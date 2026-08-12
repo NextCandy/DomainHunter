@@ -78,6 +78,8 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
   const items = useMemo(() => {
     const list = [...(data?.domains ?? [])];
     list.sort((a, b) => {
+      const reviewOrder = Number(Boolean(a.review?.required)) - Number(Boolean(b.review?.required));
+      if (reviewOrder !== 0) return reviewOrder;
       const ua = URGENCY[a.status] ?? 99;
       const ub = URGENCY[b.status] ?? 99;
       if (ua !== ub) return ua - ub;
@@ -112,9 +114,10 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
+      <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">抢注看板</h1>
+          <span className="workspace-kicker">DROP WINDOW</span>
+          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">抢注看板</h1>
           <p className="text-[12px] text-ink-muted">
             只显示处于掉落流程中的域名，按抢注紧迫度排序。全量清单在「域名」页。
           </p>
@@ -163,7 +166,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
         <>
           <div className="hidden md:block">
             <div className="table-scroll card">
-              <table className="w-full min-w-[860px] text-left">
+              <table className="data-table-refined w-full min-w-[860px] text-left">
                 <thead className="bg-surface-muted text-[11px] uppercase tracking-wide text-ink-muted">
                   <tr>
                     <th className="px-3 py-2 font-medium">域名</th>
@@ -307,7 +310,11 @@ function Row({
         <DomainName name={item.name} onClick={onOpen} />
       </td>
       <td className="px-3 py-2">
-        <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+          {item.review?.required && <span className="review-badge">需复核</span>}
+        </div>
+      {item.review?.required && <span className="review-badge">需复核</span>}
       </td>
       <td className="px-3 py-2 text-[12px] text-ink-muted">{STATUS_HINT[item.status] ?? "—"}</td>
       <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">
@@ -352,6 +359,7 @@ function MobileCard({
       <DomainName name={item.name} onClick={onOpen} className="block w-full" />
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+        {item.review?.required && <span className="review-badge">需复核</span>}
         <Pill>{STATUS_HINT[item.status] ?? STATUS_LABELS[item.status]}</Pill>
       </div>
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-faint">

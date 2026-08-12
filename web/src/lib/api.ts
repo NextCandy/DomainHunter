@@ -300,9 +300,26 @@ export interface DomainInfo {
   favorite?: boolean;
   tags?: string[];
   note?: string;
+  priority?: number;
   folder_id?: number | null;
   folder?: string;
   cached?: boolean;
+  review?: ReviewState;
+}
+
+export type ReviewReason =
+  | "query_error"
+  | "unknown_status"
+  | "low_confidence"
+  | "drop_status_future_expiry"
+  | "provider_conflict"
+  | "stale_evidence";
+
+export interface ReviewState {
+  required: boolean;
+  reasons: ReviewReason[];
+  severity?: "info" | "warning" | "critical";
+  explanation?: string;
 }
 
 export interface DomainListResult {
@@ -348,9 +365,15 @@ export interface Attempt {
 export interface ProviderHealth {
   provider: string;
   state: "healthy" | "degraded" | "offline" | "unknown";
+  as_of?: string;
   requests: number;
   errors: number;
+  error_rate?: number;
   avg_latency_ms: number;
+  p50_latency_ms?: number;
+  p95_latency_ms?: number;
+  consecutive_failures?: number;
+  state_reason?: string;
   last_error?: string;
   last_success?: string;
   last_failure?: string;
@@ -364,6 +387,7 @@ export interface OverviewItem {
   provider?: string;
   observed_at?: string;
   message?: string;
+  review?: ReviewState;
 }
 
 export interface Overview {
@@ -376,6 +400,12 @@ export interface Overview {
   providers: ProviderHealth[] | null;
   monitor: Record<string, unknown>;
   history?: { observations: number; attempts: number };
+  action_counts: {
+    available: number;
+    drop_window: number;
+    renewal_risk: number;
+    review: number;
+  };
 }
 
 export interface OverviewTrendPoint {

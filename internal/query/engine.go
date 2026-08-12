@@ -175,6 +175,21 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 	}
 
 	out.Plan = e.policy.Plan(ctx, req, e.providers)
+	// Health is a routing hint only: a degraded/offline provider is skipped for
+	// this attempt, but no status is promoted and the remaining evidence rules
+	// still decide the result.
+	if len(out.Plan) > 1 {
+		filtered := make([]Step, 0, len(out.Plan))
+		for _, step := range out.Plan {
+			if !e.health.HealthyForPlan(step.Provider) {
+				continue
+			}
+			filtered = append(filtered, step)
+		}
+		if len(filtered) > 0 {
+			out.Plan = filtered
+		}
+	}
 	if len(out.Plan) == 0 {
 		out.Winner = Result{
 			Domain:     name,

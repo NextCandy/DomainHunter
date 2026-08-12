@@ -379,6 +379,117 @@ var migrations = []Migration{
 					WHERE id = 1 AND provider = 'deepseek' AND base_url = 'https://api.deepseek.com' AND model = 'deepseek-v4-flash' AND encrypted_api_key = ''`,
 		},
 	},
+	{
+		Version: "013",
+		Name:    "strict_research_valuation_v2",
+		Stmts: []string{
+			// P1 已经使用 ai_provider_profiles / ai_jobs / ai_domain_valuations。
+			// 严格估价链路使用独立的结果表，避免升级时改变旧表语义。
+			`CREATE TABLE IF NOT EXISTS ai_profiles (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL UNIQUE,
+				provider TEXT NOT NULL,
+				enabled INTEGER NOT NULL DEFAULT 1,
+				is_default INTEGER NOT NULL DEFAULT 0,
+				base_url TEXT NOT NULL,
+				base_url_host TEXT NOT NULL,
+				model TEXT NOT NULL,
+				api_key_ciphertext TEXT NOT NULL DEFAULT '',
+				api_key_source TEXT NOT NULL DEFAULT 'none',
+				thinking_type TEXT NOT NULL DEFAULT 'disabled',
+				reasoning_effort TEXT NOT NULL DEFAULT 'low',
+				timeout_seconds INTEGER NOT NULL DEFAULT 30,
+				max_tokens INTEGER NOT NULL DEFAULT 900,
+				concurrency INTEGER NOT NULL DEFAULT 1,
+				daily_limit INTEGER NOT NULL DEFAULT 50,
+				cache_ttl_hours INTEGER NOT NULL DEFAULT 24,
+				last_tested_at DATETIME,
+				last_test_latency_ms INTEGER,
+				last_error TEXT NOT NULL DEFAULT '',
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL
+			)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_profiles_single_default
+				ON ai_profiles(is_default) WHERE is_default = 1`,
+			`CREATE TABLE IF NOT EXISTS ai_valuation_jobs (
+				id TEXT PRIMARY KEY,
+				domain_id INTEGER NOT NULL DEFAULT 0,
+				domain TEXT NOT NULL,
+				profile_id TEXT NOT NULL,
+				state TEXT NOT NULL,
+				priority TEXT NOT NULL DEFAULT 'normal',
+				input_fingerprint TEXT NOT NULL,
+				prompt_version TEXT NOT NULL,
+				lease_until DATETIME,
+				attempt_count INTEGER NOT NULL DEFAULT 0,
+				queued_at DATETIME NOT NULL,
+				started_at DATETIME,
+				completed_at DATETIME,
+				retry_after DATETIME,
+				error_code TEXT NOT NULL DEFAULT '',
+				safe_error_message TEXT NOT NULL DEFAULT '',
+				causation_id TEXT NOT NULL DEFAULT '',
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				FOREIGN KEY(profile_id) REFERENCES ai_profiles(id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_ai_valuation_jobs_take
+				ON ai_valuation_jobs(state, priority, retry_after, queued_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_ai_valuation_jobs_domain
+				ON ai_valuation_jobs(domain, queued_at DESC)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_valuation_jobs_active_dedup
+				ON ai_valuation_jobs(domain, profile_id, input_fingerprint, prompt_version)
+				WHERE state IN ('queued','running','deferred')`,
+			`CREATE TABLE IF NOT EXISTS ai_domain_valuations_v2 (
+				id TEXT PRIMARY KEY,
+				domain_id INTEGER NOT NULL DEFAULT 0,
+				domain TEXT NOT NULL,
+				job_id TEXT NOT NULL UNIQUE,
+				profile_id TEXT NOT NULL,
+				provider TEXT NOT NULL,
+				model TEXT NOT NULL,
+				prompt_version TEXT NOT NULL,
+				input_fingerprint TEXT NOT NULL,
+				quality_score INTEGER NOT NULL,
+				liquidity_score INTEGER NOT NULL,
+				risk_level TEXT NOT NULL,
+				confidence TEXT NOT NULL,
+				indicative_value_low INTEGER,
+				indicative_value_high INTEGER,
+				currency TEXT NOT NULL DEFAULT 'USD',
+				summary TEXT NOT NULL,
+				strengths_json TEXT NOT NULL DEFAULT '[]',
+				risks_json TEXT NOT NULL DEFAULT '[]',
+				data_gaps_json TEXT NOT NULL DEFAULT '[]',
+				evidence_used_json TEXT NOT NULL DEFAULT '[]',
+				status_guard TEXT NOT NULL,
+				disclaimer TEXT NOT NULL,
+				created_at DATETIME NOT NULL,
+				expires_at DATETIME,
+				FOREIGN KEY(job_id) REFERENCES ai_valuation_jobs(id),
+				FOREIGN KEY(profile_id) REFERENCES ai_profiles(id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_ai_domain_valuations_v2_domain
+				ON ai_domain_valuations_v2(domain, created_at DESC)`,
+			`CREATE TABLE IF NOT EXISTS ai_audit_log (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				event_type TEXT NOT NULL,
+				domain TEXT NOT NULL DEFAULT '',
+				profile_id TEXT NOT NULL DEFAULT '',
+				job_id TEXT NOT NULL DEFAULT '',
+				actor TEXT NOT NULL DEFAULT '',
+				details_json TEXT NOT NULL DEFAULT '{}',
+				created_at DATETIME NOT NULL
+			)`,
+		},
+	},
+	{
+		Version: "014",
+		Name:    "domain_result_confidence",
+		Stmts: []string{
+			`ALTER TABLE domain_results ADD COLUMN confidence TEXT NOT NULL DEFAULT ''`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录

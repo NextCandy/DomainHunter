@@ -38,8 +38,9 @@ export function SettingsPage({
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-[18px] font-semibold tracking-tight">系统设置</h1>
+      <header className="workspace-header">
+        <span className="workspace-kicker">SYSTEM SETTINGS</span>
+        <h1 className="mt-1 text-[28px] font-semibold tracking-tight">系统设置</h1>
         <p className="text-[12px] text-ink-muted">DomainHunter {data.version}</p>
       </header>
 

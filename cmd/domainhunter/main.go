@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	strictai "DomainHunter/internal/ai"
 	"DomainHunter/internal/auth"
 	"DomainHunter/internal/config"
 	"DomainHunter/internal/httpapi"
@@ -75,6 +76,7 @@ func run(dataDir string) error {
 	p1Service := p1.New(db)
 	p1Service.Start(ctx)
 	defer p1Service.Stop()
+	strictAIRepo := sqlite.NewAIRepo(db)
 
 	domainRepo := sqlite.NewDomainRepo(db)
 	resultRepo := sqlite.NewResultRepo(db)
@@ -178,6 +180,31 @@ func run(dataDir string) error {
 	}
 
 	// ---- HTTP ----
+	strictEncryptor, secretErr := strictai.NewEncryptorFromEnv()
+	if secretErr != nil {
+		logger.Warn("严格 AI 估价未启用数据库 Key 保存: %v", secretErr)
+	}
+	strictPolicy := strictai.BaseURLPolicyFromEnv()
+	strictAIService := strictai.NewService(
+		strictAIRepo,
+		domainRepo,
+		resultRepo,
+		strictai.DeepSeekCompatibleClient{Policy: strictPolicy},
+		strictEncryptor,
+		strictPolicy,
+	)
+	if err := strictAIService.EnsureDefaultProfile(ctx); err != nil {
+		logger.Warn("初始化严格 DeepSeek AI 档案失败: %v", err)
+	}
+	strictAIWorker := strictai.NewWorker(strictAIService, 5)
+	strictAIWorker.Start(ctx)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := strictAIWorker.Stop(shutdownCtx); err != nil {
+			logger.Warn("停止严格 AI 估价 worker 失败: %v", err)
+		}
+	}()
 	server := httpapi.NewServer(httpapi.Deps{
 		DB:            db,
 		Auth:          authenticator,
@@ -190,6 +217,7 @@ func run(dataDir string) error {
 		Engine:        engine,
 		Notifications: notificationRepo,
 		P1:            p1Service,
+		AI:            strictAIService,
 		Version:       AppVersion,
 	})
 
