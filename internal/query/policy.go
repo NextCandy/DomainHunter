@@ -12,15 +12,32 @@ import (
 
 // 内置 Provider 名称
 const (
-	ProviderRDAP     = "rdap"
-	ProviderWhois    = "whois"
-	ProviderWhoisLS  = "whois_ls"
-	ProviderFallback = "fallback"
+	ProviderWhoDat            = "who_dat"
+	ProviderWhoisDomainLookup = "whois_domain_lookup"
+	ProviderVercelWhoDat      = "vercel_who_dat"
+	ProviderRDAP              = "rdap"
+	ProviderRdapOrg           = "rdap_org"
+	ProviderWhois             = "whois"
+	ProviderWhoisLS           = "whois_ls"
+	ProviderFallback          = "fallback"
+	ProviderAIFallback        = "ai_fallback"
 )
 
 // canonicalOrder 是未做任何配置时的默认查询顺序。
-// 先问按 TLD 显式启用的专用源，再问通用的 RDAP / 注册局 WHOIS。
-var canonicalOrder = []string{ProviderWhoisLS, ProviderFallback, ProviderRDAP, ProviderWhois}
+// 按产品约定优先走可控的 who-dat，再走本地结构化服务、用户的 Vercel
+// who-dat、注册局 RDAP、rdap.org，最后才是研究性 AI 兜底。
+var canonicalOrder = []string{
+	ProviderWhoDat,
+	ProviderWhoisDomainLookup,
+	ProviderVercelWhoDat,
+	ProviderRDAP,
+	ProviderRdapOrg,
+	ProviderAIFallback,
+}
+
+// legacyCanonicalOrder 保留没有注册新 Provider 的旧测试/插件集成的行为；
+// 实际应用默认注册了新链路，因此不会把旧的 WHOIS.LS 提前到产品顺序之前。
+var legacyCanonicalOrder = []string{ProviderWhoisLS, ProviderFallback, ProviderRDAP, ProviderWhois}
 
 // optInProviders 是"必须由用户按 TLD 显式启用"的查询源。
 // 它们只在被点名的后缀上生效，因此它们的结论天然带有针对性，可以直接采信。
@@ -275,6 +292,9 @@ func (p *Policy) Plan(ctx context.Context, req Request, reg *Registry) []Step {
 	}
 	if len(names) == 0 {
 		names = canonicalOrder
+		if !hasNewChainProvider(reg) {
+			names = legacyCanonicalOrder
+		}
 	}
 
 	available := make([]string, 0, len(names))
@@ -305,6 +325,21 @@ func (p *Policy) Plan(ctx context.Context, req Request, reg *Registry) []Step {
 		steps = append(steps, Step{Provider: name, Available: mode})
 	}
 	return steps
+}
+
+func hasNewChainProvider(reg *Registry) bool {
+	for _, name := range []string{
+		ProviderWhoDat,
+		ProviderWhoisDomainLookup,
+		ProviderVercelWhoDat,
+		ProviderRdapOrg,
+		ProviderAIFallback,
+	} {
+		if _, ok := reg.Get(name); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Policy) providerEnabled(cfg Config, name string) bool {

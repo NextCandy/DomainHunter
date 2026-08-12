@@ -181,7 +181,7 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 			Status:     domain.StatusSkipped,
 			Provider:   "none",
 			Confidence: domain.ConfidenceLow,
-			Note:       "没有可用的 RDAP/WHOIS 查询源，已跳过",
+			Note:       "没有可用的域名查询源，已跳过",
 			StartedAt:  time.Now(),
 			FinishedAt: time.Now(),
 		}
@@ -310,7 +310,7 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 			Status:     domain.StatusSkipped,
 			Provider:   "none",
 			Confidence: domain.ConfidenceLow,
-			Note:       "没有可用的 RDAP/WHOIS 查询源，已跳过",
+			Note:       "没有可用的域名查询源，已跳过",
 			StartedAt:  time.Now(),
 			FinishedAt: time.Now(),
 		}
@@ -325,7 +325,7 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 			Status:     domain.StatusError,
 			Provider:   "none",
 			Confidence: domain.ConfidenceLow,
-			Err:        NewError(KindUnavailable, "none", "RDAP 和 WHOIS 查询失败"),
+			Err:        NewError(KindUnavailable, "none", "全部域名查询源失败"),
 			StartedAt:  time.Now(),
 			FinishedAt: time.Now(),
 		}

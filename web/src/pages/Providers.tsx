@@ -33,18 +33,8 @@ const STATE_CLASS: Record<ProviderHealth["state"], string> = {
 };
 
 const POLICY_EXAMPLE = `{
-  "providers": {
-    "whois_ls": { "enabled": true }
-  },
-  "tlds": {
-    "im": {
-      "providers": ["whois_ls", "rdap", "whois"],
-      "validate_available": true
-    },
-    "do": {
-      "providers": ["fallback", "rdap", "whois"],
-      "validate_available": true
-    }
+  "default": {
+    "providers": ["who_dat", "whois_domain_lookup", "vercel_who_dat", "rdap", "rdap_org", "ai_fallback"]
   }
 }`;
 
@@ -81,7 +71,7 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
         <div>
           <h1 className="text-[18px] font-semibold tracking-tight">查询源</h1>
           <p className="text-[12px] text-ink-muted">
-            RDAP 优先、WHOIS 兼容；无法明确确认可注册时一律不报告可注册
+            Pi who-dat → Pi whois-domain-lookup → rdap.re → 注册局 RDAP → rdap.org → 默认 AI 兜底
           </p>
         </div>
         <button type="button" className="btn h-8" onClick={reload}>
@@ -162,12 +152,8 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
             }
           >
             <p className="mb-2 text-[12px] text-ink-muted">
-              留空表示使用默认策略：先查按后缀显式启用的专用源（WHOIS.LS / 备用服务），
-              再查 RDAP 与注册局 WHOIS；一旦该后缀配置了专用源，通用源报告的"可注册"
-              不会被单独采信。<code className="mono">validate_available</code> 可取
-              <code className="mono"> true</code>（等价 distrust）、
-              <code className="mono">"confirm"</code>（需要第二个来源印证）或
-              <code className="mono">"trust"</code>。
+              留空表示使用默认五级查询策略。AI 只负责在所有权威来源无法匹配时提供研究性说明，
+              不会把推测改写成“可注册”；注册商入口只打开实时查询页，不执行购买。
             </p>
             <textarea
               className="input h-64 resize-y font-mono text-[12px]"

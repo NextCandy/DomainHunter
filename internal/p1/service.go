@@ -98,6 +98,21 @@ func (s *Service) AIValuation(ctx context.Context, name string) (*Valuation, err
 	return s.ai.GetValuation(ctx, name)
 }
 
+// AIQueryConfig exposes only the active profile material needed by the query
+// fallback. The API key is consumed in memory by the caller and never returned
+// by an HTTP handler or written to logs.
+func (s *Service) AIQueryConfig(ctx context.Context) (baseURL, apiKey, model string, enabled bool, err error) {
+	settings, encrypted, err := s.ai.storedSettings(ctx)
+	if err != nil {
+		return "", "", "", false, err
+	}
+	if err := validateAIBaseURL(settings.BaseURL); err != nil {
+		return "", "", "", false, err
+	}
+	key, source := configuredAPIKey(encrypted)
+	return settings.BaseURL, key, settings.Model, settings.Enabled && source != "encrypted_unavailable", nil
+}
+
 type automationObservationEvent struct {
 	ID             int64
 	Domain         string

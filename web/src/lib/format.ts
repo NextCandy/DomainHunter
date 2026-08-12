@@ -73,8 +73,13 @@ export const CONFIDENCE_LABELS: Record<string, string> = {
 };
 
 export const PROVIDER_LABELS: Record<string, string> = {
+  who_dat: "Pi who-dat",
+  whois_domain_lookup: "Pi whois-domain-lookup",
+  vercel_who_dat: "rdap.re（Vercel who-dat）",
   rdap: "RDAP",
+  rdap_org: "rdap.org",
   whois: "WHOIS",
+  ai_fallback: "默认 AI 兜底",
   whois_ls: "WHOIS.LS",
   fallback: "备用服务",
   "whois-ls": "WHOIS.LS",

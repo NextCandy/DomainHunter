@@ -21,6 +21,7 @@ import {
   providerLabel,
 } from "../lib/format";
 import { AIDomainValuationCard } from "./AIDomainValuationCard";
+import { RegistrarLookupMenu } from "./RegistrarLookupMenu";
 
 interface DetailResponse {
   info: DomainInfo;
@@ -171,6 +172,7 @@ export function DomainDrawer({
             <button type="button" className="btn h-8" onClick={toggleFavorite}>
               {info.favorite ? "取消收藏" : "加入观察列表"}
             </button>
+            {info.status === "available" && <RegistrarLookupMenu domain={info.name} />}
           </div>
 
           <nav className="mb-3 flex gap-1 border-b border-line">

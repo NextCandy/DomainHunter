@@ -135,6 +135,10 @@ data/
 | `DOMAINHUNTER_DB_FILE` | 自动选择 | 指定数据库文件名，覆盖自动选择 |
 | `DOMAINHUNTER_PORT` | 数据库中的 `server_port`（8080） | 监听端口 |
 | `DOMAINHUNTER_RDAP_BOOTSTRAP_URL` | `https://data.iana.org/rdap/dns.json` | IANA bootstrap |
+| `DOMAINHUNTER_WHO_DAT_URL` | 空 | 首选 Pi who-dat 地址，例如 `http://host.docker.internal:59090` |
+| `DOMAINHUNTER_WHO_DAT_API_KEY` | 空 | 首选 who-dat 的 Bearer Key，不提交到仓库 |
+| `DOMAINHUNTER_VERCEL_WHO_DAT_URL` | `https://rdap.re` | 三选 who-dat 兼容服务 |
+| `DOMAINHUNTER_RDAP_ORG_URL` | `https://rdap.org` | 五选 RDAP 转发服务 |
 | `DOMAINHUNTER_WHOIS_FALLBACK_URL` | 空 | 本地结构化备用服务地址 |
 | `DOMAINHUNTER_WHOIS_FALLBACK_TLDS` | `im,do` | 启用备用服务的后缀 |
 | `DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT` | `20` | 秒 |
@@ -156,9 +160,18 @@ data/
 
 ## 查询 Provider
 
+树莓派上的 who-dat 独立服务使用 `deploy/who-dat-raspberry-pi.compose.yaml`，生产实例
+采用高位端口 `59090` 并强制 `AUTH_KEY`；DomainHunter 通过 `host.docker.internal:59090`
+访问，不把 Key 暴露在仓库或前端。
+
 | Provider | 类型 | 说明 |
 | --- | --- | --- |
+| `who_dat` | 首选 | Pi 上的 lissy93/who-dat；生产部署默认端口 59090 |
+| `whois_domain_lookup` | 次选 | Pi 上的 whois-domain-lookup 结构化 API |
+| `vercel_who_dat` | 三选 | `https://rdap.re` 的 who-dat 兼容 API |
 | `rdap` | 通用 | 结构化优先；只有合法的 RDAP 错误对象 + 明确的"不存在"语义才判可注册 |
+| `rdap_org` | 五选 | `https://rdap.org/domain/{domain}` |
+| `ai_fallback` | 兜底 | 当前默认 AI 配置；仅输出研究性说明，不判定可注册 |
 | `whois` | 通用 | 注册局 43 端口；状态识别词表见 `internal/registry/detection_patterns.json` |
 | `whois_ls` | 按后缀启用 | WHOIS.LS JSON 网关，部署上用于 `.im` |
 | `fallback` | 按后缀启用 | 本地 whois-domain-lookup 结构化服务，部署上用于 `.im` / `.do` |
@@ -168,17 +181,16 @@ data/
 
 ```json
 {
-  "providers": { "whois_ls": { "enabled": true } },
-  "tlds": {
-    "im": { "providers": ["whois_ls", "rdap", "whois"], "validate_available": true },
-    "do": { "providers": ["fallback", "rdap", "whois"], "validate_available": true }
+  "default": {
+    "providers": ["who_dat", "whois_domain_lookup", "vercel_who_dat", "rdap", "rdap_org", "ai_fallback"]
   },
-  "rate_limits": { "fallback": "1s", "whois_ls": "1s", "whois:cn": "2s" }
+  "rate_limits": { "whois_domain_lookup": "1s" }
 }
 ```
 
 `validate_available` 取 `true`（= `"distrust"`，不单独采信）、`"confirm"`
-（需要第二个来源印证）或 `"trust"`。**留空即保持默认行为**，无需任何配置。
+（需要第二个来源印证）或 `"trust"`。**留空即使用默认五级顺序**：
+`who_dat → whois_domain_lookup → vercel_who_dat → rdap → rdap_org → ai_fallback`。
 
 `rate_limits` 按 `provider` 或 `provider:tld` 限制两次查询的最小间隔。
 `whois_ls` 与 `fallback` 默认各 `1s`：它们指向公共网关或单实例本地服务，
