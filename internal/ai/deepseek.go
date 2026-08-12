@@ -73,6 +73,22 @@ type DeepSeekCompatibleClient struct {
 	Policy BaseURLPolicy
 }
 
+// compatibleResponse keeps the provider envelope deliberately loose. OpenAI
+// compatible gateways generally return content as a string, but some models
+// return an array of text parts or place the final text in reasoning_content.
+// Keeping those fields as RawMessage lets us accept those harmless wire-format
+// differences without weakening the strict report JSON contract below.
+type compatibleResponse struct {
+	Choices []struct {
+		Message struct {
+			Content          json.RawMessage `json:"content"`
+			ReasoningContent json.RawMessage `json:"reasoning_content"`
+			ToolCalls        json.RawMessage `json:"tool_calls"`
+		} `json:"message"`
+		Text json.RawMessage `json:"text"`
+	} `json:"choices"`
+}
+
 func SystemPrompt() string {
 	return `你是域名鉴定师，拥有丰富的鉴定经验，能根据域名市场价格和各渠道常见交易价格区间进行价格鉴定及用途鉴定。你正在为 DomainHunter 生成研究性域名估价报告；不是交易估值、购买建议、投资建议、法律意见，也不保证可注册或可成交。
 
@@ -160,22 +176,22 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 		}
 		return Output{}, latency, fmt.Errorf("AI 服务返回 HTTP %d", resp.StatusCode)
 	}
-	var decoded struct {
-		Model   string `json:"model"`
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
+	var decoded compatibleResponse
 	if err := json.Unmarshal(responseBody, &decoded); err != nil {
 		return Output{}, latency, errors.New("AI 服务返回了无效 JSON")
 	}
-	if len(decoded.Choices) == 0 || strings.TrimSpace(decoded.Choices[0].Message.Content) == "" {
+	if len(decoded.Choices) == 0 {
 		return Output{}, latency, errors.New("AI 服务未返回有效内容")
 	}
+	responseText := firstCompatibleText(decoded.Choices[0].Message.Content, decoded.Choices[0].Message.ReasoningContent, decoded.Choices[0].Text)
+	if responseText == "" {
+		if len(decoded.Choices[0].Message.ToolCalls) > 0 && string(decoded.Choices[0].Message.ToolCalls) != "null" {
+			return Output{}, latency, errors.New("AI 模型返回了工具调用而不是估价报告")
+		}
+		return Output{}, latency, errors.New("AI 服务未返回有效文本内容")
+	}
 	var output Output
-	decoder := json.NewDecoder(strings.NewReader(decoded.Choices[0].Message.Content))
+	decoder := json.NewDecoder(strings.NewReader(responseText))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&output); err != nil {
 		return Output{}, latency, errors.New("AI 结果不符合 JSON 输出契约")
@@ -188,6 +204,73 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 		return Output{}, latency, err
 	}
 	return output, latency, nil
+}
+
+// firstCompatibleText extracts text from the common OpenAI-compatible content
+// shapes. The first non-empty field wins: final content is preferred, with
+// reasoning_content and legacy completions text used only as fallbacks.
+func firstCompatibleText(values ...json.RawMessage) string {
+	for _, raw := range values {
+		if text := compatibleText(raw); strings.TrimSpace(text) != "" {
+			return stripJSONCodeFence(text)
+		}
+	}
+	return ""
+}
+
+func compatibleText(raw json.RawMessage) string {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return ""
+	}
+
+	var text string
+	if raw[0] == '"' && json.Unmarshal(raw, &text) == nil {
+		return text
+	}
+
+	// A few gateways expose content as [{"type":"text","text":"..."}]
+	// (or as an array of plain strings) instead of one string.
+	if raw[0] == '[' {
+		var parts []json.RawMessage
+		if json.Unmarshal(raw, &parts) == nil {
+			var builder strings.Builder
+			for _, part := range parts {
+				builder.WriteString(compatibleText(part))
+			}
+			return builder.String()
+		}
+	}
+
+	if raw[0] == '{' {
+		var part struct {
+			Text    json.RawMessage `json:"text"`
+			Content json.RawMessage `json:"content"`
+		}
+		if json.Unmarshal(raw, &part) == nil {
+			if text := compatibleText(part.Text); text != "" {
+				return text
+			}
+			return compatibleText(part.Content)
+		}
+	}
+
+	return ""
+}
+
+func stripJSONCodeFence(value string) string {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(value, "```") {
+		return value
+	}
+	lines := strings.Split(value, "\n")
+	if len(lines) >= 2 {
+		lines = lines[1:]
+		if last := len(lines) - 1; last >= 0 && strings.TrimSpace(lines[last]) == "```" {
+			lines = lines[:last]
+		}
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func ValidateOutput(output Output) error {
