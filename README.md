@@ -465,7 +465,7 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 5. 只重建 `DomainHunter` 服务，不触碰 who-dat、whois-domain-lookup、FRP 或其他项目。
 6. 验证 HTTP 200、容器健康、重启次数、OOM 状态、数据库完整性和 fatal 日志。
 
-2026-08-13 的实例发布版本为 `v2.8.0-ai-report-20260813`：包含编辑式工作台 UI、浅色/深色
+2026-08-13 的实例发布版本为 `v2.9.0-ui-20260813`：包含 Monad 温暖纸张工作台 UI、浅色/深色
 主题、桌面侧栏、移动端导航，以及 `.im` 使用 WHOIS.LS、`.do` 使用结构化 fallback
 时跳过通用 `whois-domain-lookup` 的路由修复；AI 默认接入 OpenCode Zen 的
 `deepseek-v4-flash-free`，并输出逐行的域名、评分、人民币价格评估和核心分析报告。
