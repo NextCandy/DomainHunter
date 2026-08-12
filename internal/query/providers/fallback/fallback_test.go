@@ -44,7 +44,7 @@ func testServer() *httptest.Server {
 		case "redemption.im":
 			_, _ = w.Write([]byte(`{"code":0,"msg":"ok","data":{"registered":true,"reserved":false,"unknown":false,"status":["clientTransferProhibited","redemptionPeriod"],"whoisData":"Domain Status: redemptionPeriod"}}`))
 		case "pending-delete.im":
-			_, _ = w.Write([]byte(`{"code":0,"msg":"ok","data":{"registered":true,"reserved":false,"unknown":false,"status":["pendingDelete","inactive"],"whoisData":"Domain Status: pendingDelete"}}`))
+			_, _ = w.Write([]byte(`{"code":0,"msg":"ok","data":{"registered":true,"reserved":false,"unknown":false,"status":[{"text":"Pending Delete","url":"https://icann.org/epp#pendingDelete"},{"text":"Inactive"}],"whoisData":"Domain Status: pendingDelete"}}`))
 		case "available.do":
 			_, _ = w.Write([]byte(`{"code":0,"msg":"ok","data":{"registered":false,"reserved":false,"unknown":false,"whoisData":"No match"}}`))
 		case "reserved.do":

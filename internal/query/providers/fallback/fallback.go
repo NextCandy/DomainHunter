@@ -326,7 +326,7 @@ func decodeStatuses(raw []json.RawMessage) []string {
 		}
 		var obj map[string]any
 		if err := json.Unmarshal(item, &obj); err == nil {
-			for _, key := range []string{"status", "name", "value"} {
+			for _, key := range []string{"status", "name", "value", "text", "description"} {
 				if v, ok := obj[key].(string); ok && strings.TrimSpace(v) != "" {
 					out = append(out, strings.TrimSpace(v))
 					break
