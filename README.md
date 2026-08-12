@@ -18,7 +18,7 @@
   <a href="https://github.com/NextCandy/DomainHunter"><img src="https://img.shields.io/badge/architecture-Go%20%2B%20SQLite-4a4636.svg" alt="Go and SQLite" /></a>
 </p>
 
-> 当前工作区版本：`v2.9.1-card-ai-20260813` · 圆润卡片与宽松留白 · DeepSeek 官方 V4 Flash · AI 限流可见与立即重试
+> 当前工作区版本：`v2.9.2-deepseek-compat-20260813` · 圆润卡片与宽松留白 · DeepSeek 官方 V4 Flash · 官方输出兼容与立即重试
 
 DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。查询链路建立在
 "RDAP 优先、WHOIS 兼容、**无法确认就不报告可注册**"的安全模型上，
@@ -466,11 +466,12 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 5. 只重建 `DomainHunter` 服务，不触碰 who-dat、whois-domain-lookup、FRP 或其他项目。
 6. 验证 HTTP 200、容器健康、重启次数、OOM 状态、数据库完整性和 fatal 日志。
 
-2026-08-13 的实例发布版本为 `v2.9.1-card-ai-20260813`：包含 Monad 温暖纸张工作台 UI、浅色/深色
+2026-08-13 的实例发布版本为 `v2.9.2-deepseek-compat-20260813`：包含 Monad 温暖纸张工作台 UI、浅色/深色
 主题、桌面侧栏、移动端导航，以及 `.im` 使用 WHOIS.LS、`.do` 使用结构化 fallback
 时跳过通用 `whois-domain-lookup` 的路由修复；概览统计、行动卡片与抢注卡片统一 40px 圆角并增加
 内边距。AI 改用 DeepSeek 官方 `deepseek-v4-flash`，明确关闭默认 Thinking 以保证四行鉴定报告
 完整返回；上游延迟会显示原因、自动重试时间，并支持原任务立即重试。
+官方模型偶尔会在 `evidence_used` 返回解释性文本；服务端只保留真实输入字段名，避免无关标签阻断整份报告。
 Spaceship / Dynadot 注册商查询使用官方新版直达 URL。此次发布只重建 `DomainHunter` 容器，
 保留 545 个域名和现有 SQLite 数据；who-dat、whois-domain-lookup、Bark、FRP 与其他
 Compose 项目不参与重建。

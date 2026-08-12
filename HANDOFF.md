@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-13 · 圆润卡片、AI 限流重试与 DeepSeek 官方 V4 Flash 配置已部署 · Pi 版本 `v2.9.1-card-ai-20260813`
+> 最后更新：2026-08-13 · 圆润卡片、AI 限流重试与 DeepSeek 官方 V4 Flash 输出兼容已部署 · Pi 版本 `v2.9.2-deepseek-compat-20260813`
 
 ## 本次目标
 

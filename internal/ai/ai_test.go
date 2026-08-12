@@ -157,6 +157,13 @@ func TestDeepSeekV4ReasoningEffortUsesSupportedValues(t *testing.T) {
 	}
 }
 
+func TestNormalizeEvidenceUsedDropsModelFreeText(t *testing.T) {
+	got := normalizeEvidenceUsed([]string{"domain", "WHOIS.LS 实时结果", "tld", "domain", "market data"})
+	if len(got) != 2 || got[0] != "domain" || got[1] != "tld" {
+		t.Fatalf("unexpected normalized evidence: %#v", got)
+	}
+}
+
 func TestSanitizeInputExcludesSensitiveFields(t *testing.T) {
 	expiry := time.Date(2027, 1, 2, 0, 0, 0, 0, time.UTC)
 	watched := domain.Domain{Name: "alpha-test.com", Tags: []string{"高价值", "x"}, Priority: 100, Note: "必须绝不发送的私人备注"}
