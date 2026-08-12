@@ -192,7 +192,11 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 
 	switch {
 	case data.Registered != nil && *data.Registered:
-		result.Status = domain.StatusRegistered
+		// registered=true 只说明域名有注册记录，不能覆盖 EPP 状态中的
+		// redemption/pending-delete 等生命周期状态。whois-domain-lookup
+		// 的结构化响应会同时返回这两类字段；优先保留更具体的状态，避免
+		// who-dat 暂时超时时把真实的待删除/赎回状态误降成 registered。
+		result.Status = statusFromFallback(decodeStatuses(data.Status))
 		result.Confidence = domain.ConfidenceHigh
 
 	case data.Reserved != nil && *data.Reserved:
@@ -331,4 +335,24 @@ func decodeStatuses(raw []json.RawMessage) []string {
 		}
 	}
 	return out
+}
+
+// statusFromFallback maps EPP status values returned by whois-domain-lookup
+// to the same lifecycle states used by RDAP and who-dat. A transfer lock by
+// itself remains an ordinary registered state.
+func statusFromFallback(statuses []string) domain.Status {
+	for _, raw := range statuses {
+		key := strings.ToLower(strings.NewReplacer(" ", "", "_", "", "-", "").Replace(raw))
+		switch {
+		case strings.Contains(key, "hold"):
+			return domain.StatusHold
+		case strings.Contains(key, "redemption"):
+			return domain.StatusRedemption
+		case strings.Contains(key, "pendingdelete"):
+			return domain.StatusPendingDelete
+		case strings.Contains(key, "expired"), strings.Contains(key, "renewperiod"):
+			return domain.StatusGrace
+		}
+	}
+	return domain.StatusRegistered
 }
