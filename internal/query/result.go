@@ -1,6 +1,7 @@
 package query
 
 import (
+	"strings"
 	"time"
 
 	"DomainHunter/internal/domain"
@@ -33,6 +34,11 @@ type Result struct {
 	Confidence domain.Confidence
 	Raw        string
 	Note       string
+
+	// LifecycleEvidence 表示查询源是否返回了明确的生命周期字段（例如
+	// renewPeriod、redemptionPeriod 或 pendingDelete）。.im 的公开 WHOIS
+	// 只提供到期日时，不能把“到期日已过”当成宽限期证据。
+	LifecycleEvidence bool
 
 	Err error
 
@@ -103,6 +109,32 @@ func (r Result) Evidence() domain.Evidence {
 		ev.Confidence = domain.ConfidenceLow
 	}
 	return ev
+}
+
+// NormalizeIMLifecycle 将缺少明确生命周期字段的 .im 阶段结果稳定为
+// registered。官方 .im 公共 WHOIS 不公开注册日期，部分响应只包含到期日；
+// 如果仅凭这个日期推断 grace/redemption/pending-delete，会在查询源之间产生
+// “已注册 ↔ 宽限期”的来回跳变，并重复触发提醒。
+//
+// 这里不伪造注册日期，也不改变明确返回的生命周期状态；只有“有到期日、无
+// 创建日、无明确生命周期字段”的不完整证据才会被保守处理。
+func NormalizeIMLifecycle(result Result) Result {
+	if !isIMDomain(result.Domain) || result.CreatedAt != nil || result.ExpiryAt == nil || result.LifecycleEvidence {
+		return result
+	}
+
+	switch result.Status {
+	case domain.StatusGrace, domain.StatusRedemption, domain.StatusPendingDelete, domain.StatusExpired:
+		result.Status = domain.StatusRegistered
+		result.Confidence = domain.ConfidenceMedium
+		result.Note = ".im 官方公开 WHOIS 未提供注册日期或明确生命周期字段，按已注册处理"
+	}
+	return result
+}
+
+func isIMDomain(name string) bool {
+	name = domain.Normalize(name)
+	return strings.HasSuffix(name, ".im")
 }
 
 // errorResult 构造一个错误结果

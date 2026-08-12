@@ -62,6 +62,37 @@ func TestParsesIMExpiryWithoutCreationDate(t *testing.T) {
 	}
 }
 
+func TestIMExpiredDateAloneDoesNotBecomeGrace(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":false,"data":"Domain Name:\tthank.im\nDomain Details\nExpiry Date: 01/01/2020 00:59:59\nName Server: ns1.example.test."}`))
+	}))
+	defer server.Close()
+
+	provider := newTestProvider(t, server.URL+"/json/")
+	result := provider.Query(context.Background(), query.Request{Domain: "thank.im", TLD: "im"})
+	if result.Status != domain.StatusRegistered {
+		t.Fatalf("只有已过到期日但没有生命周期字段时应按已注册处理，实际 %+v", result)
+	}
+	if result.LifecycleEvidence {
+		t.Fatal("只有 Expiry Date 不应被视为生命周期证据")
+	}
+}
+
+func TestIMExplicitRenewPeriodKeepsGrace(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":false,"data":"Domain Name:\tthank.im\nDomain Status: renewPeriod\nExpiry Date: 01/01/2020 00:59:59"}`))
+	}))
+	defer server.Close()
+
+	provider := newTestProvider(t, server.URL+"/json/")
+	result := provider.Query(context.Background(), query.Request{Domain: "thank.im", TLD: "im"})
+	if result.Status != domain.StatusGrace || !result.LifecycleEvidence {
+		t.Fatalf("明确 renewPeriod 时应保留宽限期证据，实际 %+v", result)
+	}
+}
+
 func TestExplicitNotFoundIsAvailable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -187,6 +187,11 @@ data/
 | `DOMAINHUNTER_WHOIS_LS_URL` | 空 | WHOIS.LS JSON 网关 |
 | `DOMAINHUNTER_WHOIS_LS_TLDS` | `im` | 启用 WHOIS.LS 的后缀 |
 | `DOMAINHUNTER_WHOIS_LS_TIMEOUT` | `20s` | 支持 `20` 或 `20s` |
+| `DOMAINHUNTER_SPACESHIP_API_URL` | `https://spaceship.dev/api/v1` | Spaceship External API 根地址 |
+| `DOMAINHUNTER_SPACESHIP_API_KEY` | 空 | Spaceship API Key；需要 `domains:read`，不提交到仓库 |
+| `DOMAINHUNTER_SPACESHIP_API_SECRET` | 空 | Spaceship API Secret；不提交到仓库 |
+| `DOMAINHUNTER_SPACESHIP_TLDS` | `im` | 允许 Spaceship 补充查询的后缀 |
+| `DOMAINHUNTER_SPACESHIP_TIMEOUT` | `15s` | Spaceship 请求超时 |
 | `DOMAINHUNTER_AI_API_KEY` | 空 | 默认 AI 配置的运行时 Key；不会写入仓库 |
 | `DOMAINHUNTER_SECRET_KEY` | 空 | UI 保存多个 AI Key 时使用 AES-GCM 加密 |
 | `DOMAINHUNTER_AI_ALLOWED_HOSTS` | `api.deepseek.com` | 严格 AI 估价的额外出站主机 allowlist，逗号分隔 |
@@ -220,6 +225,7 @@ data/
 | `whois` | 通用 | 注册局 43 端口；状态识别词表见 `internal/registry/detection_patterns.json` |
 | `whois_ls` | 专用源 | WHOIS.LS JSON 网关，部署上用于 `.im`，避免访问不可达的 `whois.nic.im:43` |
 | `fallback` | 专用源 | 本地 whois-domain-lookup 结构化服务，部署上用于 `.do`；`.im` 优先走 WHOIS.LS |
+| `spaceship` | 可选补充 | Spaceship External API；仅在 `.im` 证据不足时调用，需要 `domains:read` API Key/Secret |
 
 查询顺序与"可注册"的采信程度可以按 TLD 配置（管理端「查询源」页，或
 `app_settings.query_policy`）。未写自定义 TLD 计划时，`.im` 会优先使用
@@ -229,7 +235,7 @@ WHOIS.LS，`.do` 会优先使用结构化 `fallback`；这两个 TLD 已有专�
 ```json
 {
   "default": {
-    "providers": ["who_dat", "whois_ls", "fallback", "whois_domain_lookup", "vercel_who_dat", "rdap", "rdap_org", "ai_fallback"]
+        "providers": ["who_dat", "whois_ls", "fallback", "whois_domain_lookup", "vercel_who_dat", "rdap", "rdap_org", "spaceship", "ai_fallback"]
   },
   "rate_limits": { "whois_domain_lookup": "1s" }
 }
@@ -237,7 +243,7 @@ WHOIS.LS，`.do` 会优先使用结构化 `fallback`；这两个 TLD 已有专�
 
 `validate_available` 取 `true`（= `"distrust"`，不单独采信）、`"confirm"`
 （需要第二个来源印证）或 `"trust"`。**留空即使用默认顺序**：
-`who_dat → whois_ls/fallback（按 TLD）→ whois_domain_lookup → vercel_who_dat → rdap → rdap_org → ai_fallback`。
+`who_dat → whois_ls/fallback（按 TLD）→ whois_domain_lookup → vercel_who_dat → rdap → rdap_org → spaceship（可选）→ ai_fallback`。
 
 `rate_limits` 按 `provider` 或 `provider:tld` 限制两次查询的最小间隔。
 `whois_ls` 与 `fallback` 默认各 `1s`：它们指向公共网关或单实例本地服务，
@@ -247,7 +253,13 @@ WHOIS.LS，`.do` 会优先使用结构化 `fallback`；这两个 TLD 已有专�
 ### 关于 `.im` 与 `.do`
 
 - `.im`：注册局公开响应**不提供创建日期**。DomainHunter 保留创建日期为空，
-  绝不猜测或填充伪造日期；到期日通过 WHOIS.LS 获取。
+  绝不猜测或填充伪造日期；到期日通过 WHOIS.LS 获取。只有到期日而没有明确
+  `renewPeriod` / `redemptionPeriod` / `pendingDelete` 等字段时，不把过期日期
+  推断为宽限期，而按“已注册、阶段无法确认”处理，避免重复提醒。
+- `.im` 的 `available` 必须由至少两个独立查询源确认；如果前面的 WHOIS / Who-Dat
+  证据仍无法确认，且配置了 Spaceship 官方 API Key/Secret，最后才会调用
+  `GET /api/v1/domains/{domain}/available`。Spaceship 只能补充“可用/不可用”事实，
+  不能提供 `.im` 注册日期或宽限期阶段；Key/Secret 通过环境变量注入，不写入仓库。
 - `.do`：响应会给每个隐私字段追加 `| Registry Policy`。这只是隐私标记，
   明确的 `registered=true` 优先，不会被误判为保留域名。
 
@@ -292,6 +304,7 @@ WHOIS.LS，`.do` 会优先使用结构化 `fallback`；这两个 TLD 已有专�
 - 从 `error` 恢复不通知
 - 目标状态本身不需要通知（`unknown` / `error` / `skipped`）时不通知
 - **可注册结论证据不足时不通知**
+- `.im` 没有明确生命周期字段时，`registered` / `grace` 等占用类阶段互相切换不重复提醒
 - Bark 使用精简正文，仅保留状态摘要，不推送 WHOIS/RDAP 原文，正文约 480 字节以内
 - 同一轮里多个域名的变化会合并成一条
 
@@ -447,6 +460,7 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 | 大量域名显示 `skipped` | 该后缀没有 RDAP/WHOIS 端点；检查「查询源」页与 `servers.json` |
 | 某后缀持续 `error` | 看域名详情的"查询证据"，确认是超时、限流还是解析失败 |
 | `.im` 没有到期日 | 确认 `DOMAINHUNTER_WHOIS_LS_URL` / `_TLDS` 已配置且服务可达 |
+| `.im` 仍显示未知 | 如需补充注册商可用性确认，配置 `DOMAINHUNTER_SPACESHIP_API_KEY`、`DOMAINHUNTER_SPACESHIP_API_SECRET`，并确认该 Key 拥有 `domains:read` 权限 |
 | `.do` 显示 `unknown` | 确认本地 whois-domain-lookup 服务可达（`extra_hosts` 是否生效） |
 | 反代下登录后立刻掉线 | 反代需要透传 `X-Forwarded-Proto`，或显式设置 `DOMAINHUNTER_COOKIE_SECURE` |
 | 前端写操作 403 | CSRF 校验失败；刷新页面重新获取令牌，或检查反代是否吞掉了 `Origin` |

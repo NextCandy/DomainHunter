@@ -245,6 +245,7 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 		if res.Domain == "" {
 			res.Domain = name
 		}
+		res = NormalizeIMLifecycle(res)
 		e.health.Record(res)
 		out.Results = append(out.Results, res)
 		out.Evidence = append(out.Evidence, res.Evidence())
@@ -311,6 +312,9 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 
 	case pendingAvail != nil:
 		res := *pendingAvail
+		if tld == "im" && availableVotes >= 2 {
+			return e.finalize(out, res)
+		}
 		res.Status = domain.StatusUnknown
 		res.Confidence = domain.ConfidenceLow
 		res.Note = fmt.Sprintf("%s 报告可注册，但未获得二次确认，按未知处理", res.Provider)

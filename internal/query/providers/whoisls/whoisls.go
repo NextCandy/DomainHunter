@@ -129,7 +129,7 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 		result.Status = domain.StatusRegistered
 		result.Note = "响应中存在注册信息，可注册判定已纠正为已注册"
 	}
-	return result
+	return query.NormalizeIMLifecycle(result)
 }
 
 func (p *Provider) fetch(ctx context.Context, name string) (string, error) {

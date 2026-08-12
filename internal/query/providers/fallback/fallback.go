@@ -175,6 +175,7 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 		Confidence:  domain.ConfidenceMedium,
 		StartedAt:   started,
 	}
+	result.LifecycleEvidence = hasLifecycleStatus(result.EPPStatuses)
 	defer func() {
 		result.FinishedAt = time.Now()
 		result.Latency = result.FinishedAt.Sub(started)
@@ -235,7 +236,7 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 			result = parsed
 		}
 	}
-	return result
+	return query.NormalizeIMLifecycle(result)
 }
 
 func (p *Provider) fetch(ctx context.Context, name string) (*apiData, error) {
@@ -355,4 +356,20 @@ func statusFromFallback(statuses []string) domain.Status {
 		}
 	}
 	return domain.StatusRegistered
+}
+
+func hasLifecycleStatus(statuses []string) bool {
+	for _, raw := range statuses {
+		key := strings.ToLower(strings.NewReplacer(" ", "", "_", "", "-", "").Replace(raw))
+		switch {
+		case strings.Contains(key, "hold"),
+			strings.Contains(key, "redemption"),
+			strings.Contains(key, "pendingdelete"),
+			strings.Contains(key, "expired"),
+			strings.Contains(key, "renewperiod"),
+			strings.Contains(key, "grace"):
+			return true
+		}
+	}
+	return false
 }

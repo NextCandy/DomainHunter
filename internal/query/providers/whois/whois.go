@@ -173,6 +173,7 @@ func Parse(name, response string) query.Result {
 	result.Status = parseStatus(lower)
 	result.Registrar = parseRegistrar(response)
 	result.EPPStatuses = parseEPPStatuses(response)
+	result.LifecycleEvidence = hasExplicitLifecycleMarker(lower)
 
 	result.CreatedAt = parseDate(response, []string{"creation date", "created", "registered"})
 	result.ExpiryAt = parseDate(response, []string{"expiry date", "expires", "expiration date", "registry expiry date"})
@@ -196,7 +197,24 @@ func Parse(name, response string) query.Result {
 	if result.Status == domain.StatusUnknown {
 		result.Confidence = domain.ConfidenceLow
 	}
-	return result
+	return query.NormalizeIMLifecycle(result)
+}
+
+// hasExplicitLifecycleMarker 只识别注册局明确返回的阶段字段。普通的
+// "Expiry Date" / "expires" 不属于生命周期证据，尤其不能在 .im 上据此
+// 推断宽限期。
+func hasExplicitLifecycleMarker(response string) bool {
+	for _, marker := range []string{
+		"renew grace", "auto renew period", "renewperiod", "auto-renew grace",
+		"autorenewperiod", "grace period", "redemption", "pending restore",
+		"pending delete", "pendingdelete", "to be released", "expired",
+		"renew period", "redemptionperiod",
+	} {
+		if strings.Contains(response, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasRegistrationEvidence(result query.Result) bool {

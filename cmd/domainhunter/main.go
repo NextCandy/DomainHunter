@@ -25,6 +25,7 @@ import (
 	"DomainHunter/internal/query/providers/fallback"
 	"DomainHunter/internal/query/providers/rdap"
 	"DomainHunter/internal/query/providers/rdaporg"
+	"DomainHunter/internal/query/providers/spaceship"
 	"DomainHunter/internal/query/providers/whodat"
 	"DomainHunter/internal/query/providers/whois"
 	"DomainHunter/internal/query/providers/whoisls"
@@ -132,6 +133,7 @@ func run(dataDir string) error {
 		whoisls.New(cfg.Monitor.Timeout),
 		fallback.New(cfg.Monitor.Timeout),
 		whois.New(cfg.Monitor.Timeout),
+		spaceship.New(cfg.Monitor.Timeout),
 	)
 	engine := query.NewEngine(providers, policy)
 

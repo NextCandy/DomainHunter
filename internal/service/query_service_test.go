@@ -95,6 +95,26 @@ func TestSuppressesLegacyTransferLockNotification(t *testing.T) {
 	}
 }
 
+func TestSuppressesUncertainIMLifecycleNotification(t *testing.T) {
+	expiry := time.Now().Add(-24 * time.Hour)
+	outcome := query.Outcome{
+		Info: &domain.Info{Name: "thank.im", Status: domain.StatusRegistered},
+		Results: []query.Result{{
+			Domain:   "thank.im",
+			Status:   domain.StatusRegistered,
+			ExpiryAt: &expiry,
+		}},
+	}
+	if !suppressUncertainIMLifecycleNotification("thank.im", domain.StatusGrace, domain.StatusRegistered, outcome) {
+		t.Fatal(".im 没有注册日期和明确生命周期证据时应抑制阶段变化提醒")
+	}
+
+	outcome.Results[0].LifecycleEvidence = true
+	if suppressUncertainIMLifecycleNotification("thank.im", domain.StatusGrace, domain.StatusRegistered, outcome) {
+		t.Fatal(".im 有明确生命周期证据时不应抑制提醒")
+	}
+}
+
 type notificationSuppressionRepo struct {
 	repository.DomainRepository
 	lastReads int

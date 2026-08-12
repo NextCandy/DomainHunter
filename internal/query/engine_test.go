@@ -142,7 +142,7 @@ func TestGenericAvailableIsDistrustedWhenOptInConfigured(t *testing.T) {
 	}
 }
 
-func TestOptInProviderAvailableIsTrusted(t *testing.T) {
+func TestIMAvailableRequiresIndependentConfirmation(t *testing.T) {
 	whois := provider(ProviderWhois, domain.StatusRegistered)
 	out := newEngine(Config{},
 		provider(ProviderWhoisLS, domain.StatusAvailable),
@@ -151,11 +151,25 @@ func TestOptInProviderAvailableIsTrusted(t *testing.T) {
 		whois,
 	).Query(context.Background(), "example.im")
 
-	if out.Winner.Status != domain.StatusAvailable {
-		t.Fatalf("专用查询源的 available 应被采信，实际 %s", out.Winner.Status)
+	if out.Winner.Status != domain.StatusRegistered {
+		t.Fatalf(".im 出现已注册证据时应优先以 registered 为准，实际 %s", out.Winner.Status)
 	}
-	if whois.callCount != 0 {
-		t.Fatal("拿到结论后不应继续查询")
+	if whois.callCount != 1 {
+		t.Fatalf(".im available 不能提前结束查询，应继续等待第二来源，实际调用 %d 次", whois.callCount)
+	}
+}
+
+func TestIMAvailableNeedsTwoVotes(t *testing.T) {
+	first := provider(ProviderWhoisLS, domain.StatusAvailable)
+	second := provider(ProviderRDAP, domain.StatusAvailable)
+	out := newEngine(Config{}, first, disabled(ProviderFallback), second).
+		Query(context.Background(), "new.im")
+
+	if out.Winner.Status != domain.StatusAvailable {
+		t.Fatalf("两个独立来源都确认 .im 可注册时应返回 available，实际 %s", out.Winner.Status)
+	}
+	if first.callCount != 1 || second.callCount != 1 {
+		t.Fatalf("两个确认来源都应被查询，实际 whois_ls=%d rdap=%d", first.callCount, second.callCount)
 	}
 }
 
@@ -309,6 +323,48 @@ func TestDefaultPlanUsesProductFallbackOrder(t *testing.T) {
 		if step.Provider != want[i] {
 			t.Fatalf("默认策略第 %d 步应为 %s，实际 %s", i, want[i], step.Provider)
 		}
+	}
+}
+
+func TestDefaultPlanPutsSpaceshipAfterPrimarySources(t *testing.T) {
+	registryOf := NewRegistry(
+		provider(ProviderWhoDat, domain.StatusUnknown),
+		provider(ProviderWhoisLS, domain.StatusUnknown),
+		provider(ProviderVercelWhoDat, domain.StatusUnknown),
+		provider(ProviderSpaceship, domain.StatusUnknown),
+	)
+
+	steps := NewPolicy(Config{}).Plan(context.Background(), Request{Domain: "example.im", TLD: "im"}, registryOf)
+	if len(steps) == 0 || steps[len(steps)-1].Provider != ProviderSpaceship {
+		t.Fatalf("Spaceship 应作为 .im 最后补充源，实际计划: %+v", steps)
+	}
+}
+
+func TestIMRegisteredResultStopsBeforeSpaceship(t *testing.T) {
+	spaceship := provider(ProviderSpaceship, domain.StatusAvailable)
+	registered := provider(ProviderWhoDat, domain.StatusRegistered)
+
+	out := newEngine(Config{}, registered, spaceship).
+		Query(context.Background(), "owned.im")
+	if out.Winner.Status != domain.StatusRegistered {
+		t.Fatalf("已有已注册证据时结果错误: %+v", out.Winner)
+	}
+	if spaceship.callCount != 0 {
+		t.Fatal("已有明确已注册结果时不应调用 Spaceship")
+	}
+}
+
+func TestIMUnconfirmedAvailabilityFallsThroughToSpaceship(t *testing.T) {
+	spaceship := provider(ProviderSpaceship, domain.StatusAvailable)
+	firstAvailable := provider(ProviderWhoisLS, domain.StatusAvailable)
+
+	out := newEngine(Config{}, firstAvailable, spaceship).
+		Query(context.Background(), "uncertain.im")
+	if out.Winner.Status != domain.StatusAvailable {
+		t.Fatalf("Spaceship 与前一来源共同确认可用时应返回 available，实际 %+v", out.Winner)
+	}
+	if spaceship.callCount != 1 {
+		t.Fatalf("无法确认时应调用一次 Spaceship，实际 %d", spaceship.callCount)
 	}
 }
 
