@@ -29,6 +29,56 @@
   font-variant-numeric: tabular-nums;
 }
 
+.ai-report {
+  border-top: 1px solid rgb(var(--line));
+  border-bottom: 1px solid rgb(var(--line));
+}
+
+.ai-report-line {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid rgb(var(--line) / 0.72);
+}
+
+.ai-report-line:last-child {
+  border-bottom: 0;
+}
+
+.ai-report-label {
+  color: rgb(var(--ink-muted));
+  font-family: var(--font-ibm-plex-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+}
+
+.ai-report-value {
+  min-width: 0;
+  color: rgb(var(--ink));
+  font-size: 0.8125rem;
+  font-weight: 560;
+}
+
+.ai-report-emphasis {
+  color: rgb(var(--accent));
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.ai-report-multiline {
+  line-height: 1.75;
+  font-weight: 450;
+}
+
+@media (max-width: 420px) {
+  .ai-report-line {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+}
+
 /* Project-wide polish utilities. Apply deliberately to page shells rather than globally replacing every card. */
 .workspace-header {
   background: transparent;

@@ -490,6 +490,16 @@ var migrations = []Migration{
 			`ALTER TABLE domain_results ADD COLUMN confidence TEXT NOT NULL DEFAULT ''`,
 		},
 	},
+	{
+		Version: "015",
+		Name:    "strict_valuation_report_fields",
+		Stmts: []string{
+			`ALTER TABLE ai_domain_valuations_v2 ADD COLUMN price_evaluation_low INTEGER`,
+			`ALTER TABLE ai_domain_valuations_v2 ADD COLUMN price_evaluation_high INTEGER`,
+			`ALTER TABLE ai_domain_valuations_v2 ADD COLUMN price_evaluation_currency TEXT NOT NULL DEFAULT 'CNY'`,
+			`ALTER TABLE ai_domain_valuations_v2 ADD COLUMN core_analysis TEXT NOT NULL DEFAULT ''`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录

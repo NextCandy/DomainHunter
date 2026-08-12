@@ -1,4 +1,4 @@
-# DeepSeek 域名估价前端模块
+# AI 域名鉴定估价前端模块
 
 本模块位于 `web/src/features/ai-valuation`，采用 React 18、TypeScript 与项目既有的 Tailwind / `ui.tsx` 组件。它已通过当前项目的 `npm run typecheck`、`npm run lint` 与 `npm run build`。模块尚未自动挂载到现有页面，因为当前源码中的 Go 后端尚未提供下述 `/api/v2/ai/*` 契约；在后端完成前，直接挂载会使“加入估价队列”得到安全的 404 错误，而不是产生真实任务。
 
@@ -6,12 +6,12 @@
 
 | 路径 | 职责 |
 | --- | --- |
-| `components/DomainValuationPanel.tsx` | 域名详情的估价模块，完整覆盖空态、数据复核禁用、入队、轮询、结果、失败、取消、额度与免责声明。 |
+| `components/DomainValuationPanel.tsx` | 域名详情的估价模块，按“域名 / 评分 / 价格评估 / 核心分析”逐行展示，完整覆盖空态、数据复核禁用、入队、轮询、结果、失败、取消、额度与免责声明。 |
 | `components/DeepSeekProfileForm.tsx` | DeepSeek / OpenAI-compatible 档案配置，覆盖 Base URL、模型、Key 写入、连接测试与并发额度。 |
 | `hooks/useDomainValuation.ts` | 当前任务加载、2.5 秒轮询、入队、取消、错误映射和 401 回调。 |
 | `hooks/useAIProfiles.ts` | 档案加载、保存、删除、默认档案选择和连接测试。 |
 | `lib/valuation-api.ts` | 同源 API 适配层，复用 `web/src/lib/api.ts` 的 CSRF 和认证行为。 |
-| `lib/valuation-types.ts` | 估价、队列任务、档案、配额与结果状态类型。 |
+| `lib/valuation-types.ts` | 估价报告、人民币价格区间、队列任务、档案、配额与结果状态类型。 |
 | `valuation.css` | 精致化 token、估价面板与工作台辅助样式。 |
 
 ## 1. 后端 API 契约
@@ -26,7 +26,7 @@
 | `PUT /api/v2/ai/profiles/:id` | 修改档案 | `AIProfile` |
 | `DELETE /api/v2/ai/profiles/:id` | 删除档案 | `{ status: "deleted" }` |
 | `POST /api/v2/ai/profiles/test-connection` | 仅以合成输入测试后端到 Provider 的连接 | `ConnectionTestResult` |
-| `GET /api/v2/domains/:domain/valuation` | 读取当前/最近任务；尚无任务时返回 404 | `ValuationJob` |
+| `GET /api/v2/domains/:domain/valuation` | 读取当前/最近任务；尚无任务时返回 404 | `ValuationJob`，完成结果含 `score`、`price_evaluation_cny`、`core_analysis` |
 | `POST /api/v2/domains/:domain/valuation` | 创建或复用幂等估价任务 | `ValuationJob` |
 | `GET /api/v2/ai/jobs/:id` | 轮询任务状态 | `ValuationJob` |
 | `POST /api/v2/ai/jobs/:id/cancel` | 取消排队任务 | `ValuationJob` |

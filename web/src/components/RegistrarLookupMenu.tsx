@@ -9,11 +9,11 @@ interface RegistrarOption {
 const REGISTRARS: RegistrarOption[] = [
   {
     label: "Spaceship",
-    href: (domain) => `https://www.spaceship.com/domain-search/cgi-bin/?query=${encodeURIComponent(domain)}`,
+    href: (domain) => `https://www.spaceship.com/zh/domain-search/?query=${encodeURIComponent(domain)}&beast=false&tab=domains`,
   },
   {
     label: "Dynadot",
-    href: (domain) => `https://www.dynadot.com/domain/search.html?domain=${encodeURIComponent(domain)}`,
+    href: (domain) => `https://www.dynadot.com/zh/domain/search?domain=${encodeURIComponent(domain)}`,
   },
   {
     label: "Namecheap",

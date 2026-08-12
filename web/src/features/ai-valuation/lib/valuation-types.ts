@@ -58,12 +58,15 @@ export interface DomainValuation {
   model: string;
   prompt_version: string;
   input_fingerprint: string;
+  score?: number;
   quality_score: number;
   liquidity_score: number;
   risk_level: "low" | "medium" | "high";
   confidence: "low" | "medium" | "high";
   indicative_value_usd?: { low: number; high: number; currency: string };
+  price_evaluation_cny?: { low: number; high: number; currency: "CNY" | string };
   summary: string;
+  core_analysis?: string;
   strengths: string[];
   risks: string[];
   data_gaps: string[];
@@ -149,6 +152,12 @@ export function formatUSD(value?: DomainValuation["indicative_value_usd"]): stri
   if (!value) return "研究区间不可用";
   const formatter = new Intl.NumberFormat("en-US", { style: "currency", currency: value.currency || "USD", maximumFractionDigits: 0 });
   return `${formatter.format(value.low)} – ${formatter.format(value.high)}`;
+}
+
+export function formatCNY(value?: DomainValuation["price_evaluation_cny"]): string {
+  if (!value) return "人民币价格区间待刷新";
+  const formatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
+  return `${formatter.format(value.low)}–${formatter.format(value.high)} 元`;
 }
 
 export type { DomainStatus };

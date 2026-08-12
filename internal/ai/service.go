@@ -44,7 +44,7 @@ func (s *Service) ListProfiles(ctx context.Context) ([]Profile, error) {
 	return s.store.ListProfiles(ctx)
 }
 
-// EnsureDefaultProfile seeds a visible DeepSeek profile exactly once. It never overwrites
+// EnsureDefaultProfile seeds a visible OpenAI-compatible profile exactly once. It never overwrites
 // an existing default and does not require an API key at startup.
 func (s *Service) EnsureDefaultProfile(ctx context.Context) error {
 	existing, err := s.store.GetDefaultProfile(ctx)
@@ -293,12 +293,25 @@ func (s *Service) ProcessOne(ctx context.Context) (bool, error) {
 	input := SanitizeInput(*watched, *info)
 	output, _, err := s.client.Evaluate(ctx, profile.Profile, key, input)
 	if err != nil {
-		_ = s.store.FailJob(ctx, job.ID, "provider_error", safeError(err), retryAfter(job, now), now)
+		errorCode := "provider_error"
+		retry := retryAfter(job, now)
+		if errors.Is(err, ErrProviderAuth) {
+			errorCode = "provider_auth"
+			retry = nil
+		} else if errors.Is(err, ErrProviderConfig) {
+			errorCode = "provider_config"
+			retry = nil
+		}
+		_ = s.store.FailJob(ctx, job.ID, errorCode, safeError(err), retry, now)
 		return true, nil
 	}
 	finger, _ := fingerprint(input)
 	expires := now.Add(time.Duration(profile.CacheTTLHours) * time.Hour)
-	valuation := Valuation{ID: newID("aiv"), Domain: job.Domain, ProfileID: profile.ID, ProfileName: profile.Name, Provider: string(profile.Provider), Model: profile.Model, PromptVersion: PromptVersion, InputFingerprint: finger, QualityScore: output.QualityScore, LiquidityScore: output.LiquidityScore, RiskLevel: output.RiskLevel, Confidence: output.Confidence, IndicativeValueUSD: output.IndicativeValueUSD, Summary: output.Summary, Strengths: output.Strengths, Risks: output.Risks, DataGaps: output.DataGaps, EvidenceUsed: output.EvidenceUsed, StatusGuard: output.StatusGuard, Disclaimer: output.Disclaimer, CreatedAt: now, ExpiresAt: &expires}
+	score := output.Score
+	if score == 0 && output.QualityScore > 0 {
+		score = output.QualityScore
+	}
+	valuation := Valuation{ID: newID("aiv"), Domain: job.Domain, ProfileID: profile.ID, ProfileName: profile.Name, Provider: string(profile.Provider), Model: profile.Model, PromptVersion: PromptVersion, InputFingerprint: finger, Score: score, QualityScore: score, LiquidityScore: output.LiquidityScore, RiskLevel: output.RiskLevel, Confidence: output.Confidence, IndicativeValueUSD: output.IndicativeValueUSD, PriceEvaluationCNY: output.PriceEvaluationCNY, Summary: output.Summary, CoreAnalysis: output.CoreAnalysis, Strengths: output.Strengths, Risks: output.Risks, DataGaps: output.DataGaps, EvidenceUsed: output.EvidenceUsed, StatusGuard: output.StatusGuard, Disclaimer: output.Disclaimer, CreatedAt: now, ExpiresAt: &expires}
 	if err = s.store.CompleteJob(ctx, job.ID, valuation, now); err != nil {
 		return true, err
 	}

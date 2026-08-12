@@ -29,8 +29,8 @@
       # P1 AI：默认不启用；Key 从环境注入，UI 保存 Key 还需要 SECRET_KEY。
       DOMAINHUNTER_AI_API_KEY: ${DOMAINHUNTER_AI_API_KEY:-}
       DOMAINHUNTER_SECRET_KEY: ${DOMAINHUNTER_SECRET_KEY:-}
-      # 严格 AI 估价默认只允许官方 DeepSeek；自定义网关必须显式加入 allowlist。
-      DOMAINHUNTER_AI_ALLOWED_HOSTS: ${DOMAINHUNTER_AI_ALLOWED_HOSTS:-api.deepseek.com}
+      # 严格 AI 估价默认允许官方 DeepSeek 与 OpenCode Zen；其他网关必须显式加入 allowlist。
+      DOMAINHUNTER_AI_ALLOWED_HOSTS: ${DOMAINHUNTER_AI_ALLOWED_HOSTS:-api.deepseek.com,opencode.ai}
       DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL: ${DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL:-false}
       # 旧版 P1 AI 兼容变量，严格估价不读取它。
       DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL: ${DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL:-false}

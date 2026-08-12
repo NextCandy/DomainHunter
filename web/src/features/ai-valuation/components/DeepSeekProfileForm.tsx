@@ -4,12 +4,12 @@ import { useAIProfiles } from "../hooks/useAIProfiles";
 import type { AIProfile, AIProfileInput, ConnectionTestResult } from "../lib/valuation-types";
 
 const DEEPSEEK_DEFAULTS: AIProfileInput = {
-  name: "DeepSeek 官方 · 研究性估价",
-  provider: "deepseek",
+  name: "OpenAI Compatible · OpenCode Zen",
+  provider: "openai_compatible",
   enabled: true,
   is_default: true,
-  base_url: "https://api.deepseek.com",
-  model: "deepseek-v4-flash",
+  base_url: "https://opencode.ai/zen/v1",
+  model: "deepseek-v4-flash-free",
   thinking_type: "disabled",
   reasoning_effort: "low",
   timeout_seconds: 30,
@@ -115,7 +115,7 @@ export function DeepSeekProfileForm({ profile, onUnauthorized, onSaved, onCancel
     <section className="overflow-hidden rounded-card border border-line bg-surface">
       <header className="border-b border-line bg-surface-subtle px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><span className="mono text-[11px] font-semibold tracking-[0.12em] text-accent">AI PROVIDER PROFILE</span><h2 className="mt-1 text-[16px] font-semibold text-ink">{profile ? "编辑 AI 估价档案" : "新建 DeepSeek 估价档案"}</h2><p className="mt-1 text-[12px] leading-5 text-ink-muted">密钥从不由读取接口回显；留空表示保留已保存的密钥或继续使用部署环境变量。</p></div>
+          <div><span className="mono text-[11px] font-semibold tracking-[0.12em] text-accent">AI PROVIDER PROFILE</span><h2 className="mt-1 text-[16px] font-semibold text-ink">{profile ? "编辑 AI 估价档案" : "新建 AI 估价档案"}</h2><p className="mt-1 text-[12px] leading-5 text-ink-muted">默认使用 OpenAI Compatible / OpenCode Zen；密钥从不由读取接口回显，留空表示保留已保存的密钥或继续使用部署环境变量。</p></div>
           {profile && <Pill>{profile.api_key_set ? `Key：${profile.api_key_source === "environment" ? "环境变量" : "已加密保存"}` : "尚未设置 Key"}</Pill>}
         </div>
       </header>
@@ -126,7 +126,7 @@ export function DeepSeekProfileForm({ profile, onUnauthorized, onSaved, onCancel
           <SectionHeading id="ai-connection-heading" title="连接" hint="服务端出站连接与档案身份" />
           <div className="mt-3 grid gap-4 md:grid-cols-2">
           <Field label="档案名称" hint="用于详情页和批量入队时识别。"><input className="input" value={form.name} maxLength={80} onChange={(event) => update("name", event.target.value)} /></Field>
-          <Field label="提供商" hint="默认 DeepSeek 使用 OpenAI-compatible 协议。"><select className="input" value={form.provider} onChange={(event) => update("provider", event.target.value as AIProfileInput["provider"])}><option value="deepseek">DeepSeek 官方</option><option value="openai_compatible">OpenAI Compatible</option></select></Field>
+          <Field label="提供商" hint="默认配置使用 OpenAI-compatible 协议。"><select className="input" value={form.provider} onChange={(event) => update("provider", event.target.value as AIProfileInput["provider"])}><option value="deepseek">DeepSeek 官方</option><option value="openai_compatible">OpenAI Compatible</option></select></Field>
           <Field label="Base URL" hint="填写服务根地址；不要填写 /chat/completions。"><input className="input mono" value={form.base_url} spellCheck={false} inputMode="url" onChange={(event) => update("base_url", event.target.value.trim())} aria-invalid={Boolean(baseURLError)} />{baseURLError && <p className="mt-1 text-[11px] text-danger">{baseURLError}</p>}</Field>
           </div>
         </section>
@@ -134,7 +134,7 @@ export function DeepSeekProfileForm({ profile, onUnauthorized, onSaved, onCancel
         <section aria-labelledby="ai-model-heading">
           <SectionHeading id="ai-model-heading" title="模型" hint="模型选择只影响研究性排序，不会改变域名状态或可注册结论" />
           <div className="mt-3 grid gap-4 md:grid-cols-3">
-            <Field label="模型" hint="批量排序建议使用快速模型；少量重点域名再选择深度模型。"><input className="input mono" list="domainhunter-models" value={form.model} spellCheck={false} onChange={(event) => update("model", event.target.value.trim())} /><datalist id="domainhunter-models"><option value="deepseek-v4-flash" /><option value="deepseek-v4-pro" /></datalist></Field>
+            <Field label="模型" hint="批量排序建议使用快速模型；少量重点域名再选择深度模型。"><input className="input mono" list="domainhunter-models" value={form.model} spellCheck={false} onChange={(event) => update("model", event.target.value.trim())} /><datalist id="domainhunter-models"><option value="deepseek-v4-flash-free" /><option value="deepseek-v4-flash" /><option value="deepseek-v4-pro" /></datalist></Field>
             <Field label="Thinking"><select className="input" value={form.thinking_type} onChange={(event) => update("thinking_type", event.target.value as AIProfileInput["thinking_type"])}><option value="disabled">关闭（默认批量）</option><option value="enabled">启用（重点域名）</option></select></Field>
             <Field label="推理强度"><select className="input" value={form.reasoning_effort} onChange={(event) => update("reasoning_effort", event.target.value as AIProfileInput["reasoning_effort"])}><option value="low">low</option><option value="high">high</option><option value="max">max</option></select></Field>
           </div>

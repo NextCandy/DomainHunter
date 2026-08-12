@@ -18,7 +18,7 @@
   <a href="https://github.com/NextCandy/DomainHunter"><img src="https://img.shields.io/badge/architecture-Go%20%2B%20SQLite-4a4636.svg" alt="Go and SQLite" /></a>
 </p>
 
-> 当前工作区版本：`v2.7.0-ui-20260812` · 纸张薄荷编辑式工作台 UI · `.im` / `.do` 查询源路由修复
+> 当前工作区版本：`v2.8.0-ai-report-20260813` · 纸张薄荷编辑式工作台 UI · AI 四行鉴定报告 · 注册商直达修复
 
 DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。查询链路建立在
 "RDAP 优先、WHOIS 兼容、**无法确认就不报告可注册**"的安全模型上，
@@ -112,7 +112,7 @@ IBM Plex Mono 大写字距；按钮和导航使用胶囊几何，卡片、抽屉
 「查询证据」会列出本次结论里**每个查询源分别看到了什么**（状态、耗时、错误），
 这是回答"当前状态为什么是这个结果"的地方。
 
-AI 与自动化页面提供 DeepSeek 档案、模型、Thinking、推理强度、超时、并发、每日额度和缓存
+AI 与自动化页面提供 OpenAI Compatible / DeepSeek 档案、模型、Thinking、推理强度、超时、并发、每日额度和缓存
 TTL 配置。域名详情的「概览」标签页提供研究性估价面板；复核中的域名会安全禁用入队操作。
 
 ## 复核与行动队列
@@ -188,7 +188,7 @@ data/
 | `DOMAINHUNTER_WHOIS_LS_TIMEOUT` | `20s` | 支持 `20` 或 `20s` |
 | `DOMAINHUNTER_AI_API_KEY` | 空 | 默认 AI 配置的运行时 Key；不会写入仓库 |
 | `DOMAINHUNTER_SECRET_KEY` | 空 | UI 保存多个 AI Key 时使用 AES-GCM 加密 |
-| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | `api.deepseek.com` | 严格 AI 估价的额外出站主机 allowlist，逗号分隔 |
+| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | `api.deepseek.com,opencode.ai` | 严格 AI 估价的额外出站主机 allowlist，逗号分隔 |
 | `DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL` | `false` | 仅本地开发时允许 localhost HTTP；生产环境必须为 `false` |
 | `DOMAINHUNTER_QUERY_POLICY_FILE` | 空 | 查询策略 JSON 文件（优先于数据库设置） |
 | `DOMAINHUNTER_COOKIE_SECURE` | `auto` | `auto` / `true` / `false` |
@@ -385,7 +385,8 @@ P1 的高级条件以版本化 JSON 条件树编码进 URL，支持状态、TLD�
 确认状态、可信度、日期、注册商及可选标签/优先级，绝不包含 WHOIS/RDAP 原文、备注、
 通知配置、Token 或密码。模型返回的严格 JSON Schema 未通过时不会伪造估价。
 
-严格研究性估价优先从 `DOMAINHUNTER_AI_API_KEY` 读取；UI 保存 Key 需要
+严格研究性估价默认使用 `OpenAI Compatible · OpenCode Zen`、`https://opencode.ai/zen/v1` 与
+`deepseek-v4-flash-free`，优先从 `DOMAINHUNTER_AI_API_KEY` 读取；UI 保存 Key 需要
 `DOMAINHUNTER_SECRET_KEY`，数据库只保存 AES-GCM 密文。Base URL 默认仅 HTTPS，拒绝
 loopback、私有/链路本地、元数据、CGNAT 和组播地址，解析 DNS 后再次检查；
 `DOMAINHUNTER_AI_ALLOWED_HOSTS` 可增加自定义主机，只有显式
@@ -463,9 +464,11 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 5. 只重建 `DomainHunter` 服务，不触碰 who-dat、whois-domain-lookup、FRP 或其他项目。
 6. 验证 HTTP 200、容器健康、重启次数、OOM 状态、数据库完整性和 fatal 日志。
 
-2026-08-12 的实例发布版本为 `v2.7.0-ui-20260812`：包含编辑式工作台 UI、浅色/深色
+2026-08-13 的实例发布版本为 `v2.8.0-ai-report-20260813`：包含编辑式工作台 UI、浅色/深色
 主题、桌面侧栏、移动端导航，以及 `.im` 使用 WHOIS.LS、`.do` 使用结构化 fallback
-时跳过通用 `whois-domain-lookup` 的路由修复。此次发布只重建 `DomainHunter` 容器，
+时跳过通用 `whois-domain-lookup` 的路由修复；AI 默认接入 OpenCode Zen 的
+`deepseek-v4-flash-free`，并输出逐行的域名、评分、人民币价格评估和核心分析报告。
+Spaceship / Dynadot 注册商查询使用官方新版直达 URL。此次发布只重建 `DomainHunter` 容器，
 保留 545 个域名和现有 SQLite 数据；who-dat、whois-domain-lookup、Bark、FRP 与其他
 Compose 项目不参与重建。
 

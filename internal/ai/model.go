@@ -123,12 +123,15 @@ type Valuation struct {
 	Model              string      `json:"model"`
 	PromptVersion      string      `json:"prompt_version"`
 	InputFingerprint   string      `json:"input_fingerprint"`
+	Score              int         `json:"score"`
 	QualityScore       int         `json:"quality_score"`
 	LiquidityScore     int         `json:"liquidity_score"`
 	RiskLevel          string      `json:"risk_level"`
 	Confidence         string      `json:"confidence"`
 	IndicativeValueUSD *ValueRange `json:"indicative_value_usd,omitempty"`
+	PriceEvaluationCNY *ValueRange `json:"price_evaluation_cny,omitempty"`
 	Summary            string      `json:"summary"`
+	CoreAnalysis       string      `json:"core_analysis"`
 	Strengths          []string    `json:"strengths"`
 	Risks              []string    `json:"risks"`
 	DataGaps           []string    `json:"data_gaps"`
@@ -195,12 +198,12 @@ func DefaultPolicy() Policy {
 
 func DefaultDeepSeekProfile() ProfileInput {
 	return ProfileInput{
-		Name:            "DeepSeek 官方 · 研究性估价",
-		Provider:        ProviderDeepSeek,
+		Name:            "OpenAI Compatible · OpenCode Zen",
+		Provider:        ProviderOpenAICompatible,
 		Enabled:         true,
 		IsDefault:       true,
-		BaseURL:         "https://api.deepseek.com",
-		Model:           "deepseek-v4-flash",
+		BaseURL:         "https://opencode.ai/zen/v1",
+		Model:           "deepseek-v4-flash-free",
 		ThinkingType:    ThinkingDisabled,
 		ReasoningEffort: ReasoningLow,
 		TimeoutSeconds:  30,

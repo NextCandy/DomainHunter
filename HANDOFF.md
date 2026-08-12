@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-12 · 严格 AI 估价与工作台 UI 已部署 · Pi 版本 `v2.6.0-strict-ai-20260812-d346a1f`
+> 最后更新：2026-08-13 · AI 鉴定报告、注册商直达与 OpenCode Zen 配置已部署 · Pi 版本 `v2.8.0-ai-report-20260813`
 
 ## 本次目标
 
@@ -35,7 +35,7 @@
 | P1 AI | 兼容版多 Provider 配置档案、自动化、AES-GCM Key 密文、SSRF 防护、持久化 Job/租约/重试/限额/TTL 估价 |
 | 严格 AI 估价 | DeepSeek 研究性估价、最小化输入、严格 JSON schema、复核门禁、档案级并发、缓存、配额和审计 |
 | 复核与健康 | 低可信度/未知/冲突/过期证据复核，Provider 错误率、P50/P95、连续失败和离线原因 |
-| UI 美化 | 工作台行动队列、复核徽标、浅色/深色主题、响应式估价面板与四区 DeepSeek 配置表单 |
+| UI 美化 | 工作台行动队列、复核徽标、浅色/深色主题、响应式估价面板与四行 AI 鉴定报告 |
 | P1 自动化 | 触发器/条件/白名单动作/冷却/每日上限、Dry-run、事件桥接、幂等运行审计与批量审计 |
 | 文档与图标 | README / ARCHITECTURE.md / MIGRATION.md / 本文件；`web/public/DomainHunter.svg` 与 `.png` |
 | 改名 | 仓库、镜像、树莓派部署目录与 compose 项目名统一为 DomainHunter |
@@ -82,6 +82,7 @@ Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动
 | 012 | `ai_provider_profiles` 多 AI 配置档案，并把新安装默认项设为 OpenAI Compatible |
 | 013 | 严格研究性估价的 `ai_profiles` / `ai_valuation_jobs` / `ai_domain_valuations_v2` / `ai_audit_log` |
 | 014 | `domain_results.confidence` 可信度字段 |
+| 015 | 严格 AI 人民币价格区间与核心分析字段 |
 
 因此 **v1 二进制仍能读 v2 的库**；迁移 010–014 仅新增表和索引/字段，旧字段与旧 API 不变，
 回滚程序不会删除 P1 数据。

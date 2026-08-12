@@ -199,6 +199,10 @@ func (s *Server) writeAIError(w http.ResponseWriter, r *http.Request, err error)
 		s.writeError(w, r, http.StatusUnprocessableEntity, "当前域名状态或证据不足，暂不能加入 AI 估价")
 	case errors.Is(err, ai.ErrQuotaExceeded):
 		s.writeError(w, r, http.StatusTooManyRequests, "今日估价额度已用完，请稍后重试或调整额度")
+	case errors.Is(err, ai.ErrProviderAuth):
+		s.writeError(w, r, http.StatusUnprocessableEntity, "默认 AI 的 API Key 无效或已过期，请在 AI 与自动化中更新 Key")
+	case errors.Is(err, ai.ErrProviderConfig):
+		s.writeError(w, r, http.StatusUnprocessableEntity, "默认 AI 模型或接口地址无效，请在 AI 与自动化中检查配置")
 	case errors.Is(err, ai.ErrSecretKeyRequired):
 		s.writeError(w, r, http.StatusUnprocessableEntity, "未配置可用的 AI API Key 或应用级加密主密钥")
 	case errors.Is(err, ai.ErrUnsafeBaseURL):

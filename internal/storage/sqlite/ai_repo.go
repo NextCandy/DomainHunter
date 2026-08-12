@@ -17,6 +17,14 @@ type AIRepo struct{ db *DB }
 
 func NewAIRepo(db *DB) *AIRepo { return &AIRepo{db: db} }
 
+const valuationSelect = `SELECT v.id,v.domain,v.profile_id,COALESCE(p.name,''),v.provider,v.model,v.prompt_version,v.input_fingerprint,
+	v.quality_score,v.liquidity_score,v.risk_level,v.confidence,
+	v.indicative_value_low,v.indicative_value_high,v.currency,
+	v.price_evaluation_low,v.price_evaluation_high,v.price_evaluation_currency,
+	v.summary,v.core_analysis,v.strengths_json,v.risks_json,v.data_gaps_json,v.evidence_used_json,
+	v.status_guard,v.disclaimer,v.created_at,v.expires_at
+	FROM ai_domain_valuations_v2 v LEFT JOIN ai_profiles p ON p.id=v.profile_id`
+
 const aiProfileColumns = `id,name,provider,enabled,is_default,base_url,base_url_host,model,
 	api_key_ciphertext,api_key_source,thinking_type,reasoning_effort,timeout_seconds,max_tokens,
 	concurrency,daily_limit,cache_ttl_hours,last_tested_at,last_test_latency_ms,last_error,created_at,updated_at`
@@ -251,7 +259,7 @@ func (r *AIRepo) GetJob(ctx context.Context, id string) (*ai.Job, error) {
 }
 
 func (r *AIRepo) GetFreshValuation(ctx context.Context, domain, profileID, fingerprint, promptVersion string, now time.Time) (*ai.Valuation, error) {
-	row := r.db.QueryRowContext(ctx, `SELECT v.id,v.domain,v.profile_id,COALESCE(p.name,''),v.provider,v.model,v.prompt_version,v.input_fingerprint,v.quality_score,v.liquidity_score,v.risk_level,v.confidence,v.indicative_value_low,v.indicative_value_high,v.currency,v.summary,v.strengths_json,v.risks_json,v.data_gaps_json,v.evidence_used_json,v.status_guard,v.disclaimer,v.created_at,v.expires_at FROM ai_domain_valuations_v2 v LEFT JOIN ai_profiles p ON p.id=v.profile_id WHERE lower(v.domain)=lower(?) AND v.profile_id=? AND v.input_fingerprint=? AND v.prompt_version=? AND (v.expires_at IS NULL OR v.expires_at>?) ORDER BY v.created_at DESC LIMIT 1`, domain, profileID, fingerprint, promptVersion, now)
+	row := r.db.QueryRowContext(ctx, valuationSelect+` WHERE lower(v.domain)=lower(?) AND v.profile_id=? AND v.input_fingerprint=? AND v.prompt_version=? AND (v.expires_at IS NULL OR v.expires_at>?) ORDER BY v.created_at DESC LIMIT 1`, domain, profileID, fingerprint, promptVersion, now)
 	valuation, err := scanValuation(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -340,12 +348,16 @@ func (r *AIRepo) CompleteJob(ctx context.Context, jobID string, valuation ai.Val
 	risks, _ := json.Marshal(valuation.Risks)
 	gaps, _ := json.Marshal(valuation.DataGaps)
 	evidence, _ := json.Marshal(valuation.EvidenceUsed)
-	var low, high any
+	var low, high, priceLow, priceHigh any
 	if valuation.IndicativeValueUSD != nil {
 		low = valuation.IndicativeValueUSD.Low
 		high = valuation.IndicativeValueUSD.High
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO ai_domain_valuations_v2(id,domain,job_id,profile_id,provider,model,prompt_version,input_fingerprint,quality_score,liquidity_score,risk_level,confidence,indicative_value_low,indicative_value_high,currency,summary,strengths_json,risks_json,data_gaps_json,evidence_used_json,status_guard,disclaimer,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, valuation.ID, valuation.Domain, jobID, valuation.ProfileID, valuation.Provider, valuation.Model, valuation.PromptVersion, valuation.InputFingerprint, valuation.QualityScore, valuation.LiquidityScore, valuation.RiskLevel, valuation.Confidence, low, high, "USD", valuation.Summary, string(strengths), string(risks), string(gaps), string(evidence), valuation.StatusGuard, valuation.Disclaimer, valuation.CreatedAt, valuation.ExpiresAt)
+	if valuation.PriceEvaluationCNY != nil {
+		priceLow = valuation.PriceEvaluationCNY.Low
+		priceHigh = valuation.PriceEvaluationCNY.High
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO ai_domain_valuations_v2(id,domain,job_id,profile_id,provider,model,prompt_version,input_fingerprint,quality_score,liquidity_score,risk_level,confidence,indicative_value_low,indicative_value_high,currency,price_evaluation_low,price_evaluation_high,price_evaluation_currency,summary,core_analysis,strengths_json,risks_json,data_gaps_json,evidence_used_json,status_guard,disclaimer,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, valuation.ID, valuation.Domain, jobID, valuation.ProfileID, valuation.Provider, valuation.Model, valuation.PromptVersion, valuation.InputFingerprint, valuation.QualityScore, valuation.LiquidityScore, valuation.RiskLevel, valuation.Confidence, low, high, "USD", priceLow, priceHigh, "CNY", valuation.Summary, valuation.CoreAnalysis, string(strengths), string(risks), string(gaps), string(evidence), valuation.StatusGuard, valuation.Disclaimer, valuation.CreatedAt, valuation.ExpiresAt)
 	if err != nil {
 		return err
 	}
@@ -388,7 +400,7 @@ func (r *AIRepo) Audit(ctx context.Context, eventType, domain, profileID, jobID,
 }
 
 func (r *AIRepo) attachResult(ctx context.Context, job *ai.Job) error {
-	row := r.db.QueryRowContext(ctx, `SELECT v.id,v.domain,v.profile_id,COALESCE(p.name,''),v.provider,v.model,v.prompt_version,v.input_fingerprint,v.quality_score,v.liquidity_score,v.risk_level,v.confidence,v.indicative_value_low,v.indicative_value_high,v.currency,v.summary,v.strengths_json,v.risks_json,v.data_gaps_json,v.evidence_used_json,v.status_guard,v.disclaimer,v.created_at,v.expires_at FROM ai_domain_valuations_v2 v LEFT JOIN ai_profiles p ON p.id=v.profile_id WHERE v.job_id=?`, job.ID)
+	row := r.db.QueryRowContext(ctx, valuationSelect+` WHERE v.job_id=?`, job.ID)
 	value, err := scanValuation(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
@@ -402,15 +414,22 @@ func (r *AIRepo) attachResult(ctx context.Context, job *ai.Job) error {
 
 func scanValuation(scanner interface{ Scan(...any) error }) (ai.Valuation, error) {
 	var v ai.Valuation
-	var low, high sql.NullInt64
+	var low, high, priceLow, priceHigh sql.NullInt64
 	var expires sql.NullTime
-	var strengths, risks, gaps, evidence, currency string
-	err := scanner.Scan(&v.ID, &v.Domain, &v.ProfileID, &v.ProfileName, &v.Provider, &v.Model, &v.PromptVersion, &v.InputFingerprint, &v.QualityScore, &v.LiquidityScore, &v.RiskLevel, &v.Confidence, &low, &high, &currency, &v.Summary, &strengths, &risks, &gaps, &evidence, &v.StatusGuard, &v.Disclaimer, &v.CreatedAt, &expires)
+	var strengths, risks, gaps, evidence, currency, priceCurrency string
+	err := scanner.Scan(&v.ID, &v.Domain, &v.ProfileID, &v.ProfileName, &v.Provider, &v.Model, &v.PromptVersion, &v.InputFingerprint, &v.QualityScore, &v.LiquidityScore, &v.RiskLevel, &v.Confidence, &low, &high, &currency, &priceLow, &priceHigh, &priceCurrency, &v.Summary, &v.CoreAnalysis, &strengths, &risks, &gaps, &evidence, &v.StatusGuard, &v.Disclaimer, &v.CreatedAt, &expires)
 	if err != nil {
 		return v, err
 	}
 	if low.Valid && high.Valid {
 		v.IndicativeValueUSD = &ai.ValueRange{Low: low.Int64, High: high.Int64, Currency: currency}
+	}
+	v.Score = v.QualityScore
+	if priceLow.Valid && priceHigh.Valid {
+		if priceCurrency == "" {
+			priceCurrency = "CNY"
+		}
+		v.PriceEvaluationCNY = &ai.ValueRange{Low: priceLow.Int64, High: priceHigh.Int64, Currency: priceCurrency}
 	}
 	_ = json.Unmarshal([]byte(strengths), &v.Strengths)
 	_ = json.Unmarshal([]byte(risks), &v.Risks)

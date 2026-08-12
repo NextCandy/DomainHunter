@@ -12,7 +12,12 @@ import (
 	"time"
 )
 
-const PromptVersion = "domainhunter.ai-valuation.v1"
+const PromptVersion = "domainhunter.ai-valuation.v2-report"
+
+var (
+	ErrProviderAuth   = errors.New("AI Provider 认证失败")
+	ErrProviderConfig = errors.New("AI Provider 配置无效")
+)
 
 type SanitizedInput struct {
 	Domain  string `json:"domain"`
@@ -40,13 +45,18 @@ type SanitizedInput struct {
 }
 
 type Output struct {
-	SchemaVersion      string      `json:"schema_version"`
-	Summary            string      `json:"summary"`
-	QualityScore       int         `json:"quality_score"`
+	SchemaVersion string `json:"schema_version"`
+	Summary       string `json:"summary"`
+	// Score is the single user-facing domain score. QualityScore remains accepted
+	// for compatibility with older test doubles, but the v2 prompt asks for score.
+	Score              int         `json:"score"`
+	QualityScore       int         `json:"quality_score,omitempty"`
 	LiquidityScore     int         `json:"liquidity_score"`
 	RiskLevel          string      `json:"risk_level"`
 	Confidence         string      `json:"confidence"`
 	IndicativeValueUSD *ValueRange `json:"indicative_value_usd"`
+	PriceEvaluationCNY *ValueRange `json:"price_evaluation_cny"`
+	CoreAnalysis       string      `json:"core_analysis"`
 	Strengths          []string    `json:"strengths"`
 	Risks              []string    `json:"risks"`
 	DataGaps           []string    `json:"data_gaps"`
@@ -64,17 +74,19 @@ type DeepSeekCompatibleClient struct {
 }
 
 func SystemPrompt() string {
-	return `你是 DomainHunter 的“域名研究性估价分析器”。任务是根据给定的最小化结构化事实，输出面向运营排序的研究性评估；不是交易估值、购买建议、投资建议、法律意见，也不保证可注册或可成交。
+	return `你是域名鉴定师，拥有丰富的鉴定经验，能根据域名市场价格和各渠道常见交易价格区间进行价格鉴定及用途鉴定。你正在为 DomainHunter 生成研究性域名估价报告；不是交易估值、购买建议、投资建议、法律意见，也不保证可注册或可成交。
 
 硬性规则：
 1. status、confidence 和 review 是系统事实，AI 不得改变、推测或强化域名可注册结论；review_required=true 时必须将数据需复核列为主要限制。
-2. 不得使用外部浏览、未提供的实时市场数据、商标数据库或隐含可比成交信息。
-3. 只能基于输入字段作条件性推断；数据不足时降低 confidence 并列入 data_gaps。
-4. 不得提供购买、竞价、投资或法律行动指令。
-5. 只输出一个合法 JSON 对象，不输出 Markdown 或额外文字。
-6. indicative_value_usd 仅能作为宽泛研究性指示区间；数据不足时为 null。
+2. 结合域名长度、字符结构、语义、记忆点、前缀习惯、后缀适用性、用途和市场需求进行判断。可以使用你掌握的行业常识和常见交易区间，但不得编造某一笔具体成交、实时挂牌价、商标结论或未提供的事实。
+3. 若检测到域名后缀的谐音与前缀能够拼成一个完整的词，将其按完整词语分析；这个“按全称理解”的判断不额外抬高或压低价格，价格仍由整体稀缺性、商业用途和市场需求决定。
+4. 只能基于输入字段作条件性推断；数据不足时降低 confidence、扩大价格区间并列入 data_gaps。
+5. 不得提供购买、竞价、投资或法律行动指令。
+6. 只输出一个合法 JSON 对象，不输出 Markdown、列表符号或额外文字。
+7. price_evaluation_cny 必须是人民币宽泛研究性区间，currency 必须为 CNY；即使信息有限也要给出保守区间，不要返回 null。
+8. core_analysis 必须是一段中文综合分析，说明域名组成、语义、记忆点、后缀适用性、前缀习惯、适合用途、市场需求和溢价空间；不得声称有未提供的具体成交证据。
 
-返回字段必须是 schema_version、summary、quality_score、liquidity_score、risk_level、confidence、indicative_value_usd、strengths、risks、data_gaps、evidence_used、status_guard、disclaimer。`
+返回字段必须包含 schema_version、summary、score、liquidity_score、risk_level、confidence、price_evaluation_cny、core_analysis、strengths、risks、data_gaps、evidence_used、status_guard、disclaimer；不要返回未声明字段。`
 }
 
 func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile, apiKey string, input SanitizedInput) (Output, int64, error) {
@@ -86,10 +98,10 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 		return Output{}, 0, err
 	}
 	content, err := json.Marshal(map[string]any{
-		"task":  "research_only_domain_valuation",
+		"task":  "domain_expert_valuation_report",
 		"input": input,
 		"output_constraints": map[string]any{
-			"language": "zh-CN", "json_only": true, "max_strengths": 3, "max_risks": 3, "max_data_gaps": 3,
+			"language": "zh-CN", "json_only": true, "report_order": []string{"domain", "score", "price_evaluation", "core_analysis"}, "max_strengths": 3, "max_risks": 3, "max_data_gaps": 3,
 		},
 	})
 	if err != nil {
@@ -136,6 +148,16 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 		return Output{}, latency, fmt.Errorf("读取 AI 响应失败: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		switch resp.StatusCode {
+		case http.StatusUnauthorized:
+			return Output{}, latency, fmt.Errorf("%w：默认 AI 的 API Key 无效或已过期，请在 AI 与自动化中更新 Key", ErrProviderAuth)
+		case http.StatusForbidden:
+			return Output{}, latency, fmt.Errorf("%w：默认 AI API Key 没有调用权限，请检查 DeepSeek 账户权限或更换 Key", ErrProviderAuth)
+		case http.StatusTooManyRequests:
+			return Output{}, latency, errors.New("默认 AI 请求额度已用完或触发限流，请稍后重试")
+		case http.StatusNotFound:
+			return Output{}, latency, fmt.Errorf("%w：默认 AI 模型或接口地址不存在，请检查模型配置", ErrProviderConfig)
+		}
 		return Output{}, latency, fmt.Errorf("AI 服务返回 HTTP %d", resp.StatusCode)
 	}
 	var decoded struct {
@@ -175,11 +197,23 @@ func ValidateOutput(output Output) error {
 	if strings.TrimSpace(output.Summary) == "" || len([]rune(output.Summary)) > 80 {
 		return errors.New("AI 输出 summary 无效")
 	}
-	if output.QualityScore < 0 || output.QualityScore > 100 || output.LiquidityScore < 0 || output.LiquidityScore > 100 {
+	if output.Score == 0 && output.QualityScore > 0 {
+		output.Score = output.QualityScore
+	}
+	if output.Score < 0 || output.Score > 100 || output.QualityScore < 0 || output.QualityScore > 100 || output.LiquidityScore < 0 || output.LiquidityScore > 100 {
 		return errors.New("AI 输出评分超出 0–100 范围")
 	}
 	if !oneOf(output.RiskLevel, "low", "medium", "high") || !oneOf(output.Confidence, "low", "medium", "high") {
 		return errors.New("AI 输出枚举无效")
+	}
+	if output.PriceEvaluationCNY == nil || output.PriceEvaluationCNY.Currency != "CNY" || output.PriceEvaluationCNY.Low < 0 || output.PriceEvaluationCNY.High < output.PriceEvaluationCNY.Low {
+		return errors.New("AI 输出人民币价格区间无效")
+	}
+	if output.PriceEvaluationCNY.High > 1_000_000_000 {
+		return errors.New("AI 输出人民币价格区间过大")
+	}
+	if strings.TrimSpace(output.CoreAnalysis) == "" || len([]rune(output.CoreAnalysis)) > 1200 {
+		return errors.New("AI 输出核心分析无效")
 	}
 	if output.IndicativeValueUSD != nil {
 		if output.IndicativeValueUSD.Currency != "USD" || output.IndicativeValueUSD.Low < 0 || output.IndicativeValueUSD.High < output.IndicativeValueUSD.Low {

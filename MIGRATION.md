@@ -51,6 +51,7 @@ v2 引入了 `schema_migrations` 表并按版本执行迁移：
 | 012 | ai_provider_profiles | 兼容版 P1 AI Provider 档案 |
 | 013 | strict_research_valuation_v2 | 严格研究性估价档案、Job、结果与审计 |
 | 014 | domain_result_confidence | 为域名查询结果补充可信度字段 |
+| 015 | strict_valuation_report_fields | AI 人民币价格区间与核心分析字段 |
 
 **全部是新增，没有任何列被重命名或删除**，`domains` / `domain_results` /
 `notification_history` / `app_settings` 的原有列语义完全不变。
@@ -106,7 +107,7 @@ P1 AI 变量没有旧版别名：
 | --- | --- |
 | `DOMAINHUNTER_AI_API_KEY` | 优先级最高的环境 Key，不写入 SQLite |
 | `DOMAINHUNTER_SECRET_KEY` | UI 保存 Key 时用于 AES-GCM 加密的主密钥；不要提交到仓库 |
-| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | 手动 Base URL 的主机 allowlist；默认允许 `api.deepseek.com` |
+| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | 手动 Base URL 的主机 allowlist；默认允许 `api.deepseek.com,opencode.ai` |
 | `DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL` | 严格估价仅设为 `true` 才允许受控本机 HTTP 开发端点；生产环境必须保持 `false` |
 | `DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL` | 旧版 P1 AI 的兼容变量；严格估价不读取 |
 
@@ -236,6 +237,6 @@ docker compose up -d
 [ ] 随便点一个域名"立即检查"，能返回结果
 [ ] 设置页能读到原来的 SMTP / Telegram 配置
 [ ] docker logs 里没有 migration 相关报错
-[ ] P1 迁移 011、严格估价迁移 013/014 已应用，`PRAGMA integrity_check` 返回 `ok`
+[ ] P1 迁移 011、严格估价迁移 013–015 已应用，`PRAGMA integrity_check` 返回 `ok`
 [ ] 未登录访问 P1 受保护接口返回 401
 ```

@@ -5,7 +5,7 @@ import { formatDateTime, formatRelative } from "../../../lib/format";
 import { ErrorNotice, Pill, Spinner, cx, useToast } from "../../../components/ui";
 import { useDomainValuation } from "../hooks/useDomainValuation";
 import {
-  formatUSD,
+  formatCNY,
   VALUATION_CONFIDENCE_LABELS,
   VALUATION_RISK_LABELS,
   VALUATION_STATE_LABELS,
@@ -69,8 +69,8 @@ export function DomainValuationPanel({
             <span className="mono text-[11px] font-semibold tracking-[0.12em] text-accent">AI RESEARCH</span>
             {job && <JobStatePill state={job.state} />}
           </div>
-          <h3 className="mt-1 text-[14px] font-semibold text-ink">DeepSeek 域名研究性估价</h3>
-          <p className="mt-1 text-[12px] leading-5 text-ink-muted">基于最小化结构化事实生成排序辅助；不会改变查询状态或可注册结论。</p>
+          <h3 className="mt-1 text-[14px] font-semibold text-ink">AI 域名鉴定报告</h3>
+          <p className="mt-1 text-[12px] leading-5 text-ink-muted">默认使用 DeepSeek；输出评分、人民币价格区间和用途分析，不改变查询状态或可注册结论。</p>
         </div>
         <button
           type="button"
@@ -162,8 +162,8 @@ function ValuationJobContent({
     return (
       <div className="border border-red-200 bg-red-50/60 p-3 dark:border-red-900 dark:bg-red-950/20">
         <p className="text-[13px] font-semibold text-red-800 dark:text-red-200">{job.state === "failed" ? "本次估价未完成" : "估价任务已取消"}</p>
-        <p className="mt-1 text-[12px] leading-5 text-red-700 dark:text-red-300">{job.error_message || "没有生成可展示的估价结果。"}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="btn h-8 text-[12px]" disabled={pending || !allowRetry} onClick={() => void onStart(false)}>重新加入队列</button>{allowRetry && <button type="button" className="btn h-8 text-[12px]" disabled={pending} onClick={() => void onStart(true)}>忽略缓存重试</button>}</div>
+        <p className="mt-1 whitespace-pre-line text-[12px] leading-5 text-red-700 dark:text-red-300">{job.error_message || "没有生成可展示的估价结果。"}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="btn h-8 text-[12px]" disabled={pending || !allowRetry || job.error_code === "provider_auth" || job.error_code === "provider_config"} onClick={() => void onStart(false)}>重新加入队列</button>{allowRetry && job.error_code !== "provider_auth" && job.error_code !== "provider_config" && <button type="button" className="btn h-8 text-[12px]" disabled={pending} onClick={() => void onStart(true)}>忽略缓存重试</button>}</div>
       </div>
     );
   }
@@ -179,7 +179,7 @@ function InProgressState({ job, pending, onCancel }: { job: ValuationJob; pendin
   const quota = job.quota;
   return (
     <div className="border border-accent/25 bg-accent-soft/55 p-3">
-      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Spinner /><span className="text-[13px] font-semibold text-ink">{job.state === "running" ? "正在分析最小化证据…" : job.state === "deferred" ? "等待额度或重试窗口" : "已加入估价队列"}</span></div><span className="mono text-[11px] text-accent">{job.cached ? "CACHE HIT" : job.state.toUpperCase()}</span></div>
+      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Spinner /><span className="text-[13px] font-semibold text-ink">{job.state === "running" ? "正在生成域名鉴定报告…" : job.state === "deferred" ? "等待额度或重试窗口" : "已加入估价队列"}</span></div><span className="mono text-[11px] text-accent">{job.cached ? "CACHE HIT" : job.state.toUpperCase()}</span></div>
       <div className="mt-3 grid gap-2 border-t border-accent/20 pt-2 text-[12px] text-ink-muted sm:grid-cols-2"><span>入队：{formatRelative(job.queued_at)}</span>{quota && <span className="sm:text-right">今日剩余：{quota.remaining_today} / {quota.daily_limit}</span>}</div>
       {job.retry_after && <p className="mt-2 text-[12px] text-ink-muted">预计重试：{formatDateTime(job.retry_after)}</p>}
       {job.state !== "running" && <button type="button" className="btn mt-3 h-8 text-[12px]" disabled={pending} onClick={() => void onCancel()}>取消任务</button>}
@@ -188,17 +188,29 @@ function InProgressState({ job, pending, onCancel }: { job: ValuationJob; pendin
 }
 
 function ValuationResultView({ valuation, compact, showDetails, onToggleDetails, onRefresh, pending, cached }: { valuation: DomainValuation; compact: boolean; showDetails: boolean; onToggleDetails: () => void; onRefresh: () => void; pending: boolean; cached: boolean }) {
+  const score = valuation.score ?? valuation.quality_score;
   return (
     <div>
-      <div className="grid gap-3 border-b border-line pb-3 sm:grid-cols-[1.25fr_.75fr]">
-        <div><div className="mono text-[11px] tracking-[0.12em] text-accent">RESEARCH INDICATIVE RANGE</div><div className="mt-1 text-[24px] font-semibold tracking-tight text-ink">{formatUSD(valuation.indicative_value_usd)}</div><p className="mt-2 text-[12px] leading-5 text-ink-muted">{valuation.summary}</p></div>
-        <div className="grid grid-cols-2 border-l border-line pl-3"><ScoreCell label="质量" score={valuation.quality_score} /><ScoreCell label="流动性" score={valuation.liquidity_score} /></div>
+      <div className="ai-report" aria-label={`${valuation.domain} 域名鉴定报告`}>
+        <ReportLine label="域名" value={valuation.domain} mono />
+        <ReportLine label="评分" value={`${score} 分`} emphasis />
+        <ReportLine label="价格评估" value={formatCNY(valuation.price_evaluation_cny)} emphasis />
+        <ReportLine label="核心分析" value={valuation.core_analysis || valuation.summary} multiline />
       </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 border-y border-line py-2 sm:grid-cols-4"><ScoreCell label="评分" score={score} /><ScoreCell label="流动性" score={valuation.liquidity_score} /><MetricPill label="风险" value={VALUATION_RISK_LABELS[valuation.risk_level]} /><MetricPill label="可信度" value={VALUATION_CONFIDENCE_LABELS[valuation.confidence]} /></div>
       <div className="mt-3 flex flex-wrap gap-1.5"><Pill>风险 {VALUATION_RISK_LABELS[valuation.risk_level]}</Pill><Pill>输入充分度 {VALUATION_CONFIDENCE_LABELS[valuation.confidence]}</Pill><Pill>{valuation.profile_name} · {valuation.model}</Pill>{cached && <Pill title="命中相同输入与 Prompt 版本的有效结果">缓存结果</Pill>}</div>
       {!compact || showDetails ? <ResultDetails valuation={valuation} /> : null}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3"><button type="button" className="text-[12px] font-medium text-accent hover:underline" onClick={onToggleDetails}>{showDetails ? "收起研究依据" : "展开研究依据"}</button><button type="button" className="btn h-8 text-[12px]" disabled={pending} onClick={onRefresh}>忽略缓存重新估价</button></div>
     </div>
   );
+}
+
+function ReportLine({ label, value, mono = false, emphasis = false, multiline = false }: { label: string; value: string; mono?: boolean; emphasis?: boolean; multiline?: boolean }) {
+  return <div className={cx("ai-report-line", multiline && "ai-report-line-analysis")}><span className="ai-report-label">{label}</span><span className={cx("ai-report-value", mono && "mono", emphasis && "ai-report-emphasis", multiline && "ai-report-multiline")}>{value}</span></div>;
+}
+
+function MetricPill({ label, value }: { label: string; value: string }) {
+  return <div className="rounded border border-line bg-surface-muted px-2 py-1 text-[11px]"><span className="text-ink-faint">{label}</span><strong className="ml-1 text-ink">{value}</strong></div>;
 }
 
 function ScoreCell({ label, score }: { label: string; score: number }) {
