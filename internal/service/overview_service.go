@@ -14,14 +14,22 @@ import (
 
 // OverviewItem 概览页里的一行域名摘要
 type OverviewItem struct {
-	Domain     string        `json:"domain"`
-	Status     domain.Status `json:"status"`
-	OldStatus  domain.Status `json:"old_status,omitempty"`
-	Registrar  string        `json:"registrar,omitempty"`
-	ExpiryAt   *time.Time    `json:"expiry_at,omitempty"`
-	Provider   string        `json:"provider,omitempty"`
-	ObservedAt *time.Time    `json:"observed_at,omitempty"`
-	Message    string        `json:"message,omitempty"`
+	Domain     string              `json:"domain"`
+	Status     domain.Status       `json:"status"`
+	OldStatus  domain.Status       `json:"old_status,omitempty"`
+	Registrar  string              `json:"registrar,omitempty"`
+	ExpiryAt   *time.Time          `json:"expiry_at,omitempty"`
+	Provider   string              `json:"provider,omitempty"`
+	ObservedAt *time.Time          `json:"observed_at,omitempty"`
+	Message    string              `json:"message,omitempty"`
+	Review     *domain.ReviewState `json:"review,omitempty"`
+}
+
+type OverviewActionCounts struct {
+	Available   int `json:"available"`
+	DropWindow  int `json:"drop_window"`
+	RenewalRisk int `json:"renewal_risk"`
+	Review      int `json:"review"`
 }
 
 // Overview 概览页数据
@@ -35,6 +43,7 @@ type Overview struct {
 	Providers       []query.ProviderHealth `json:"providers"`
 	Monitor         map[string]any         `json:"monitor"`
 	History         map[string]int64       `json:"history"`
+	ActionCounts    OverviewActionCounts   `json:"action_counts"`
 }
 
 // OverviewTrendPoint 是概览趋势图的一天数据。
@@ -125,25 +134,42 @@ func (s *OverviewService) Build(ctx context.Context) (*Overview, error) {
 	for _, entry := range entries {
 		res, ok := results[strings.ToLower(entry.Name)]
 		if !ok {
+			overview.ActionCounts.Review++
 			continue
+		}
+		res.Priority = entry.Priority
+		res.Review = domain.BuildReviewState(&res, now)
+		if res.Review != nil && res.Review.Required {
+			overview.ActionCounts.Review++
+		}
+		if res.Review == nil || !res.Review.Required {
+			if res.Confidence == domain.ConfidenceHigh && res.Status == domain.StatusAvailable {
+				overview.ActionCounts.Available++
+			}
+			if res.Confidence == domain.ConfidenceHigh && domain.IsDropStatus(res.Status) {
+				overview.ActionCounts.DropWindow++
+			}
+		}
+		if (res.Review == nil || !res.Review.Required) && res.ExpiryDate != nil && res.ExpiryDate.After(now) && res.ExpiryDate.Before(now.AddDate(0, 0, 7)) {
+			overview.ActionCounts.RenewalRisk++
 		}
 		switch {
 		case res.ExpiryDate != nil && res.ExpiryDate.After(now) && res.ExpiryDate.Before(horizon):
 			overview.UpcomingExpiry = append(overview.UpcomingExpiry, OverviewItem{
-				Domain: res.Name, Status: res.Status, Registrar: res.Registrar, ExpiryAt: res.ExpiryDate,
+				Domain: res.Name, Status: res.Status, Registrar: res.Registrar, ExpiryAt: res.ExpiryDate, Review: res.Review,
 			})
 		}
 		if res.Status == domain.StatusAvailable {
 			checked := res.LastChecked
 			overview.RecentAvailable = append(overview.RecentAvailable, OverviewItem{
-				Domain: res.Name, Status: res.Status, Provider: res.QueryMethod, ObservedAt: &checked,
+				Domain: res.Name, Status: res.Status, Provider: res.QueryMethod, ObservedAt: &checked, Review: res.Review,
 			})
 		}
 		if res.Status == domain.StatusError {
 			checked := res.LastChecked
 			overview.QueryFailures = append(overview.QueryFailures, OverviewItem{
 				Domain: res.Name, Status: res.Status, Provider: res.QueryMethod,
-				ObservedAt: &checked, Message: res.ErrorMessage,
+				ObservedAt: &checked, Message: res.ErrorMessage, Review: res.Review,
 			})
 		}
 	}
@@ -164,12 +190,14 @@ func (s *OverviewService) Build(ctx context.Context) (*Overview, error) {
 	if changes, err := s.observations.ListRecentChanges(ctx, 15); err == nil {
 		for _, change := range changes {
 			observed := change.ObservedAt
+			changeInfo := &domain.Info{Name: change.Domain, Status: change.Status, Registrar: change.Registrar, LastChecked: change.ObservedAt, QueryMethod: change.Provider}
 			overview.RecentChanges = append(overview.RecentChanges, OverviewItem{
 				Domain:     change.Domain,
 				Status:     change.Status,
 				Registrar:  change.Registrar,
 				Provider:   change.Provider,
 				ObservedAt: &observed,
+				Review:     domain.BuildReviewState(changeInfo, now),
 			})
 		}
 	}

@@ -14,12 +14,24 @@ services:
     environment:
       TZ: Asia/Shanghai
       DOMAINHUNTER_RDAP_BOOTSTRAP_URL: https://data.iana.org/rdap/dns.json
+      DOMAINHUNTER_WHO_DAT_URL: http://host.docker.internal:59090
+      DOMAINHUNTER_WHO_DAT_API_KEY: ${DOMAINHUNTER_WHO_DAT_API_KEY:-}
+      DOMAINHUNTER_VERCEL_WHO_DAT_URL: ${DOMAINHUNTER_VERCEL_WHO_DAT_URL:-https://rdap.re}
+      DOMAINHUNTER_RDAP_ORG_URL: ${DOMAINHUNTER_RDAP_ORG_URL:-https://rdap.org}
       DOMAINHUNTER_WHOIS_FALLBACK_URL: http://host.docker.internal:12121/api/
       DOMAINHUNTER_WHOIS_FALLBACK_TLDS: im,do
       DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT: "20"
       DOMAINHUNTER_WHOIS_LS_URL: https://whois.ls/json/
       DOMAINHUNTER_WHOIS_LS_TLDS: im
       DOMAINHUNTER_WHOIS_LS_TIMEOUT: "20s"
+      # P1 AI 默认关闭；生产 Key/SECRET_KEY 通过 Pi 的环境管理注入，不提交到仓库。
+      DOMAINHUNTER_AI_API_KEY: ${DOMAINHUNTER_AI_API_KEY:-}
+      DOMAINHUNTER_SECRET_KEY: ${DOMAINHUNTER_SECRET_KEY:-}
+      # 严格 AI 估价默认允许官方 DeepSeek 与 OpenCode Zen；其他网关必须显式加入 allowlist。
+      DOMAINHUNTER_AI_ALLOWED_HOSTS: ${DOMAINHUNTER_AI_ALLOWED_HOSTS:-api.deepseek.com,opencode.ai}
+      DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL: ${DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL:-false}
+      # 旧版 P1 AI 兼容变量，严格估价不读取它。
+      DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL: ${DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL:-false}
       DOMAINHUNTER_COOKIE_SECURE: auto
     extra_hosts:
       - host.docker.internal:host-gateway

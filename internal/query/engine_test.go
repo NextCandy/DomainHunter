@@ -290,6 +290,58 @@ func TestPlanRespectsExplicitTLDOrder(t *testing.T) {
 	}
 }
 
+func TestDefaultPlanUsesProductFallbackOrder(t *testing.T) {
+	registryOf := NewRegistry(
+		provider(ProviderWhoDat, domain.StatusUnknown),
+		provider(ProviderWhoisDomainLookup, domain.StatusUnknown),
+		provider(ProviderVercelWhoDat, domain.StatusUnknown),
+		provider(ProviderRDAP, domain.StatusUnknown),
+		provider(ProviderRdapOrg, domain.StatusUnknown),
+		provider(ProviderAIFallback, domain.StatusUnknown),
+	)
+
+	steps := NewPolicy(Config{}).Plan(context.Background(), Request{Domain: "example.com", TLD: "com"}, registryOf)
+	want := []string{ProviderWhoDat, ProviderWhoisDomainLookup, ProviderVercelWhoDat, ProviderRDAP, ProviderRdapOrg, ProviderAIFallback}
+	if len(steps) != len(want) {
+		t.Fatalf("默认策略步骤数量不对: got %d want %d", len(steps), len(want))
+	}
+	for i, step := range steps {
+		if step.Provider != want[i] {
+			t.Fatalf("默认策略第 %d 步应为 %s，实际 %s", i, want[i], step.Provider)
+		}
+	}
+}
+
+func TestDefaultPlanSkipsGenericLookupWhenTLDSourceIsConfigured(t *testing.T) {
+	registryOf := NewRegistry(
+		provider(ProviderWhoDat, domain.StatusUnknown),
+		provider(ProviderWhoisLS, domain.StatusUnknown),
+		provider(ProviderFallback, domain.StatusUnknown),
+		provider(ProviderWhoisDomainLookup, domain.StatusUnknown),
+		provider(ProviderVercelWhoDat, domain.StatusUnknown),
+		provider(ProviderRDAP, domain.StatusUnknown),
+		provider(ProviderRdapOrg, domain.StatusUnknown),
+		provider(ProviderAIFallback, domain.StatusUnknown),
+	)
+
+	steps := NewPolicy(Config{}).Plan(context.Background(), Request{Domain: "example.im", TLD: "im"}, registryOf)
+	for _, step := range steps {
+		if step.Provider == ProviderWhoisDomainLookup {
+			t.Fatalf(".im 已有 WHOIS.LS 专用源时不应再次调用通用 whois-domain-lookup: %+v", steps)
+		}
+	}
+	if len(steps) < 2 || steps[1].Provider != ProviderWhoisLS {
+		t.Fatalf(".im 默认计划应优先使用 WHOIS.LS: %+v", steps)
+	}
+
+	doSteps := NewPolicy(Config{}).Plan(context.Background(), Request{Domain: "example.do", TLD: "do"}, registryOf)
+	for _, step := range doSteps {
+		if step.Provider == ProviderWhoisDomainLookup {
+			t.Fatalf(".do 已有 fallback 专用源时不应再次调用通用 whois-domain-lookup: %+v", doSteps)
+		}
+	}
+}
+
 func TestLoadConfigAcceptsBooleanAndString(t *testing.T) {
 	cfg, err := LoadConfig(`{"tlds":{"im":{"providers":["whois_ls","rdap"],"validate_available":true}}}`)
 	if err != nil {

@@ -51,7 +51,7 @@ function DesktopTable({
 
   return (
     <div className="table-scroll card">
-      <table className="w-full min-w-[960px] text-left">
+      <table className="data-table-refined w-full min-w-[960px] text-left">
         <thead className="bg-surface-muted text-[11px] uppercase tracking-wide text-ink-muted">
           <tr>
             <th className="w-9 px-3 py-2">
@@ -94,6 +94,7 @@ function DesktopTable({
               <td className="px-3 py-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+                  {item.review?.required && <span className="review-badge">需复核</span>}
                   {item.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
                 </div>
               </td>
@@ -168,6 +169,7 @@ function MobileList({
               <DomainName name={item.name} favorite={item.favorite} onClick={() => onOpen(item.name)} />
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-muted">
                 <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+                {item.review?.required && <span className="review-badge">需复核</span>}
                 {item.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
                 <span className="truncate">{item.registrar || "—"}</span>
               </div>

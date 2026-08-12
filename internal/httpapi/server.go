@@ -12,10 +12,12 @@ import (
 	"sync"
 	"time"
 
+	"DomainHunter/internal/ai"
 	"DomainHunter/internal/auth"
 	"DomainHunter/internal/config"
 	"DomainHunter/internal/logger"
 	"DomainHunter/internal/notification"
+	"DomainHunter/internal/p1"
 	"DomainHunter/internal/query"
 	"DomainHunter/internal/repository"
 	"DomainHunter/internal/service"
@@ -36,6 +38,8 @@ type Deps struct {
 	Notifications      repository.NotificationRepository
 	Tokens             repository.APITokenRepository
 	NotificationConfig repository.NotificationConfigRepository
+	P1                 *p1.Service
+	AI                 *ai.Service
 	Version            string
 }
 

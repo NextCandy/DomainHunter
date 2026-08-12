@@ -90,10 +90,11 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
     Number(data.monitor?.["queue_scheduled"] ?? 0);
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
+    <div className="space-y-8">
+      <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">概览</h1>
+          <span className="workspace-kicker">DOMAIN WORKSPACE</span>
+          <h1 className="editorial-title mt-2 text-[38px] leading-tight sm:text-[52px]">今日工作台</h1>
           <p className="text-[12px] text-ink-muted">
             共 {data.total} 个域名 · 调度器
             <span className={cx("ml-1", monitorRunning ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>
@@ -102,26 +103,34 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
             （{workers} worker，队列 {queued}）
           </p>
         </div>
-        <button type="button" className="btn h-8" onClick={reload}>
+        <button type="button" className="btn btn-secondary" onClick={reload}>
           刷新
         </button>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="总域名" value={data.total} tone="ink" />
-        {STATUS_ORDER.filter((status) =>
-          ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
-            status,
-          ),
-        ).map((status) => (
-          <StatTile
-            key={status}
-            label={STATUS_LABELS[status]}
-            value={data.status_counts?.[status] ?? 0}
-            tone={status === "available" ? "accent" : "ink"}
-          />
-        ))}
+      <div className="overview-stats-band">
+        <div className="relative grid grid-cols-2 gap-0 border-y border-line sm:grid-cols-3 lg:grid-cols-6">
+          <StatTile label="总域名" value={data.total} tone="ink" />
+          {STATUS_ORDER.filter((status) =>
+            ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
+              status,
+            ),
+          ).map((status) => (
+            <StatTile
+              key={status}
+              label={STATUS_LABELS[status]}
+              value={data.status_counts?.[status] ?? 0}
+              tone={status === "available" ? "accent" : "ink"}
+            />
+          ))}
+        </div>
       </div>
+
+      <ActionQueue
+        counts={data.action_counts}
+      />
+
+      <ProviderAlert providers={data.providers} />
 
       <TrendCard points={trendPoints} usingFallback={usingFallback} />
 
@@ -133,6 +142,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
             render={(item) => (
               <>
                 <StatusBadge status={item.status} />
+                {item.review?.required && <span className="review-badge">需复核</span>}
                 <span className="text-[12px] text-ink-faint">{formatRelative(item.observed_at)}</span>
               </>
             )}
@@ -215,6 +225,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
                 </span>
                 <span className="tabular text-[12px] text-ink-faint">
                   {provider.errors} 错误 / {provider.requests} 请求
+                  {provider.error_rate != null && ` · ${(provider.error_rate * 100).toFixed(1)}%`}
                 </span>
                 <span className="tabular ml-auto text-[12px] text-ink-faint">
                   平均 {formatLatency(provider.avg_latency_ms)}
@@ -282,6 +293,22 @@ function TrendCard({
       </div>
     </Card>
   );
+}
+
+function ActionQueue({ counts }: { counts: Overview["action_counts"] }) {
+  const items = [
+    { label: "立即行动", count: counts.available, hint: "高可信可注册结果", href: "/domains?status=available", tone: "text-accent" },
+    { label: "抢注窗口", count: counts.drop_window, hint: "高可信掉落流程", href: "/watchlist", tone: "text-ink" },
+    { label: "续费风险", count: counts.renewal_risk, hint: "未来 7 天内到期", href: "/domains?sort=expiry", tone: "text-ink" },
+    { label: "需要复核", count: counts.review, hint: "查询事实或证据异常", href: "/domains?statuses=error,unknown,skipped", tone: "text-review" },
+  ];
+  return <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{items.map((item) => <Link key={item.label} to={item.href} className="action-queue-item card block p-3 transition-colors hover:bg-accent-soft/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"><div className="flex items-start justify-between gap-2"><span className={cx("text-[13px] font-semibold", item.tone)}>{item.label}</span><span className="tabular text-[24px] font-semibold leading-none text-ink">{item.count}</span></div><p className="mt-2 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-2 block text-[11px] font-medium text-accent">打开工作区 →</span></Link>)}</div>;
+}
+
+function ProviderAlert({ providers }: { providers: ProviderHealth[] | null }) {
+  const degraded = (providers ?? []).filter((provider) => provider.state === "degraded" || provider.state === "offline");
+  if (degraded.length === 0) return null;
+  return <div className="flex flex-wrap items-center justify-between gap-2 border border-amber-300/60 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/30 dark:bg-amber-950/20 dark:text-amber-200"><span><strong>查询源正在降权或离线：</strong> {degraded.map((provider) => `${providerLabel(provider.provider)}（${HEALTH_LABELS[provider.state]}）`).join("、")}</span><Link to="/providers" className="font-medium underline">查看健康详情</Link></div>;
 }
 
 function normalizeTrend(payload: unknown): OverviewTrendPoint[] {
@@ -376,12 +403,12 @@ function StatTile({
   tone: "ink" | "accent";
 }) {
   return (
-    <div className="card px-3 py-2.5">
-      <div className="text-[11px] text-ink-muted">{label}</div>
+    <div className="border-r border-line px-3 py-4 last:border-r-0 sm:px-4">
+      <div className="font-mono text-[10px] uppercase tracking-[-0.02em] text-ink-muted">{label}</div>
       <div
         className={cx(
-          "tabular mt-0.5 text-[20px] font-semibold leading-tight",
-          tone === "accent" && value > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-ink",
+          "tabular mt-2 font-display text-[30px] font-normal leading-tight",
+          tone === "accent" && value > 0 ? "text-[#1e6a47] dark:text-emerald-300" : "text-ink",
         )}
       >
         {value}

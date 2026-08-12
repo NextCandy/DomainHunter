@@ -202,10 +202,19 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	providers := map[string]any{}
 	for _, health := range s.deps.Engine.Health().Snapshot(s.deps.Engine.Providers().Names()) {
 		providers[health.Provider] = map[string]any{
-			"state":          health.State,
-			"requests":       health.Requests,
-			"errors":         health.Errors,
-			"avg_latency_ms": health.AvgLatency,
+			"state":                health.State,
+			"as_of":                health.AsOf,
+			"requests":             health.Requests,
+			"errors":               health.Errors,
+			"error_rate":           health.ErrorRate,
+			"avg_latency_ms":       health.AvgLatency,
+			"p50_latency_ms":       health.P50Latency,
+			"p95_latency_ms":       health.P95Latency,
+			"last_error":           health.LastError,
+			"last_success":         health.LastSuccess,
+			"last_failure":         health.LastFailure,
+			"consecutive_failures": health.ConsecutiveFailures,
+			"state_reason":         health.StateReason,
 		}
 	}
 

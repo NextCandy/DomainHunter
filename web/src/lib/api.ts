@@ -200,6 +200,59 @@ export const api = {
     revoke: (id: number) =>
       request<{ status: string; id: number }>(`/api/v2/tokens/${id}`, { method: "DELETE" }),
   },
+  p1: {
+    savedViews: {
+      list: () => request<{ views: SavedView[] }>("/api/v2/saved-views"),
+      create: (input: { name: string; filter: FilterNode; shared: boolean }) =>
+        request<SavedView>("/api/v2/saved-views", { method: "POST", body: JSON.stringify(input) }),
+      update: (id: number, input: { name: string; filter: FilterNode; shared: boolean }) =>
+        request<SavedView>(`/api/v2/saved-views/${id}`, { method: "PUT", body: JSON.stringify(input) }),
+      remove: (id: number) => request<{ status: string; id: number }>(`/api/v2/saved-views/${id}`, { method: "DELETE" }),
+    },
+    bulkPreview: (action: BulkAction) =>
+      request<BulkPreview>("/api/v2/bulk-actions/preview", { method: "POST", body: JSON.stringify(action) }),
+    bulkExecute: (action: BulkAction) =>
+      request<{ status: string; updated: number; queued?: number }>("/api/v2/bulk-actions", {
+        method: "POST",
+        body: JSON.stringify(action),
+      }),
+    bulkAudits: () => request<{ audits: BulkAudit[] }>("/api/v2/bulk-actions/audits?limit=100"),
+    ai: {
+      settings: () => request<AISettings>("/api/v2/ai/settings"),
+      saveSettings: (input: AISettingsInput) =>
+        request<AISettings>("/api/v2/ai/settings", { method: "PUT", body: JSON.stringify(input) }),
+      providers: {
+        list: () => request<{ providers: AIProviderProfile[] }>("/api/v2/ai/providers"),
+        create: (input: AISettingsInput) =>
+          request<AIProviderProfile>("/api/v2/ai/providers", { method: "POST", body: JSON.stringify(input) }),
+        remove: (id: number) => request<{ status: string; id: number }>(`/api/v2/ai/providers/${id}`, { method: "DELETE" }),
+      },
+      models: () => request<{ models: string[] }>("/api/v2/ai/models"),
+      usage: () => request<AIUsage>("/api/v2/ai/usage"),
+      jobs: () => request<{ jobs: AIJob[] }>("/api/v2/ai/jobs?limit=100"),
+      enqueue: (domains: string[]) =>
+        request<{ status: string; queued: number }>("/api/v2/ai/jobs", { method: "POST", body: JSON.stringify({ domains }) }),
+      valuation: (domain: string) =>
+        request<{ valuation: Valuation | null }>(`/api/v2/ai/valuations/${encodeURIComponent(domain)}`),
+    },
+    automation: {
+      rules: () => request<{ rules: AutomationRule[] }>("/api/v2/automation/rules"),
+      createRule: (rule: AutomationRuleInput) =>
+        request<AutomationRule>("/api/v2/automation/rules", { method: "POST", body: JSON.stringify(rule) }),
+      updateRule: (id: number, rule: AutomationRuleInput) =>
+        request<{ status: string; id: number }>(`/api/v2/automation/rules/${id}`, {
+          method: "PUT",
+          body: JSON.stringify({ ...rule, id }),
+        }),
+      removeRule: (id: number) => request<{ status: string; id: number }>(`/api/v2/automation/rules/${id}`, { method: "DELETE" }),
+      dryRun: (id: number, event: AutomationEvent) =>
+        request<{ runs: AutomationRun[]; side_effects: boolean }>(`/api/v2/automation/rules/${id}/dry-run`, {
+          method: "POST",
+          body: JSON.stringify(event),
+        }),
+      runs: () => request<{ runs: AutomationRun[] }>("/api/v2/automation/runs?limit=100"),
+    },
+  },
 };
 
 // ---------- 类型 ----------
@@ -247,9 +300,26 @@ export interface DomainInfo {
   favorite?: boolean;
   tags?: string[];
   note?: string;
+  priority?: number;
   folder_id?: number | null;
   folder?: string;
   cached?: boolean;
+  review?: ReviewState;
+}
+
+export type ReviewReason =
+  | "query_error"
+  | "unknown_status"
+  | "low_confidence"
+  | "drop_status_future_expiry"
+  | "provider_conflict"
+  | "stale_evidence";
+
+export interface ReviewState {
+  required: boolean;
+  reasons: ReviewReason[];
+  severity?: "info" | "warning" | "critical";
+  explanation?: string;
 }
 
 export interface DomainListResult {
@@ -295,9 +365,15 @@ export interface Attempt {
 export interface ProviderHealth {
   provider: string;
   state: "healthy" | "degraded" | "offline" | "unknown";
+  as_of?: string;
   requests: number;
   errors: number;
+  error_rate?: number;
   avg_latency_ms: number;
+  p50_latency_ms?: number;
+  p95_latency_ms?: number;
+  consecutive_failures?: number;
+  state_reason?: string;
   last_error?: string;
   last_success?: string;
   last_failure?: string;
@@ -311,6 +387,7 @@ export interface OverviewItem {
   provider?: string;
   observed_at?: string;
   message?: string;
+  review?: ReviewState;
 }
 
 export interface Overview {
@@ -323,6 +400,12 @@ export interface Overview {
   providers: ProviderHealth[] | null;
   monitor: Record<string, unknown>;
   history?: { observations: number; attempts: number };
+  action_counts: {
+    available: number;
+    drop_window: number;
+    renewal_risk: number;
+    review: number;
+  };
 }
 
 export interface OverviewTrendPoint {
@@ -492,4 +575,183 @@ export interface ApiToken {
 export interface ApiTokenInput {
   name: string;
   scopes: string[];
+}
+
+export interface FilterNode {
+  version?: number;
+  logic?: "and" | "or";
+  conditions?: FilterNode[];
+  field?: string;
+  op?: string;
+  value?: string | number | boolean | Array<string | number>;
+}
+
+export interface SavedView {
+  id: number;
+  name: string;
+  filter: FilterNode;
+  shared: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BulkAction {
+  type: "tag" | "priority" | "folder" | "notification" | "monitor" | "ai_valuation";
+  domains?: string[];
+  filter?: FilterNode;
+  tag?: string;
+  priority?: number;
+  folder_id?: number | null;
+  enabled?: boolean;
+  notify?: boolean;
+}
+
+export interface BulkPreview {
+  action_type: string;
+  matched: number;
+  samples: string[];
+  task_count: number;
+  cache_hits: number;
+  daily_limit: number;
+  daily_used: number;
+  within_limit: boolean;
+  warning?: string;
+}
+
+export interface BulkAudit {
+  id: number;
+  action_type: string;
+  matched: number;
+  task_count: number;
+  result: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AISettings {
+  profile_id: number;
+  profile_name: string;
+  is_default: boolean;
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key_set: boolean;
+  key_source: string;
+  timeout_seconds: number;
+  concurrency: number;
+  max_output_tokens: number;
+  daily_limit: number;
+  cache_ttl_seconds: number;
+  enabled: boolean;
+}
+
+export interface AISettingsInput {
+  profile_id?: number;
+  name?: string;
+  is_default?: boolean;
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key?: string;
+  timeout_seconds: number;
+  concurrency: number;
+  max_output_tokens: number;
+  daily_limit: number;
+  cache_ttl_seconds: number;
+  enabled: boolean;
+}
+
+export interface AIProviderProfile {
+  profile_id: number;
+  profile_name: string;
+  is_default: boolean;
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key_set: boolean;
+  key_source: string;
+  timeout_seconds: number;
+  concurrency: number;
+  max_output_tokens: number;
+  daily_limit: number;
+  cache_ttl_seconds: number;
+  enabled: boolean;
+}
+
+export interface AIUsage {
+  date: string;
+  daily_limit: number;
+  used: number;
+  queued: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+}
+
+export interface AIJob {
+  id: number;
+  domain: string;
+  status: string;
+  attempts: number;
+  max_attempts: number;
+  last_error?: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+}
+
+export interface Valuation {
+  domain: string;
+  provider: string;
+  model: string;
+  analysis_version: string;
+  input_fingerprint: string;
+  quality_score: number;
+  liquidity_score: number;
+  risk_level: "low" | "medium" | "high";
+  value_low: number;
+  value_high: number;
+  confidence: "low" | "medium" | "high";
+  strengths: string[];
+  limitations: string[];
+  data_gaps: string[];
+  rationale: string;
+  disclaimer: string;
+  generated_at: string;
+  expires_at: string;
+}
+
+export interface AutomationRule {
+  id: number;
+  name: string;
+  enabled: boolean;
+  dry_run: boolean;
+  trigger: FilterNode;
+  conditions: FilterNode;
+  actions: Array<Record<string, string | number | boolean>>;
+  cooldown_seconds: number;
+  daily_run_cap: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AutomationRuleInput = Omit<AutomationRule, "id" | "created_at" | "updated_at">;
+
+export interface AutomationEvent {
+  event_id: string;
+  type: string;
+  domain?: string;
+}
+
+export interface AutomationRun {
+  id: number;
+  rule_id: number;
+  event_id: string;
+  domain: string;
+  status: string;
+  dry_run: boolean;
+  action_count: number;
+  details: Record<string, unknown>;
+  started_at: string;
+  completed_at?: string;
 }

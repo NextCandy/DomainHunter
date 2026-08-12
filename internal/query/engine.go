@@ -175,13 +175,28 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 	}
 
 	out.Plan = e.policy.Plan(ctx, req, e.providers)
+	// Health is a routing hint only: a degraded/offline provider is skipped for
+	// this attempt, but no status is promoted and the remaining evidence rules
+	// still decide the result.
+	if len(out.Plan) > 1 {
+		filtered := make([]Step, 0, len(out.Plan))
+		for _, step := range out.Plan {
+			if !e.health.HealthyForPlan(step.Provider) {
+				continue
+			}
+			filtered = append(filtered, step)
+		}
+		if len(filtered) > 0 {
+			out.Plan = filtered
+		}
+	}
 	if len(out.Plan) == 0 {
 		out.Winner = Result{
 			Domain:     name,
 			Status:     domain.StatusSkipped,
 			Provider:   "none",
 			Confidence: domain.ConfidenceLow,
-			Note:       "没有可用的 RDAP/WHOIS 查询源，已跳过",
+			Note:       "没有可用的域名查询源，已跳过",
 			StartedAt:  time.Now(),
 			FinishedAt: time.Now(),
 		}
@@ -310,7 +325,7 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 			Status:     domain.StatusSkipped,
 			Provider:   "none",
 			Confidence: domain.ConfidenceLow,
-			Note:       "没有可用的 RDAP/WHOIS 查询源，已跳过",
+			Note:       "没有可用的域名查询源，已跳过",
 			StartedAt:  time.Now(),
 			FinishedAt: time.Now(),
 		}
@@ -325,7 +340,7 @@ func (e *Engine) query(ctx context.Context, name string) Outcome {
 			Status:     domain.StatusError,
 			Provider:   "none",
 			Confidence: domain.ConfidenceLow,
-			Err:        NewError(KindUnavailable, "none", "RDAP 和 WHOIS 查询失败"),
+			Err:        NewError(KindUnavailable, "none", "全部域名查询源失败"),
 			StartedAt:  time.Now(),
 			FinishedAt: time.Now(),
 		}

@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-12 · P0–P2 与 Bark 通知精简已合并进 `main` · Pi 版本 `v2.4.1-codex-2f7669d`
+> 最后更新：2026-08-13 · Monad UI、AI 鉴定报告、注册商直达与 OpenCode Zen 配置已部署 · Pi 版本 `v2.9.0-ui-20260813`
 
 ## 本次目标
 
@@ -31,7 +31,13 @@
 | 安全 | bcrypt + 旧密码自动迁移、Cookie 加固、CORS 收敛、CSRF、退出即撤销免登录令牌 |
 | 通知 | 邮件 / Telegram / **Bark** / **飞书机器人** / **自定义 Webhook** |
 | 前端 | React 18 + TS + Vite + Tailwind，7 个页面，文件夹/导入导出/通知规则/Token 管理，go:embed 进单容器 |
-| 文档 | README / ARCHITECTURE.md / MIGRATION.md / 本文件 |
+| P1 筛选与批量 | 版本化高级筛选树、可分享智能视图、批量动作影响预览与单事务安全执行 |
+| P1 AI | 兼容版多 Provider 配置档案、自动化、AES-GCM Key 密文、SSRF 防护、持久化 Job/租约/重试/限额/TTL 估价 |
+| 严格 AI 估价 | DeepSeek 研究性估价、最小化输入、严格 JSON schema、复核门禁、档案级并发、缓存、配额和审计 |
+| 复核与健康 | 低可信度/未知/冲突/过期证据复核，Provider 错误率、P50/P95、连续失败和离线原因 |
+| UI 美化 | 工作台行动队列、复核徽标、浅色/深色主题、响应式估价面板与四行 AI 鉴定报告 |
+| P1 自动化 | 触发器/条件/白名单动作/冷却/每日上限、Dry-run、事件桥接、幂等运行审计与批量审计 |
+| 文档与图标 | README / ARCHITECTURE.md / MIGRATION.md / 本文件；`web/public/DomainHunter.svg` 与 `.png` |
 | 改名 | 仓库、镜像、树莓派部署目录与 compose 项目名统一为 DomainHunter |
 
 Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动页脚，仅保留状态摘要，正文约 480 字节以内。
@@ -57,7 +63,7 @@ Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动
 
 ## 数据库变化
 
-新增 `schema_migrations` 并按版本执行 9 条迁移，**全部是新增，没有任何列被
+新增 `schema_migrations` 并按版本执行 14 条迁移，**全部是新增，没有任何列被
 重命名或删除**：
 
 | 版本 | 内容 |
@@ -71,8 +77,15 @@ Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动
 | 007 | `folders` 与 `domains.folder_id` |
 | 008 | `api_tokens` |
 | 009 | `notification_rules` / `notification_templates` / `notification_digest` |
+| 010 | P1 `saved_views` / `ai_provider_settings` / `ai_jobs` / `ai_domain_valuations` / `automation_rules` / `automation_runs` |
+| 011 | P1 `automation_cursors` / `bulk_action_audits`，事件游标与批量审计 |
+| 012 | `ai_provider_profiles` 多 AI 配置档案，并把新安装默认项设为 OpenAI Compatible |
+| 013 | 严格研究性估价的 `ai_profiles` / `ai_valuation_jobs` / `ai_domain_valuations_v2` / `ai_audit_log` |
+| 014 | `domain_results.confidence` 可信度字段 |
+| 015 | 严格 AI 人民币价格区间与核心分析字段 |
 
-因此 **v1 二进制仍能读 v2 的库**，这是回滚能无损进行的前提。
+因此 **v1 二进制仍能读 v2 的库**；迁移 010–014 仅新增表和索引/字段，旧字段与旧 API 不变，
+回滚程序不会删除 P1 数据。
 
 数据文件：默认 `domainhunter.db`；**已存在 `puff.db` 的部署继续使用 puff.db，
 程序绝不自动改名**。树莓派已在 2026-08-11 停机手工改名为 `domainhunter.db`。
@@ -116,9 +129,9 @@ domains.next_check_at → 每 5s 扫描 → 优先级队列(manual>retry>schedul
 ## 前端
 
 React 18 + TypeScript + Vite + Tailwind v3，运行时依赖只有 react /
-react-dom / react-router-dom，构建产物 gzip 后约 72KB，**零外部请求**。
+react-dom / react-router-dom，当前构建产物 JS gzip 后约 94KB，**零外部请求**。
 
-7 个页面：概览 / 域名 / 抢注看板 / 查询历史 / 查询源 / 通知 / 系统设置。
+8 个页面：概览 / 域名 / 抢注看板 / 查询历史 / 查询源 / 通知 / 自动化与 AI / 系统设置。
 域名详情抽屉分四个标签页：概览 / 查询证据 / 状态时间线 / 原始报文。
 
 **抢注看板**只显示处于掉落流程的域名（可注册 / 待删除 / 赎回期 / 已过期 /
@@ -139,7 +152,9 @@ react-dom / react-router-dom，构建产物 gzip 后约 72KB，**零外部请求
 
 新增：`/api/domains/{domain}/history`、`/api/domains/{domain}/attempts`、
 `/api/v2/{overview,meta,facets,domains,observations,providers,notifications,settings,backups}`、
-`/api/v2/notifications/test/{channel}`、`/api/health/providers`。
+`/api/v2/notifications/test/{channel}`、`/api/health/providers`、P1 的
+`saved-views`、`bulk-actions`、`ai/{settings,models,usage,jobs,valuations}`、
+`automation/{rules,runs,evaluate}`、`bulk-actions/audits`。
 
 ## 安全调整
 
@@ -179,20 +194,33 @@ email / Telegram / Bark 真实测试（2026-08-12）  PASS
 Bark 精简正文回归测试                            PASS
 未配置渠道给出明确提示                          PASS
 /health                                        PASS
+P1 migration 010–012 / 新增表与索引                     PASS
+严格 AI migration 013–014 / integrity / 545 domains    PASS
+严格 AI 未登录策略接口 → 401                            PASS
+严格 AI Key 不回显 / 研究性状态 guard                    PASS（代码与单测）
+ARM64 image build / version v2.6.0-strict-ai-20260812-d346a1f PASS
+health / schema 014 / integrity / 545 domains             PASS
+P1 未登录访问 AI/视图/高级列表接口 → 401                  PASS
+P1 未登录访问批量审计接口 → 401                           PASS
+P1 多 AI 配置默认项 / Provider models 200                PASS
+P1 前端 go:embed 图标与 AI 配置表单                       PASS
 ```
 
 ## 测试结果
 
 ```
 go build ./...        PASS
+go test ./...         PASS（含 internal/p1 专项测试）
+go test -race ./...   PASS（本机 macOS；Pi 仅运行镜像）
 go vet ./...          PASS
-go test ./...         PASS（auth / httpapi / query / 4 个 provider /
-                            scheduler / service / storage 共 9 个包）
-go test -race ./...   PASS（在 GitHub Actions amd64 上）
 前端 npm run lint     PASS
-前端 npm run build    PASS（gzip 72KB）
+前端 npm run build    PASS（gzip JS 94KB）
+前端 npm ci            PASS（npm audit 报现有依赖树 4 个漏洞，未执行 audit fix）
 docker compose config PASS
-docker build          PASS（arm64 本机 + CI）
+docker build          PASS（Pi arm64，镜像 `domainhunter:v2.6.0-strict-ai-20260812-d346a1f`）
+隔离容器 smoke        PASS（/health 200、版本正确、迁移 013/014 应用）
+browser QA             PASS（本地隔离环境，浅色/深色、响应式与 AI 配置交互可见）
+GitHub Actions         PASS（Go / Frontend / Docker，commit `d346a1f`）
 ```
 
 > `go test -race` **无法在树莓派上运行**：该机内核是 47 位 VMA，
@@ -204,22 +232,29 @@ docker build          PASS（arm64 本机 + CI）
 
 ```
 docker compose -p domainhunter -f compose.yaml config -q   PASS
-docker build --build-arg VERSION=v2.1.0 -t domainhunter:v2.1.0   PASS（arm64，37.5MB）
-docker compose -p domainhunter up -d                        PASS
+docker build --build-arg VERSION=v2.6.0-strict-ai-20260812-d346a1f -t domainhunter:v2.6.0-strict-ai-20260812-d346a1f   PASS（Pi arm64）
+docker compose -p domainhunter -f compose.yaml up -d --no-build --no-deps domainhunter PASS
 HEALTHCHECK                                                 healthy
+`/health`                                                     HTTP 200，status=ok，545 domains
+旧 `/api/session`                                            HTTP 200，未登录受保护 v2 AI 策略接口 HTTP 401
+restart=0 / OOM=false                                        PASS
 ```
 
 ## 当前部署状态
 
 ```
 主机        树莓派 Pi (aarch64)，SSH 192.168.50.180:22370
-容器        DomainHunter        镜像 domainhunter:latest (= v2.4.1-codex-2f7669d)
+容器        DomainHunter        镜像 domainhunter:v2.6.0-strict-ai-20260812-d346a1f
 端口        22334 → 8080        网络 domainhunter_default
 compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/compose.yaml
 数据目录    /opt/docker-migrated/domainhunter （即容器内 /app/data）
-数据库      domainhunter.db（14.8MB，551 个域名）—— 2026-08-11 停机由 puff.db 改名
-资源        31MB RSS / 10 线程 / CPU 接近 0
+数据库      domainhunter.db（约17MB，545 个域名）—— 2026-08-11 停机由 puff.db 改名
+资源        内存限制 0 / cpu_shares 512 / 重启 0 / 当前健康
 容器总数    35（与改动前一致，未影响任何其他项目）
+备份        backups/domainhunter-20260812-221928-pre-d346a1f/domainhunter.db（integrity=ok）
+Compose备份 compose.yaml.pre-d346a1f-20260812-222349
+回滚镜像    domainhunter:rollback-pre-d346a1f-20260812-221928
+运行时配置  `.env`（权限 600；API Key 未写入 Git 或数据库明文）
 ```
 
 ## 回滚方式
@@ -230,8 +265,8 @@ compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/co
 
 ```bash
 cd /opt/docker-migrated/domainhunter
-docker tag domainhunter-go:v1-rollback domainhunter:latest
-docker compose -p domainhunter -f compose.yaml up -d
+docker tag domainhunter:rollback-pre-d346a1f-20260812-221928 domainhunter:v2.6.0-strict-ai-20260812-d346a1f
+docker compose -p domainhunter -f compose.yaml up -d --no-build --no-deps domainhunter
 curl -f http://127.0.0.1:22334/health
 ```
 
@@ -274,14 +309,18 @@ tag         backup-before-domainhunter-refactor-20260811-0852  ← 回滚到重�
 旧镜像      domainhunter-go:v1-rollback (31cc46c9b25f)  ← v1
             domainhunter:v2.1.0-rollback、domainhunter:v2.2.0  ← v2 各阶段
             domainhunter:v2.4.0-rollback-20260812-0003  ← Bark 修复前
+            domainhunter:rollback-pre-d346a1f-20260812-221928  ← v2.6.0 部署前
 数据库备份  /opt/docker-migrated/domainhunter/backups/
+              domainhunter-20260812-070555-pre-mobile.db  （移动端响应式修复部署前）
               domainhunter-20260812-0003-pre-bark.db
               puff-20260811-100852-pre-v2-manual.db      （重构前基线，817 域名）
               puff-20260811-143159-pre-owned-cleanup.db  （清理已拥有域名前，695）
               puff-20260811-153045-pre-db-rename.db      （改名前冷拷贝，551）
+              domainhunter-20260812-221928-pre-d346a1f/domainhunter.db（v2.6.0 部署前）
 compose 备份 /opt/docker-migrated/domainhunter/compose.yaml.pre-rename
              /opt/docker-migrated/domainhunter/compose.yaml.pre-dbrename-comment
              /opt/docker-migrated/domainhunter/compose.yaml.pre-bark-20260812-0003
+             /opt/docker-migrated/domainhunter/compose.yaml.pre-d346a1f-20260812-222349
 ```
 
 ## 未完成项

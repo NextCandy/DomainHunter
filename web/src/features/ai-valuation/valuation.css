@@ -1,0 +1,121 @@
+/*
+ * DomainHunter AI valuation visual layer
+ * Import once from the feature entry point or DomainValuationPanel.
+ * Token definitions intentionally have fallbacks so the module can land before the global theme refactor.
+ */
+/* A quiet framed surface: depth comes from a periwinkle plane and 1px border, never a heavy shadow. */
+.ai-valuation-panel {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--periwinkle-mist));
+  border: 1px solid rgb(var(--line));
+  border-radius: 40px;
+}
+
+.ai-valuation-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: rgb(var(--lake-blue));
+}
+
+.ai-valuation-panel .mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-valuation-score {
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-report {
+  border-top: 1px solid rgb(var(--line));
+  border-bottom: 1px solid rgb(var(--line));
+}
+
+.ai-report-line {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid rgb(var(--line) / 0.72);
+}
+
+.ai-report-line:last-child {
+  border-bottom: 0;
+}
+
+.ai-report-label {
+  color: rgb(var(--ink-muted));
+  font-family: var(--font-abc-diatype-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+}
+
+.ai-report-value {
+  min-width: 0;
+  color: rgb(var(--ink));
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.ai-report-emphasis {
+  color: rgb(var(--lake-blue));
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.ai-report-multiline {
+  line-height: 1.75;
+  font-weight: 450;
+}
+
+@media (max-width: 420px) {
+  .ai-report-line {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+}
+
+/* Project-wide polish utilities. Apply deliberately to page shells rather than globally replacing every card. */
+.workspace-header {
+  background: transparent;
+  border-bottom: 0;
+}
+
+.workspace-kicker {
+  color: rgb(var(--accent));
+  font-family: var(--font-abc-diatype-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+}
+
+.data-table-refined tbody tr {
+  border-color: rgb(var(--line) / 0.78);
+}
+
+.data-table-refined tbody tr:hover {
+  background: rgb(var(--periwinkle-mist) / 0.42);
+}
+
+.review-badge {
+  border: 1px solid rgb(var(--review) / 0.34);
+  border-radius: 100px;
+  background: rgb(var(--review) / 0.09);
+  color: rgb(var(--review));
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1.1rem;
+}
+
+.action-queue-item {
+  border-bottom: 1px solid rgb(var(--line));
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.action-queue-item:last-child {
+  border-bottom: 0;
+}

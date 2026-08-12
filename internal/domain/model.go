@@ -60,16 +60,18 @@ type Info struct {
 	WhoisRaw     string     `json:"whois_raw"`
 
 	// 以下为重构新增字段，旧客户端会忽略它们。
-	Confidence  Confidence `json:"confidence,omitempty"`
-	EPPStatuses []string   `json:"epp_statuses,omitempty"`
-	Evidence    []Evidence `json:"evidence,omitempty"`
-	NextCheckAt *time.Time `json:"next_check_at,omitempty"`
-	Favorite    bool       `json:"favorite,omitempty"`
-	Tags        []string   `json:"tags,omitempty"`
-	Note        string     `json:"note,omitempty"`
-	FolderID    *int64     `json:"folder_id,omitempty"`
-	FolderName  string     `json:"folder,omitempty"`
-	Cached      bool       `json:"cached,omitempty"`
+	Confidence  Confidence   `json:"confidence,omitempty"`
+	EPPStatuses []string     `json:"epp_statuses,omitempty"`
+	Evidence    []Evidence   `json:"evidence,omitempty"`
+	NextCheckAt *time.Time   `json:"next_check_at,omitempty"`
+	Favorite    bool         `json:"favorite,omitempty"`
+	Tags        []string     `json:"tags,omitempty"`
+	Note        string       `json:"note,omitempty"`
+	Priority    int          `json:"priority,omitempty"`
+	FolderID    *int64       `json:"folder_id,omitempty"`
+	FolderName  string       `json:"folder,omitempty"`
+	Cached      bool         `json:"cached,omitempty"`
+	Review      *ReviewState `json:"review,omitempty"`
 }
 
 // HasRegistrationEvidence 判断快照里是否存在"已被注册"的实证信息。

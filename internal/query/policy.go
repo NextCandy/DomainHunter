@@ -12,15 +12,35 @@ import (
 
 // 内置 Provider 名称
 const (
-	ProviderRDAP     = "rdap"
-	ProviderWhois    = "whois"
-	ProviderWhoisLS  = "whois_ls"
-	ProviderFallback = "fallback"
+	ProviderWhoDat            = "who_dat"
+	ProviderWhoisDomainLookup = "whois_domain_lookup"
+	ProviderVercelWhoDat      = "vercel_who_dat"
+	ProviderRDAP              = "rdap"
+	ProviderRdapOrg           = "rdap_org"
+	ProviderWhois             = "whois"
+	ProviderWhoisLS           = "whois_ls"
+	ProviderFallback          = "fallback"
+	ProviderAIFallback        = "ai_fallback"
 )
 
 // canonicalOrder 是未做任何配置时的默认查询顺序。
-// 先问按 TLD 显式启用的专用源，再问通用的 RDAP / 注册局 WHOIS。
-var canonicalOrder = []string{ProviderWhoisLS, ProviderFallback, ProviderRDAP, ProviderWhois}
+// 专用 TLD 源（whois_ls / fallback）放在通用 whois-domain-lookup 之前；
+// Plan 会在同一 TLD 已有专用源时跳过通用服务，避免 .im/.do 重复打到
+// 不适合该注册局的上游 WHOIS 端口。
+var canonicalOrder = []string{
+	ProviderWhoDat,
+	ProviderWhoisLS,
+	ProviderFallback,
+	ProviderWhoisDomainLookup,
+	ProviderVercelWhoDat,
+	ProviderRDAP,
+	ProviderRdapOrg,
+	ProviderAIFallback,
+}
+
+// legacyCanonicalOrder 保留没有注册新 Provider 的旧测试/插件集成的行为；
+// 实际应用默认注册了新链路，因此不会把旧的 WHOIS.LS 提前到产品顺序之前。
+var legacyCanonicalOrder = []string{ProviderWhoisLS, ProviderFallback, ProviderRDAP, ProviderWhois}
 
 // optInProviders 是"必须由用户按 TLD 显式启用"的查询源。
 // 它们只在被点名的后缀上生效，因此它们的结论天然带有针对性，可以直接采信。
@@ -275,6 +295,9 @@ func (p *Policy) Plan(ctx context.Context, req Request, reg *Registry) []Step {
 	}
 	if len(names) == 0 {
 		names = canonicalOrder
+		if !hasNewChainProvider(reg) {
+			names = legacyCanonicalOrder
+		}
 	}
 
 	available := make([]string, 0, len(names))
@@ -282,6 +305,14 @@ func (p *Policy) Plan(ctx context.Context, req Request, reg *Registry) []Step {
 	for _, name := range names {
 		provider, ok := reg.Get(name)
 		if !ok || !p.providerEnabled(cfg, name) || !provider.Supports(ctx, req) {
+			continue
+		}
+		// The standalone whois-domain-lookup service is useful for generic TLDs,
+		// but its .im path falls through to whois.nic.im:43, which is unreachable
+		// from the production Pi. Once a TLD-specific source is configured, the
+		// specialized source is authoritative for that TLD and the generic call
+		// is redundant and noisy. An explicit TLD policy remains an override.
+		if explicit == nil && name == ProviderWhoisDomainLookup && hasOptInProviderForTLD(available) {
 			continue
 		}
 		available = append(available, name)
@@ -305,6 +336,30 @@ func (p *Policy) Plan(ctx context.Context, req Request, reg *Registry) []Step {
 		steps = append(steps, Step{Provider: name, Available: mode})
 	}
 	return steps
+}
+
+func hasOptInProviderForTLD(available []string) bool {
+	for _, name := range available {
+		if optInProviders[name] {
+			return true
+		}
+	}
+	return false
+}
+
+func hasNewChainProvider(reg *Registry) bool {
+	for _, name := range []string{
+		ProviderWhoDat,
+		ProviderWhoisDomainLookup,
+		ProviderVercelWhoDat,
+		ProviderRdapOrg,
+		ProviderAIFallback,
+	} {
+		if _, ok := reg.Get(name); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Policy) providerEnabled(cfg Config, name string) bool {
