@@ -3,21 +3,21 @@
  * Import once from the feature entry point or DomainValuationPanel.
  * Token definitions intentionally have fallbacks so the module can land before the global theme refactor.
  */
-/* A quiet framed surface: depth comes from a flat mint plane and 1px border, never a heavy shadow. */
+/* A quiet framed surface: depth comes from a periwinkle plane and 1px border, never a heavy shadow. */
 .ai-valuation-panel {
   position: relative;
   overflow: hidden;
-  background: rgb(var(--card-mint));
+  background: rgb(var(--periwinkle-mist));
   border: 1px solid rgb(var(--line));
-  border-radius: 12px;
+  border-radius: 40px;
 }
 
 .ai-valuation-panel::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 4px;
-  background: rgb(var(--sage));
+  width: 5px;
+  background: rgb(var(--lake-blue));
 }
 
 .ai-valuation-panel .mono {
@@ -36,10 +36,10 @@
 
 .ai-report-line {
   display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
+  grid-template-columns: 6rem minmax(0, 1fr);
   gap: 1rem;
   align-items: baseline;
-  padding: 0.7rem 0;
+  padding: 0.9rem 0;
   border-bottom: 1px solid rgb(var(--line) / 0.72);
 }
 
@@ -49,8 +49,8 @@
 
 .ai-report-label {
   color: rgb(var(--ink-muted));
-  font-family: var(--font-ibm-plex-mono);
-  font-size: 0.6875rem;
+  font-family: var(--font-abc-diatype-mono);
+  font-size: 0.625rem;
   letter-spacing: 0.08em;
 }
 
@@ -58,11 +58,11 @@
   min-width: 0;
   color: rgb(var(--ink));
   font-size: 0.8125rem;
-  font-weight: 560;
+  font-weight: 400;
 }
 
 .ai-report-emphasis {
-  color: rgb(var(--accent));
+  color: rgb(var(--lake-blue));
   font-size: 1.1rem;
   letter-spacing: -0.02em;
 }
@@ -87,7 +87,7 @@
 
 .workspace-kicker {
   color: rgb(var(--accent));
-  font-family: var(--font-ibm-plex-mono);
+  font-family: var(--font-abc-diatype-mono);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.13em;
@@ -98,7 +98,7 @@
 }
 
 .data-table-refined tbody tr:hover {
-  background: rgb(var(--accent-soft) / 0.65);
+  background: rgb(var(--periwinkle-mist) / 0.42);
 }
 
 .review-badge {

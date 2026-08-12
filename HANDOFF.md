@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-13 · AI 鉴定报告、注册商直达与 OpenCode Zen 配置已部署 · Pi 版本 `v2.8.0-ai-report-20260813`
+> 最后更新：2026-08-13 · Monad UI、AI 鉴定报告、注册商直达与 OpenCode Zen 配置已部署 · Pi 版本 `v2.9.0-ui-20260813`
 
 ## 本次目标
 

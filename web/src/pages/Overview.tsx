@@ -90,11 +90,11 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
     Number(data.monitor?.["queue_scheduled"] ?? 0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="workspace-kicker">DOMAIN WORKSPACE</span>
-          <h1 className="editorial-title mt-2 text-[32px] leading-tight sm:text-[38px]">今日工作台</h1>
+          <h1 className="editorial-title mt-2 text-[38px] leading-tight sm:text-[52px]">今日工作台</h1>
           <p className="text-[12px] text-ink-muted">
             共 {data.total} 个域名 · 调度器
             <span className={cx("ml-1", monitorRunning ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>
@@ -108,20 +108,22 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
         </button>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="总域名" value={data.total} tone="ink" />
-        {STATUS_ORDER.filter((status) =>
-          ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
-            status,
-          ),
-        ).map((status) => (
-          <StatTile
-            key={status}
-            label={STATUS_LABELS[status]}
-            value={data.status_counts?.[status] ?? 0}
-            tone={status === "available" ? "accent" : "ink"}
-          />
-        ))}
+      <div className="overview-stats-band">
+        <div className="relative grid grid-cols-2 gap-0 border-y border-line sm:grid-cols-3 lg:grid-cols-6">
+          <StatTile label="总域名" value={data.total} tone="ink" />
+          {STATUS_ORDER.filter((status) =>
+            ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
+              status,
+            ),
+          ).map((status) => (
+            <StatTile
+              key={status}
+              label={STATUS_LABELS[status]}
+              value={data.status_counts?.[status] ?? 0}
+              tone={status === "available" ? "accent" : "ink"}
+            />
+          ))}
+        </div>
       </div>
 
       <ActionQueue
@@ -401,12 +403,12 @@ function StatTile({
   tone: "ink" | "accent";
 }) {
   return (
-    <div className="card px-3 py-3 sm:px-4">
-      <div className="text-[11px] text-ink-muted">{label}</div>
+    <div className="border-r border-line px-3 py-4 last:border-r-0 sm:px-4">
+      <div className="font-mono text-[10px] uppercase tracking-[-0.02em] text-ink-muted">{label}</div>
       <div
         className={cx(
-          "tabular mt-1 text-[24px] font-semibold leading-tight",
-          tone === "accent" && value > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-ink",
+          "tabular mt-2 font-display text-[30px] font-normal leading-tight",
+          tone === "accent" && value > 0 ? "text-[#1e6a47] dark:text-emerald-300" : "text-ink",
         )}
       >
         {value}

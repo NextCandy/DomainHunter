@@ -12,7 +12,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  mode: "system",
+  mode: "light",
   setMode: () => {},
   resolved: "light",
 });
@@ -28,7 +28,7 @@ function readStored(): ThemeMode {
   } catch {
     /* localStorage 不可用时退回跟随系统 */
   }
-  return "system";
+  return "light";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

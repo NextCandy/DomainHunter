@@ -18,7 +18,7 @@
   <a href="https://github.com/NextCandy/DomainHunter"><img src="https://img.shields.io/badge/architecture-Go%20%2B%20SQLite-4a4636.svg" alt="Go and SQLite" /></a>
 </p>
 
-> 当前工作区版本：`v2.8.0-ai-report-20260813` · 纸张薄荷编辑式工作台 UI · AI 四行鉴定报告 · 注册商直达修复
+> 当前工作区版本：`v2.9.0-ui-20260813` · Monad 纸张工作台 UI · AI 四行鉴定报告 · 注册商直达修复
 
 DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。查询链路建立在
 "RDAP 优先、WHOIS 兼容、**无法确认就不报告可注册**"的安全模型上，
@@ -92,9 +92,10 @@ React + TypeScript + Vite + Tailwind，构建产物经 `go:embed` 打进同一�
 **生产运行时不需要 Node，仍然只有一个容器**。支持浅色 / 深色 / 跟随系统，
 窄屏下表格自动换成卡片列表。
 
-本次 UI 按 `DESIGN (1).md` 的编辑式研究工作台方向整理：页面使用纸张薄荷色画布
-(`#f2f8f7`)，卡片使用薄荷/腮红平面色块，标题使用文学衬线风格，区块标注使用
-IBM Plex Mono 大写字距；按钮和导航使用胶囊几何，卡片、抽屉和弹窗不使用投影，
+本次 UI 按 `DESIGN (5).md` 的 Monad 视觉规范整理：页面使用温暖纸张色画布
+(`#f6f3f1`)，卡片使用湖蓝、淡紫、薄荷、珊瑚与金色平面色块，标题使用 Untitled Serif
+文学衬线风格，区块标注使用 ABC Diatype Mono 大写字距；按钮和导航使用胶囊几何，
+卡片、抽屉和弹窗不使用投影，
 依靠 1px 细线与色块层级表达信息密度。桌面端采用左侧工作区导航，移动端提供顶部菜单
 与底部主导航，保留数据表、详情抽屉、AI 估价和通知配置的原有操作逻辑。
 

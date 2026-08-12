@@ -52,10 +52,10 @@ export function Layout({
   return (
     <div className="min-h-full min-w-0 bg-canvas">
       <div className="flex min-h-full min-w-0 flex-col lg:flex-row">
-        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[244px] lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-surface/45 lg:px-4 lg:py-5">
+        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[228px] lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-canvas lg:px-4 lg:py-6">
           <BrandBlock />
-          <div className="mt-10">
-            <p className="section-label mb-2 px-3">WORKSPACE</p>
+          <div className="mt-12">
+            <p className="section-label mb-3 px-3">WORKSPACE</p>
             <nav className="space-y-1" aria-label="主导航">
               {NAV.map((item) => (
                 <NavLink
@@ -75,9 +75,9 @@ export function Layout({
           </div>
 
           <div className="mt-auto space-y-4 pt-8">
-            <div className="rounded-card border border-line bg-blush p-3">
+            <div className="rounded-card border border-line bg-periwinkle-mist p-4">
               <p className="section-label">SESSION</p>
-              <p className="mt-2 truncate text-[13px] font-medium text-navy">{username}</p>
+              <p className="mt-2 truncate text-[13px] font-medium text-ink">{username}</p>
               <p className="mt-0.5 text-[11px] text-ink-muted">DomainHunter {version}</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -134,7 +134,7 @@ export function Layout({
               </button>
             </div>
             {menuOpen && (
-              <div className="border-t border-line bg-surface/95 px-4 py-3">
+              <div className="border-t border-line bg-canvas/95 px-4 py-3">
                 <nav className="grid grid-cols-2 gap-1" aria-label="移动端完整导航">
                   {NAV.map((item) => (
                     <NavLink
@@ -215,7 +215,7 @@ export function Layout({
                   className={({ isActive }) =>
                     cx(
                       "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-nav px-1 py-1 text-[10px] transition-colors",
-                      isActive ? "bg-sea-foam font-medium text-deep-teal" : "text-ink-muted hover:text-ink",
+                      isActive ? "bg-periwinkle-mist font-medium text-ink" : "text-ink-muted hover:text-ink",
                     )
                   }
                   aria-label={item.label}
@@ -228,7 +228,7 @@ export function Layout({
             </div>
           </nav>
 
-          <footer className="border-t border-line px-4 py-3 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-ink-faint sm:px-6 lg:px-8">
+          <footer className="border-t border-line px-4 py-4 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-ink-faint sm:px-6 lg:px-8">
             DomainHunter · {version}
           </footer>
         </div>
@@ -240,7 +240,9 @@ export function Layout({
 function BrandBlock({ compact = false }: { compact?: boolean }) {
   return (
     <div className={cx("flex min-w-0 items-center gap-2.5", compact && "gap-2")}>
-      <Logo className={cx("shrink-0", compact ? "h-7 w-7" : "h-9 w-9")} />
+      <span className={cx("flex shrink-0 items-center justify-center rounded-full border border-ink", compact ? "h-8 w-8" : "h-10 w-10")}>
+        <Logo className={cx(compact ? "h-5 w-5" : "h-7 w-7")} />
+      </span>
       <div className="min-w-0">
         <div className="brand-wordmark truncate">DomainHunter</div>
         {!compact && <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">domain intelligence</p>}

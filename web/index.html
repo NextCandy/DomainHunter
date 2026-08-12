@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <meta name="robots" content="noindex, nofollow" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#181b21" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f3f1" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1d1d1f" />
     <title>DomainHunter</title>
     <link rel="icon" type="image/svg+xml" href="/DomainHunter.svg" />
     <link rel="apple-touch-icon" href="/DomainHunter.png" />
@@ -14,7 +14,7 @@
       // 首屏前应用主题，避免深色模式下的白屏闪烁
       (function () {
         try {
-          var stored = localStorage.getItem("dh-theme") || "system";
+          var stored = localStorage.getItem("dh-theme") || "light";
           var dark =
             stored === "dark" ||
             (stored === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);

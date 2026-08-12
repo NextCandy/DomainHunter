@@ -113,12 +113,12 @@ export function Card({
   return (
     <section className={cx("card min-w-0", className)}>
       {(title || action) && (
-        <header className="density-card-header flex min-w-0 items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-          <h2 className="min-w-0 truncate text-[13px] font-semibold text-ink">{title}</h2>
+        <header className="density-card-header flex min-w-0 items-center justify-between gap-3 border-b border-line px-6 py-4">
+          <h2 className="min-w-0 truncate font-display text-[20px] font-normal tracking-[-0.02em] text-ink">{title}</h2>
           {action}
         </header>
       )}
-      <div className={cx("density-card-body min-w-0 p-4", bodyClassName)}>{children}</div>
+      <div className={cx("density-card-body min-w-0 p-6", bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -136,7 +136,7 @@ export function StatusBadge({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-tag border px-2 py-0.5 text-[11px] font-medium leading-4",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-tag border px-2.5 py-1 text-[10px] font-medium uppercase leading-4 tracking-[-0.02em]",
         STATUS_CLASSES[status] ?? STATUS_CLASSES.unknown,
         className,
       )}
@@ -178,7 +178,7 @@ export function Pill({
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-tag border border-line bg-surface-muted px-2 py-0.5 text-[11px] leading-4 text-ink-muted",
+        "inline-flex items-center rounded-tag border border-line bg-transparent px-2.5 py-1 text-[10px] uppercase leading-4 tracking-[-0.02em] text-ink-muted",
         className,
       )}
       title={title}
@@ -255,7 +255,7 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
       <span
-        className="mb-1 flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface-muted text-ink-faint"
+        className="mb-2 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-transparent font-display text-[18px] text-ink-faint"
         aria-hidden="true"
       >
         ∅
@@ -269,7 +269,7 @@ export function EmptyState({
 
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-danger/35 bg-blush px-4 py-3 text-[12px] text-danger dark:border-danger/30 dark:bg-danger/10 dark:text-red-200">
       <span>{message}</span>
       {onRetry && (
         <button type="button" className="btn btn-ghost h-7 px-2 text-[12px]" onClick={onRetry}>
@@ -337,15 +337,15 @@ export function Drawer({
       <aside
         className={cx(
           "absolute inset-x-0 bottom-0 flex max-h-[92vh] w-full flex-col rounded-t-card border border-line bg-surface-raised transition-transform duration-200 ease-out motion-reduce:transition-none",
-          "lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:max-h-none lg:max-w-[560px] lg:rounded-none",
+          "lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:max-h-none lg:max-w-[620px] lg:rounded-none",
           visible ? "translate-y-0 lg:translate-x-0" : "translate-y-full lg:translate-y-0 lg:translate-x-full",
         )}
         role="dialog"
         aria-modal="true"
       >
-        <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+        <header className="flex items-start justify-between gap-3 border-b border-line px-6 py-5">
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-semibold text-ink">{title}</h2>
+            <h2 className="truncate font-display text-[24px] font-normal tracking-[-0.02em] text-ink">{title}</h2>
             {subtitle && <div className="mt-0.5 text-[12px] text-ink-muted">{subtitle}</div>}
           </div>
           <button
@@ -368,7 +368,7 @@ export function Drawer({
             </svg>
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto overscroll-contain p-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6">{children}</div>
       </aside>
     </div>
   );
@@ -395,8 +395,8 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} role="presentation" />
-      <div className="card relative w-full max-w-sm p-4" role="dialog" aria-modal="true">
-        <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
+      <div className="card relative w-full max-w-sm p-6" role="dialog" aria-modal="true">
+        <h3 className="font-display text-[24px] font-normal tracking-[-0.02em] text-ink">{title}</h3>
         {description && <p className="mt-1.5 text-[13px] text-ink-muted">{description}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className="btn" onClick={onCancel}>

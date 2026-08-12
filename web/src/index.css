@@ -2,74 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
-/* DomainHunter editorial workbench
-   纸张感底色 + 薄荷/腮红平面 + 深青/海军蓝信息层级。
-   阴影被刻意收掉，让数据密度来自间距、细线和色块。 */
+/* DomainHunter · Monad visual system
+   Warm parchment canvas, editorial serif display type and mono utility text.
+   The palette stays deliberately quiet so status and primary actions retain meaning. */
 @layer base {
   :root {
-    --font-sofia-pro: "Sofia Pro", "Avenir Next", "Helvetica Neue", "PingFang SC", "Noto Sans SC", sans-serif;
-    --font-display: "P22 Mackinac Pro", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-    --font-ibm-plex-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-abc-diatype-mono: "ABC Diatype Mono", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-untitled-serif: "Untitled Serif", "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+    --font-untitled-sans: "Untitled Sans", "Helvetica Neue", "PingFang SC", sans-serif;
 
-    --canvas: 242 248 247;
-    --surface: 228 240 241;
-    --surface-subtle: 242 232 226;
-    --surface-muted: 202 225 226;
-    --surface-raised: 255 255 255;
-    --line: 183 211 211;
-    --ink: 40 51 56;
-    --ink-muted: 67 83 85;
-    --ink-faint: 91 110 111;
-    --accent: 28 93 95;
-    --accent-soft: 202 225 226;
-    --paper: 242 248 247;
-    --card-mint: 228 240 241;
-    --blush: 242 232 226;
-    --sea-foam: 202 225 226;
-    --mint-mist: 162 203 205;
-    --deep-teal: 28 93 95;
-    --pine: 14 71 73;
-    --sage: 101 184 162;
-    --lake: 42 119 121;
-    --forest: 21 97 82;
-    --navy: 22 50 90;
-    --rose: 214 174 193;
-    --charcoal: 40 51 56;
-    --illustration-ink: 35 30 33;
+    --parchment: 246 243 241;
+    --lake-blue: 43 89 209;
+    --periwinkle-mist: 207 218 245;
+    --sky-blue: 160 181 235;
+    --mint: 167 252 205;
+    --coral: 255 148 115;
+    --gold: 236 218 152;
+    --crimson: 243 122 10;
+    --off-black: 36 36 36;
+    --ink-black: 0 0 0;
+    --graphite: 78 77 77;
+    --smoke: 121 119 118;
+    --ash: 206 202 200;
+    --danger: 170 65 48;
     --review: 126 74 105;
-    --danger: 166 63 53;
-    --density-card-pad: 1rem;
-    --density-card-header-pad: 0.625rem;
+
+    /* Existing semantic aliases remain stable for every page component. */
+    --canvas: 246 243 241;
+    --surface: 246 243 241;
+    --surface-subtle: 239 235 232;
+    --surface-muted: 232 228 225;
+    --surface-raised: 250 248 247;
+    --line: 206 202 200;
+    --ink: 36 36 36;
+    --ink-muted: 78 77 77;
+    --ink-faint: 121 119 118;
+    --accent: 43 89 209;
+    --accent-soft: 207 218 245;
+    --paper: 246 243 241;
+    --card-mint: 207 218 245;
+    --blush: 255 232 224;
+    --sea-foam: 226 244 233;
+    --mint-mist: 160 181 235;
+    --deep-teal: 43 89 209;
+    --pine: 36 36 36;
+    --sage: 167 252 205;
+    --lake: 43 89 209;
+    --forest: 30 106 71;
+    --navy: 36 36 36;
+    --rose: 255 148 115;
+    --charcoal: 36 36 36;
+    --illustration-ink: 36 36 36;
+    --density-card-pad: 1.5rem;
+    --density-card-header-pad: 1rem;
   }
 
+  /* Keep the existing dark option useful without changing the default visual language. */
   .dark {
-    --canvas: 20 35 36;
-    --surface: 29 57 58;
-    --surface-subtle: 62 47 49;
-    --surface-muted: 39 79 80;
-    --surface-raised: 25 44 45;
-    --line: 75 116 116;
-    --ink: 239 247 244;
-    --ink-muted: 180 204 202;
-    --ink-faint: 143 172 170;
-    --accent: 103 201 176;
-    --accent-soft: 40 86 86;
-    --paper: 20 35 36;
-    --card-mint: 29 57 58;
-    --blush: 62 47 49;
-    --sea-foam: 39 79 80;
-    --mint-mist: 73 125 126;
-    --deep-teal: 42 119 121;
-    --pine: 21 97 82;
-    --sage: 103 201 176;
-    --lake: 111 198 194;
-    --forest: 112 211 181;
-    --navy: 168 194 231;
-    --rose: 224 173 197;
-    --charcoal: 239 247 244;
-    --illustration-ink: 239 247 244;
-    --review: 225 171 205;
-    --danger: 242 133 122;
+    --canvas: 29 29 31;
+    --surface: 38 38 41;
+    --surface-subtle: 47 45 46;
+    --surface-muted: 57 56 59;
+    --surface-raised: 43 43 46;
+    --line: 91 88 88;
+    --ink: 246 243 241;
+    --ink-muted: 202 198 196;
+    --ink-faint: 157 152 150;
+    --accent: 137 163 239;
+    --accent-soft: 61 75 122;
+    --paper: 29 29 31;
+    --card-mint: 61 75 122;
+    --blush: 83 55 51;
+    --sea-foam: 45 75 61;
+    --deep-teal: 93 122 222;
+    --pine: 246 243 241;
+    --sage: 167 252 205;
+    --lake: 137 163 239;
+    --forest: 167 252 205;
+    --navy: 246 243 241;
+    --rose: 255 148 115;
+    --charcoal: 246 243 241;
+    --illustration-ink: 246 243 241;
+    --review: 226 158 202;
+    --danger: 244 137 116;
   }
 
   html,
@@ -78,12 +93,16 @@
     height: 100%;
   }
 
+  html {
+    background: rgb(var(--canvas));
+  }
+
   body {
     @apply text-ink font-sans antialiased;
     background: rgb(var(--canvas));
     font-size: 14px;
-    line-height: 1.5;
-    /* 表格与代码块自己滚动，页面整体永远不横向滚动 */
+    line-height: 1.35;
+    letter-spacing: -0.025em;
     overflow-x: hidden;
   }
 
@@ -92,7 +111,7 @@
   }
 
   ::selection {
-    background: rgb(var(--accent) / 0.2);
+    background: rgb(var(--lake-blue) / 0.2);
   }
 
   button,
@@ -107,53 +126,67 @@
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible {
-    outline: 2px solid rgb(var(--sage));
-    outline-offset: 2px;
+    outline: 2px solid rgb(var(--lake-blue));
+    outline-offset: 3px;
   }
 }
 
 @layer components {
   .card {
-    @apply rounded-card border border-line bg-surface;
+    @apply min-w-0 rounded-card border border-line bg-surface;
     box-shadow: none;
   }
 
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-button
-      border border-line bg-surface-raised px-4 py-2 text-[13px] font-medium text-ink
-      transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-button
+      border border-line bg-transparent px-4 py-2 text-[12px] font-medium uppercase tracking-[-0.02em] text-ink
+      transition-[background-color,border-color,color,transform] duration-150 hover:border-ink hover:bg-surface-muted
+      disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translateY(1px);
   }
 
   .workspace-header {
-    @apply border-0 bg-transparent px-0 pb-4 pt-1;
+    @apply border-0 bg-transparent px-0 pb-6 pt-1;
   }
 
-  .workspace-header h1 {
-    @apply editorial-title mt-2 text-[30px] leading-tight sm:text-[38px];
+  .workspace-header h1,
+  .workspace-header > div > h1 {
+    @apply editorial-title mt-2 text-[34px] leading-[1.2] sm:text-[44px];
   }
 
   .workspace-kicker {
-    @apply relative inline-flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-accent;
+    @apply inline-flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-ink-muted;
   }
 
   .workspace-kicker::before {
     content: "";
-    width: 0.4rem;
-    height: 0.4rem;
+    width: 0.45rem;
+    height: 0.45rem;
+    border: 1px solid rgb(var(--ink));
     border-radius: 999px;
-    background: rgb(var(--sage));
-    box-shadow: 0 0 0 3px rgb(var(--sage) / 0.16);
+    background: rgb(var(--lake-blue));
   }
 
   .editorial-title {
-    font-family: var(--font-display);
-    font-weight: 500;
-    letter-spacing: -0.035em;
-    color: rgb(var(--navy));
+    font-family: var(--font-untitled-serif);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: rgb(var(--off-black));
+  }
+
+  .page-shell h1,
+  .page-shell h2,
+  .page-shell h3 {
+    font-family: var(--font-untitled-serif);
+    font-weight: 400;
+    letter-spacing: -0.02em;
   }
 
   .section-label {
-    @apply font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-accent;
+    @apply font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-ink-muted;
   }
 
   .flat-panel {
@@ -170,45 +203,46 @@
   }
 
   .sidebar-link {
-    @apply flex items-center gap-2.5 rounded-nav px-3 py-2.5 text-[13px] text-ink-muted transition-colors;
+    @apply flex items-center gap-3 rounded-button px-3 py-2.5 text-[12px] uppercase tracking-[-0.02em] text-ink-muted transition-colors;
   }
 
   .sidebar-link:hover {
-    background: rgb(var(--surface-muted) / 0.74);
+    background: rgb(var(--surface-muted) / 0.72);
     color: rgb(var(--ink));
   }
 
   .sidebar-link-active {
-    background: rgb(var(--accent));
-    color: white;
+    background: rgb(var(--off-black));
+    color: rgb(var(--parchment));
   }
 
   .sidebar-link-active:hover {
-    background: rgb(var(--pine));
-    color: white;
+    background: rgb(var(--off-black));
+    color: rgb(var(--parchment));
   }
 
   .dark .sidebar-link-active {
-    background: rgb(var(--deep-teal));
-    color: rgb(var(--ink));
+    background: rgb(var(--lake-blue));
+    color: white;
   }
 
   .dark .sidebar-link-active:hover {
-    background: rgb(var(--pine));
-    color: rgb(var(--ink));
+    background: rgb(var(--lake-blue));
+    color: white;
   }
 
   .brand-wordmark {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    letter-spacing: -0.04em;
-    color: rgb(var(--navy));
+    font-family: var(--font-untitled-serif);
+    font-size: 1.25rem;
+    font-weight: 400;
+    letter-spacing: -0.03em;
+    color: rgb(var(--off-black));
   }
 
   .review-badge {
-    @apply inline-flex items-center rounded-tag border px-2 py-0.5 text-[11px] font-medium leading-4;
-    border-color: rgb(var(--review) / 0.35);
-    background: rgb(var(--review) / 0.09);
+    @apply inline-flex items-center rounded-tag border px-2 py-0.5 text-[10px] font-medium uppercase leading-4 tracking-[-0.02em];
+    border-color: rgb(var(--review) / 0.45);
+    background: rgb(var(--review) / 0.07);
     color: rgb(var(--review));
   }
 
@@ -217,38 +251,33 @@
   }
 
   .data-table-refined tbody tr:hover {
-    background: rgb(var(--accent-soft) / 0.55);
+    background: rgb(var(--periwinkle-mist) / 0.42);
   }
 
   .btn-primary {
-    @apply border-transparent bg-deep-teal text-white hover:bg-pine;
+    @apply border-transparent bg-lake text-white hover:border-transparent hover:bg-lake/90;
   }
 
   .btn-secondary {
-    @apply border-transparent bg-navy text-white hover:bg-navy/90;
-  }
-
-  .dark .btn-secondary {
-    background: rgb(22 50 90);
-    color: white;
+    @apply border-transparent bg-off-black text-white hover:border-transparent hover:bg-off-black/90;
   }
 
   .btn-ghost {
-    @apply border-pine/35 bg-transparent text-pine hover:bg-sea-foam dark:text-ink;
+    @apply border-ink/40 bg-transparent text-ink hover:border-ink hover:bg-transparent;
   }
 
   .btn-danger {
-    @apply border-transparent bg-danger text-white hover:bg-danger/90;
+    @apply border-transparent bg-danger text-white hover:border-transparent hover:bg-danger/90;
   }
 
   .input {
-    @apply w-full rounded-[10px] border border-line bg-surface-raised px-3 py-2 text-[13px]
-      text-ink placeholder:text-ink-faint focus:border-pine focus:outline-none
-      focus:ring-1 focus:ring-sage disabled:opacity-60;
+    @apply w-full rounded-button border border-line bg-surface-raised px-4 py-2.5 text-[12px]
+      text-ink placeholder:text-ink-faint focus:border-lake focus:outline-none
+      focus:ring-1 focus:ring-lake/40 disabled:opacity-60;
   }
 
   .label {
-    @apply mb-1 block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted;
+    @apply mb-1.5 block font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-ink-muted;
   }
 
   .table-scroll {
@@ -262,15 +291,52 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  .page-shell {
+    max-width: 1432px;
+  }
+
+  .overview-stats-band {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .overview-stats-band::before {
+    position: absolute;
+    inset: -3rem 8% -3rem 0;
+    z-index: -1;
+    content: "";
+    background: linear-gradient(90deg, rgb(var(--coral) / 0.16), rgb(var(--sky-blue) / 0.13) 52%, rgb(var(--mint) / 0.16));
+    filter: blur(42px);
+  }
+
+  .design-wash {
+    position: absolute;
+    width: 22rem;
+    height: 22rem;
+    pointer-events: none;
+    border-radius: 9999px;
+    filter: blur(70px);
+    opacity: 0.24;
+  }
+
+  .design-wash-coral {
+    top: -6rem;
+    left: -5rem;
+    background: rgb(var(--coral));
+  }
+
+  .design-wash-blue {
+    right: -7rem;
+    bottom: -7rem;
+    background: rgb(var(--sky-blue));
+  }
 }
 
 @keyframes skeleton-pulse {
-  from {
-    opacity: 0.62;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0.52; }
+  to { opacity: 1; }
 }
 
 .skeleton {
@@ -280,12 +346,8 @@
 }
 
 @keyframes status-row-highlight {
-  0% {
-    background-color: rgb(var(--accent-soft) / 0.95);
-  }
-  100% {
-    background-color: transparent;
-  }
+  0% { background-color: rgb(var(--periwinkle-mist) / 0.85); }
+  100% { background-color: transparent; }
 }
 
 .status-change-highlight {
@@ -293,34 +355,17 @@
 }
 
 @keyframes toast-enter {
-  from {
-    opacity: 0;
-    transform: translateY(0.5rem) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(0.5rem) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes toast-leave {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(0.35rem) scale(0.98);
-  }
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(0.35rem) scale(0.98); }
 }
 
-.toast-enter {
-  animation: toast-enter 180ms ease-out both;
-}
-
-.toast-leave {
-  animation: toast-leave 320ms ease-in both;
-}
+.toast-enter { animation: toast-enter 180ms ease-out both; }
+.toast-leave { animation: toast-leave 320ms ease-in both; }
 
 .raw-code {
   display: grid;
@@ -328,9 +373,9 @@
   overflow: auto;
   max-height: 60vh;
   border: 1px solid rgb(var(--line));
-  border-radius: 10px;
+  border-radius: 24px;
   background: rgb(var(--surface-muted));
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-abc-diatype-mono);
   font-size: 0.75rem;
   line-height: 1.6;
 }
@@ -363,19 +408,19 @@
 
 @media (min-width: 1024px) {
   .page-shell {
-    width: min(100%, 1200px);
+    width: min(100%, 1432px);
     margin-inline: auto;
   }
 }
 
 html[data-density="compact"] {
-  --density-card-pad: 0.75rem;
-  --density-card-header-pad: 0.5rem;
+  --density-card-pad: 1.15rem;
+  --density-card-header-pad: 0.8rem;
 }
 
 html[data-density="dense"] {
-  --density-card-pad: 0.625rem;
-  --density-card-header-pad: 0.375rem;
+  --density-card-pad: 0.9rem;
+  --density-card-header-pad: 0.65rem;
 }
 
 html[data-density="compact"] .density-card-body:not(.p-0),
@@ -388,17 +433,11 @@ html[data-density="dense"] .density-card-header {
   padding-block: var(--density-card-header-pad);
 }
 
-/* 滚动条低调一些，避免抢视觉 */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb {
-  background: rgb(var(--line));
+  background: rgb(var(--ash));
   border-radius: 6px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+::-webkit-scrollbar-track { background: transparent; }
