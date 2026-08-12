@@ -70,7 +70,7 @@ export function DomainValuationPanel({
             {job && <JobStatePill state={job.state} />}
           </div>
           <h3 className="mt-1 text-[14px] font-semibold text-ink">AI 域名鉴定报告</h3>
-          <p className="mt-1 text-[12px] leading-5 text-ink-muted">默认使用 DeepSeek；输出评分、人民币价格区间和用途分析，不改变查询状态或可注册结论。</p>
+          <p className="mt-1 text-[12px] leading-5 text-ink-muted">默认使用当前启用的 AI 配置；输出评分、人民币价格区间和用途分析，不改变查询状态或可注册结论。</p>
         </div>
         <button
           type="button"
@@ -125,7 +125,7 @@ function EmptyValuationState({ disabled, reviewRequired, onStart }: { disabled: 
     <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
       <div>
         <p className="text-[13px] font-medium text-ink">尚无估价记录</p>
-        <p className="mt-1 text-[12px] leading-5 text-ink-muted">默认使用已启用的 DeepSeek 配置档案。可在 AI 与自动化中更换模型、额度和安全的 Base URL。</p>
+        <p className="mt-1 text-[12px] leading-5 text-ink-muted">默认使用已启用的 AI 配置档案。可在 AI 与自动化中更换提供商、模型、额度和安全的 Base URL。</p>
       </div>
       <button type="button" className="btn btn-primary h-9 whitespace-nowrap" disabled={disabled} onClick={onStart}>
         加入估价队列

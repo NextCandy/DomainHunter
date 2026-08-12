@@ -1,6 +1,6 @@
 # AI 域名鉴定估价前端模块
 
-本模块位于 `web/src/features/ai-valuation`，采用 React 18、TypeScript 与项目既有的 Tailwind / `ui.tsx` 组件。它已通过当前项目的 `npm run typecheck`、`npm run lint` 与 `npm run build`。模块尚未自动挂载到现有页面，因为当前源码中的 Go 后端尚未提供下述 `/api/v2/ai/*` 契约；在后端完成前，直接挂载会使“加入估价队列”得到安全的 404 错误，而不是产生真实任务。
+本模块位于 `web/src/features/ai-valuation`，采用 React 18、TypeScript 与项目既有的 Tailwind / `ui.tsx` 组件，已挂载到域名详情与“AI 研究与自动化”页面。它已通过当前项目的 `npm run typecheck`、`npm run lint` 与 `npm run build`；Go 后端同步提供下述 `/api/v2/ai/*` 契约，浏览器只访问同源 API，API Key 仅由后端读取。
 
 ## 目录
 
@@ -16,7 +16,7 @@
 
 ## 1. 后端 API 契约
 
-前端调用均经由 DomainHunter 同源 API；**浏览器不能直接调用 DeepSeek，也不得接触 API Key**。后端应返回 JSON，非 2xx 返回 `{ "error": "可读错误信息" }`。
+前端调用均经由 DomainHunter 同源 API；**浏览器不能直接调用 AI 提供商，也不得接触 API Key**。后端应返回 JSON，非 2xx 返回 `{ "error": "可读错误信息" }`。
 
 | 方法与路径 | 用途 | 最小响应 |
 | --- | --- | --- |
@@ -102,7 +102,7 @@ import { DeepSeekProfileForm } from "../features/ai-valuation";
 />
 ```
 
-新建 DeepSeek 档案的默认值为 `https://api.deepseek.com` 和 `deepseek-v4-flash`。用户只填写 **Base URL**；前端会阻止 `/chat/completions`、query、fragment、userinfo 与非 HTTPS 输入，但这些只是体验校验。后端必须再次执行 DNS/IP 私网拒绝、出站 allowlist、重定向逐跳检查与 URL 规范化。
+默认档案使用 OpenAI Compatible / OpenCode Zen：`https://opencode.ai/zen/v1` 和 `deepseek-v4-flash-free`；用户也可以在表单中切换 DeepSeek 官方或其他已允许的 OpenAI-compatible 网关。用户只填写 **Base URL**；前端会阻止 `/chat/completions`、query、fragment、userinfo 与非 HTTPS 输入，但这些只是体验校验。后端必须再次执行 DNS/IP 私网拒绝、出站 allowlist、重定向逐跳检查与 URL 规范化。
 
 ## 4. UI 精致化接入
 
