@@ -40,7 +40,7 @@ export function DomainValuationPanel({
 }: DomainValuationPanelProps) {
   const toast = useToast();
   const [showDetails, setShowDetails] = useState(!compact);
-  const { job, loading, submitting, error, enqueue, cancel, refresh, clearError } = useDomainValuation(domain, {
+  const { job, loading, submitting, error, enqueue, cancel, retry, refresh, clearError } = useDomainValuation(domain, {
     onUnauthorized,
     onCompleted: (completed) => {
       if (completed.state === "succeeded") toast("AI 估价已完成", "success");
@@ -101,7 +101,7 @@ export function DomainValuationPanel({
             onStart={() => void startValuation(false)}
           />
         )}
-        {job && <ValuationJobContent job={job} compact={compact} showDetails={showDetails} onToggleDetails={() => setShowDetails((value) => !value)} onStart={startValuation} onCancel={cancel} pending={submitting} allowRetry={Boolean(canEnqueue)} />}
+        {job && <ValuationJobContent job={job} compact={compact} showDetails={showDetails} onToggleDetails={() => setShowDetails((value) => !value)} onStart={startValuation} onRetry={retry} onCancel={cancel} pending={submitting} allowRetry={Boolean(canEnqueue)} />}
       </div>
     </section>
   );
@@ -141,6 +141,7 @@ function ValuationJobContent({
   showDetails,
   onToggleDetails,
   onStart,
+  onRetry,
   onCancel,
   pending,
   allowRetry,
@@ -150,11 +151,16 @@ function ValuationJobContent({
   showDetails: boolean;
   onToggleDetails: () => void;
   onStart: (forceRefresh?: boolean) => Promise<void>;
+  onRetry: () => Promise<void>;
   onCancel: () => Promise<void>;
   pending: boolean;
   allowRetry: boolean;
 }) {
-  if (job.state === "queued" || job.state === "running" || job.state === "deferred") {
+  if (job.state === "deferred") {
+    return <DeferredState job={job} pending={pending} allowRetry={allowRetry} onRetry={onRetry} onCancel={onCancel} />;
+  }
+
+  if (job.state === "queued" || job.state === "running") {
     return <InProgressState job={job} pending={pending} onCancel={onCancel} />;
   }
 
@@ -179,10 +185,32 @@ function InProgressState({ job, pending, onCancel }: { job: ValuationJob; pendin
   const quota = job.quota;
   return (
     <div className="border border-accent/25 bg-accent-soft/55 p-3">
-      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Spinner /><span className="text-[13px] font-semibold text-ink">{job.state === "running" ? "正在生成域名鉴定报告…" : job.state === "deferred" ? "等待额度或重试窗口" : "已加入估价队列"}</span></div><span className="mono text-[11px] text-accent">{job.cached ? "CACHE HIT" : job.state.toUpperCase()}</span></div>
+      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Spinner /><span className="text-[13px] font-semibold text-ink">{job.state === "running" ? "正在生成域名鉴定报告…" : "已加入估价队列"}</span></div><span className="mono text-[11px] text-accent">{job.cached ? "CACHE HIT" : job.state.toUpperCase()}</span></div>
       <div className="mt-3 grid gap-2 border-t border-accent/20 pt-2 text-[12px] text-ink-muted sm:grid-cols-2"><span>入队：{formatRelative(job.queued_at)}</span>{quota && <span className="sm:text-right">今日剩余：{quota.remaining_today} / {quota.daily_limit}</span>}</div>
       {job.retry_after && <p className="mt-2 text-[12px] text-ink-muted">预计重试：{formatDateTime(job.retry_after)}</p>}
       {job.state !== "running" && <button type="button" className="btn mt-3 h-8 text-[12px]" disabled={pending} onClick={() => void onCancel()}>取消任务</button>}
+    </div>
+  );
+}
+
+function DeferredState({ job, pending, allowRetry, onRetry, onCancel }: { job: ValuationJob; pending: boolean; allowRetry: boolean; onRetry: () => Promise<void>; onCancel: () => Promise<void> }) {
+  return (
+    <div className="rounded-[24px] border border-amber-300/80 bg-amber-50/75 px-5 py-4 dark:border-amber-700/60 dark:bg-amber-950/25">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-amber-900 dark:text-amber-100">上游 AI 暂时限流，任务会自动重试</p>
+          <p className="mt-1 whitespace-pre-line text-[12px] leading-5 text-amber-800 dark:text-amber-200">{job.error_message || "AI 提供商暂时不可用，DomainHunter 已保留任务。"}</p>
+        </div>
+        <span className="mono text-[10px] text-amber-700 dark:text-amber-300">DEFERRED</span>
+      </div>
+      <div className="mt-3 grid gap-1 border-t border-amber-300/60 pt-3 text-[11px] text-amber-800 dark:border-amber-700/50 dark:text-amber-200 sm:grid-cols-2">
+        <span>入队：{formatRelative(job.queued_at)}</span>
+        <span className="sm:text-right">{job.retry_after ? `自动重试：${formatDateTime(job.retry_after)}` : "等待提供商恢复"}</span>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" className="btn h-8 text-[12px]" disabled={pending || !allowRetry} onClick={() => void onRetry()}>立即重试</button>
+        <button type="button" className="btn h-8 text-[12px]" disabled={pending} onClick={() => void onCancel()}>取消任务</button>
+      </div>
     </div>
   );
 }

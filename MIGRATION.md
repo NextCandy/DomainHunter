@@ -107,7 +107,7 @@ P1 AI 变量没有旧版别名：
 | --- | --- |
 | `DOMAINHUNTER_AI_API_KEY` | 优先级最高的环境 Key，不写入 SQLite |
 | `DOMAINHUNTER_SECRET_KEY` | UI 保存 Key 时用于 AES-GCM 加密的主密钥；不要提交到仓库 |
-| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | 手动 Base URL 的主机 allowlist；默认允许 `api.deepseek.com,opencode.ai` |
+| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | 手动 Base URL 的主机 allowlist；默认允许 `api.deepseek.com` |
 | `DOMAINHUNTER_ALLOW_INSECURE_AI_BASE_URL` | 严格估价仅设为 `true` 才允许受控本机 HTTP 开发端点；生产环境必须保持 `false` |
 | `DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL` | 旧版 P1 AI 的兼容变量；严格估价不读取 |
 

@@ -127,15 +127,15 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
         </button>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {DROP_STATUSES.map((status) => (
-          <div key={status} className="card px-3 py-2.5">
+          <div key={status} className="card min-h-[108px] px-6 py-5 sm:px-7">
             <div className="flex items-center gap-1.5">
               <StatusBadge status={status} />
             </div>
             <div
               className={cx(
-                "tabular mt-1 text-[20px] font-semibold leading-tight",
+                "tabular mt-3 text-[22px] font-semibold leading-tight",
                 status === "available" && (counts.get(status) ?? 0) > 0
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-ink",
@@ -245,7 +245,7 @@ function DropBoard({ counts }: { counts: Map<string, number> }) {
       action={<Pill title="从宽限期到可注册的五个观察阶段">5 阶段</Pill>}
       bodyClassName="p-0"
     >
-      <div className="relative overflow-hidden px-4 py-4">
+      <div className="relative overflow-hidden px-6 py-6 sm:px-8 sm:py-8">
         <div
           className="absolute bottom-7 left-8 top-7 w-px bg-line md:hidden"
           aria-hidden="true"

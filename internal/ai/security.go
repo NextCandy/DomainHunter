@@ -82,7 +82,7 @@ type BaseURLPolicy struct {
 // DOMAINHUNTER_AI_ALLOWED_HOSTS is a comma-separated host list; the supported
 // first-party/default hosts are always allowed.
 func BaseURLPolicyFromEnv() BaseURLPolicy {
-	allowed := map[string]struct{}{"api.deepseek.com": {}, "opencode.ai": {}}
+	allowed := map[string]struct{}{"api.deepseek.com": {}}
 	for _, raw := range strings.Split(os.Getenv("DOMAINHUNTER_AI_ALLOWED_HOSTS"), ",") {
 		if host := strings.ToLower(strings.TrimSpace(raw)); host != "" {
 			allowed[host] = struct{}{}

@@ -26,8 +26,8 @@ import (
 
 const (
 	defaultAIProvider = "openai_compatible"
-	defaultAIBaseURL  = "https://opencode.ai/zen/v1"
-	defaultAIModel    = "deepseek-v4-flash-free"
+	defaultAIBaseURL  = "https://api.deepseek.com"
+	defaultAIModel    = "deepseek-v4-flash"
 	analysisVersion   = "p1-valuation-v1"
 )
 
@@ -508,7 +508,7 @@ func validateAIBaseURL(raw string) error {
 	if len(allowlist) > 0 && !containsHost(allowlist, host) {
 		return fmt.Errorf("Base URL 主机不在 DOMAINHUNTER_AI_ALLOWED_HOSTS allowlist 中")
 	}
-	if len(allowlist) == 0 && host != "api.deepseek.com" && host != "opencode.ai" && !(allowLocal && isLocalHost(host)) {
+	if len(allowlist) == 0 && host != "api.deepseek.com" && !(allowLocal && isLocalHost(host)) {
 		return fmt.Errorf("自定义 Base URL 必须配置 DOMAINHUNTER_AI_ALLOWED_HOSTS allowlist")
 	}
 	if isBlockedHost(host) && !(allowLocal && isLocalHost(host)) {

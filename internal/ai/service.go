@@ -52,6 +52,13 @@ func (s *Service) EnsureDefaultProfile(ctx context.Context) error {
 		return err
 	}
 	if existing != nil {
+		defaults := DefaultDeepSeekProfile()
+		if existing.IsDefault && existing.BaseURLHost == "opencode.ai" && existing.Model == "deepseek-v4-flash-free" {
+			defaults.Enabled = existing.Enabled
+			defaults.IsDefault = true
+			_, err = s.SaveProfile(ctx, existing.ID, defaults, "system")
+			return err
+		}
 		return nil
 	}
 	_, err = s.SaveProfile(ctx, "", DefaultDeepSeekProfile(), "system")
@@ -253,6 +260,15 @@ func (s *Service) Cancel(ctx context.Context, jobID, actor string) (*Job, error)
 		return nil, err
 	}
 	_ = s.store.Audit(ctx, "ai_valuation_cancelled", job.Domain, job.ProfileID, job.ID, actor, map[string]any{})
+	return job, nil
+}
+
+func (s *Service) RetryNow(ctx context.Context, jobID, actor string) (*Job, error) {
+	job, err := s.store.RetryJobNow(ctx, jobID, s.clock())
+	if err != nil {
+		return nil, err
+	}
+	_ = s.store.Audit(ctx, "ai_valuation_retried", job.Domain, job.ProfileID, job.ID, actor, map[string]any{"manual": true})
 	return job, nil
 }
 

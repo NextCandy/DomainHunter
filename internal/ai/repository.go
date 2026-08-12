@@ -8,6 +8,7 @@ import (
 
 var ErrActiveJobDuplicate = errors.New("相同输入的 AI 估价任务已在队列中")
 var ErrJobNotCancellable = errors.New("任务已开始或不存在，不能取消")
+var ErrJobNotRetryable = errors.New("任务不在待重试状态")
 
 // ProfileRecord is storage-only and must never be returned by HTTP handlers.
 type ProfileRecord struct {
@@ -38,6 +39,7 @@ type Store interface {
 	ClaimNextJob(ctx context.Context, now time.Time, lease time.Duration) (*JobClaim, error)
 	RenewLease(ctx context.Context, jobID string, until time.Time) error
 	CancelJob(ctx context.Context, jobID string, now time.Time) (*Job, error)
+	RetryJobNow(ctx context.Context, jobID string, now time.Time) (*Job, error)
 	CompleteJob(ctx context.Context, jobID string, valuation Valuation, now time.Time) error
 	FailJob(ctx context.Context, jobID, code, safeMessage string, retryAfter *time.Time, now time.Time) error
 	RecoverExpiredLeases(ctx context.Context, now time.Time) (int64, error)

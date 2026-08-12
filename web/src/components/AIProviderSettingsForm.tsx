@@ -176,5 +176,5 @@ function settingsToInput(settings: AISettings): AISettingsInput {
 }
 
 function emptySettings(): AISettingsInput {
-  return { provider: "openai_compatible", base_url: "https://opencode.ai/zen/v1", model: "deepseek-v4-flash-free", timeout_seconds: 30, concurrency: 1, max_output_tokens: 1200, daily_limit: 50, cache_ttl_seconds: 86400, enabled: false };
+  return { provider: "openai_compatible", base_url: "https://api.deepseek.com", model: "deepseek-v4-flash", timeout_seconds: 30, concurrency: 1, max_output_tokens: 1200, daily_limit: 50, cache_ttl_seconds: 86400, enabled: false };
 }

@@ -300,6 +300,9 @@
     position: relative;
     isolation: isolate;
     overflow: hidden;
+    border: 1px solid rgb(var(--line));
+    border-radius: 40px;
+    background: rgb(var(--surface) / 0.72);
   }
 
   .overview-stats-band::before {
@@ -309,6 +312,42 @@
     content: "";
     background: linear-gradient(90deg, rgb(var(--coral) / 0.16), rgb(var(--sky-blue) / 0.13) 52%, rgb(var(--mint) / 0.16));
     filter: blur(42px);
+  }
+
+  .overview-stat-tile {
+    border-right: 1px solid rgb(var(--line));
+    border-bottom: 1px solid rgb(var(--line));
+  }
+
+  .overview-stat-tile:nth-child(2n),
+  .overview-stat-tile:last-child {
+    border-right: 0;
+  }
+
+  .overview-stat-tile:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
+  @media (min-width: 640px) {
+    .overview-stat-tile:nth-child(n) {
+      border-right: 1px solid rgb(var(--line));
+    }
+
+    .overview-stat-tile:nth-child(3n),
+    .overview-stat-tile:last-child {
+      border-right: 0;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .overview-stat-tile:nth-child(n) {
+      border-right: 1px solid rgb(var(--line));
+    }
+
+    .overview-stat-tile:nth-child(6n),
+    .overview-stat-tile:last-child {
+      border-right: 0;
+    }
   }
 
   .design-wash {

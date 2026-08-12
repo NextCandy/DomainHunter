@@ -185,6 +185,19 @@ func (s *Server) handleAIJobCancel(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, r, http.StatusOK, job)
 }
 
+func (s *Server) handleAIJobRetry(w http.ResponseWriter, r *http.Request) {
+	service := s.aiService(w, r)
+	if service == nil {
+		return
+	}
+	job, err := service.RetryNow(r.Context(), r.PathValue("id"), "authenticated")
+	if err != nil {
+		s.writeAIError(w, r, err)
+		return
+	}
+	s.writeJSON(w, r, http.StatusAccepted, job)
+}
+
 func (s *Server) writeAIError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, ai.ErrProfileNotFound):
@@ -195,6 +208,8 @@ func (s *Server) writeAIError(w http.ResponseWriter, r *http.Request, err error)
 		s.writeError(w, r, http.StatusConflict, "相同输入的 AI 估价任务已在队列中，请等待当前任务完成")
 	case errors.Is(err, ai.ErrJobNotCancellable):
 		s.writeError(w, r, http.StatusConflict, "任务已开始或不存在，不能取消")
+	case errors.Is(err, ai.ErrJobNotRetryable):
+		s.writeError(w, r, http.StatusConflict, "任务不在待重试状态，请刷新后查看最新结果")
 	case errors.Is(err, ai.ErrIneligible):
 		s.writeError(w, r, http.StatusUnprocessableEntity, "当前域名状态或证据不足，暂不能加入 AI 估价")
 	case errors.Is(err, ai.ErrQuotaExceeded):

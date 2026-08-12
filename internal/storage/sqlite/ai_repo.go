@@ -338,6 +338,18 @@ func (r *AIRepo) CancelJob(ctx context.Context, jobID string, now time.Time) (*a
 	return r.GetJob(ctx, jobID)
 }
 
+func (r *AIRepo) RetryJobNow(ctx context.Context, jobID string, now time.Time) (*ai.Job, error) {
+	result, err := r.db.ExecContext(ctx, `UPDATE ai_valuation_jobs SET state='queued',retry_after=NULL,lease_until=NULL,error_code='',safe_error_message='',updated_at=? WHERE id=? AND state='deferred'`, now, jobID)
+	if err != nil {
+		return nil, err
+	}
+	count, _ := result.RowsAffected()
+	if count == 0 {
+		return nil, ai.ErrJobNotRetryable
+	}
+	return r.GetJob(ctx, jobID)
+}
+
 func (r *AIRepo) CompleteJob(ctx context.Context, jobID string, valuation ai.Valuation, now time.Time) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {

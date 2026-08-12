@@ -31,5 +31,6 @@ export const valuationApi = {
       api.post<ValuationJob>(`/api/v2/domains/${encodeURIComponent(domain)}/valuation`, input),
     getJob: (jobId: string) => api.get<ValuationJob>(`/api/v2/ai/jobs/${encodeURIComponent(jobId)}`),
     cancel: (jobId: string) => api.post<ValuationJob>(`/api/v2/ai/jobs/${encodeURIComponent(jobId)}/cancel`),
+    retry: (jobId: string) => api.post<ValuationJob>(`/api/v2/ai/jobs/${encodeURIComponent(jobId)}/retry`),
   },
 };

@@ -98,11 +98,13 @@ func SystemPrompt() string {
 3. 若检测到域名后缀的谐音与前缀能够拼成一个完整的词，将其按完整词语分析；这个“按全称理解”的判断不额外抬高或压低价格，价格仍由整体稀缺性、商业用途和市场需求决定。
 4. 只能基于输入字段作条件性推断；数据不足时降低 confidence、扩大价格区间并列入 data_gaps。
 5. 不得提供购买、竞价、投资或法律行动指令。
-6. 只输出一个合法 JSON 对象，不输出 Markdown、列表符号或额外文字。
-7. price_evaluation_cny 必须是人民币宽泛研究性区间，currency 必须为 CNY；即使信息有限也要给出保守区间，不要返回 null。
+6. 只输出一个合法 JSON 对象，不输出 Markdown、列表符号或额外文字；summary 不超过 80 个汉字。
+7. price_evaluation_cny 必须严格是对象 {"low":整数,"high":整数,"currency":"CNY"}，三个字段均不可缺少，不能写成字符串或 null；即使信息有限也要给出保守区间。
 8. core_analysis 必须是一段中文综合分析，说明域名组成、语义、记忆点、后缀适用性、前缀习惯、适合用途、市场需求和溢价空间；不得声称有未提供的具体成交证据。
 
-返回字段必须包含 schema_version、summary、score、liquidity_score、risk_level、confidence、price_evaluation_cny、core_analysis、strengths、risks、data_gaps、evidence_used、status_guard、disclaimer；不要返回未声明字段。`
+严格按以下类型返回；示例中的 0 必须替换为合理整数：
+{"schema_version":"domainhunter.ai-valuation.v2-report","summary":"不超过80字","score":0,"liquidity_score":0,"risk_level":"low|medium|high","confidence":"low|medium|high","price_evaluation_cny":{"low":0,"high":0,"currency":"CNY"},"core_analysis":"中文综合分析","strengths":[],"risks":[],"data_gaps":[],"evidence_used":[],"status_guard":"AI 不改变系统查询结论","disclaimer":"仅供研究性用途"}
+不要返回未声明字段。`
 }
 
 func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile, apiKey string, input SanitizedInput) (Output, int64, error) {
@@ -134,7 +136,17 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 		"stream":          false,
 		"response_format": map[string]string{"type": "json_object"},
 	}
-	if profile.ThinkingType == ThinkingEnabled {
+	if isDeepSeekV4(profile.Model) {
+		if profile.ThinkingType == ThinkingEnabled {
+			payload["thinking"] = map[string]string{"type": "enabled"}
+			payload["reasoning_effort"] = deepSeekReasoningEffort(profile.ReasoningEffort)
+		} else {
+			// DeepSeek V4 defaults to thinking mode. Explicitly disable it when the
+			// profile says so; otherwise reasoning can consume the whole completion
+			// allowance before the compact JSON report is finished.
+			payload["thinking"] = map[string]string{"type": "disabled"}
+		}
+	} else if profile.ThinkingType == ThinkingEnabled {
 		payload["thinking"] = map[string]string{"type": "enabled"}
 		payload["reasoning_effort"] = profile.ReasoningEffort
 	}
@@ -164,12 +176,16 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 		return Output{}, latency, fmt.Errorf("读取 AI 响应失败: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		providerMessage := compatibleProviderError(responseBody)
 		switch resp.StatusCode {
 		case http.StatusUnauthorized:
 			return Output{}, latency, fmt.Errorf("%w：默认 AI 的 API Key 无效或已过期，请在 AI 与自动化中更新 Key", ErrProviderAuth)
 		case http.StatusForbidden:
 			return Output{}, latency, fmt.Errorf("%w：默认 AI API Key 没有调用权限，请检查 DeepSeek 账户权限或更换 Key", ErrProviderAuth)
 		case http.StatusTooManyRequests:
+			if providerMessage != "" {
+				return Output{}, latency, fmt.Errorf("默认 AI 请求额度已用完或触发限流，请稍后重试：%s", providerMessage)
+			}
 			return Output{}, latency, errors.New("默认 AI 请求额度已用完或触发限流，请稍后重试")
 		case http.StatusNotFound:
 			return Output{}, latency, fmt.Errorf("%w：默认 AI 模型或接口地址不存在，请检查模型配置", ErrProviderConfig)
@@ -204,6 +220,56 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 		return Output{}, latency, err
 	}
 	return output, latency, nil
+}
+
+func compatibleProviderError(body []byte) string {
+	var envelope struct {
+		Error struct {
+			Type    string `json:"type"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &envelope) != nil {
+		return ""
+	}
+	value := strings.TrimSpace(envelope.Error.Type)
+	if value == "" {
+		value = strings.TrimSpace(envelope.Error.Code)
+	}
+	if value == "" {
+		value = strings.TrimSpace(envelope.Error.Message)
+	}
+	return safeProviderMessage(value)
+}
+
+func safeProviderMessage(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, value)
+	runes := []rune(value)
+	if len(runes) > 80 {
+		value = string(runes[:80])
+	}
+	return value
+}
+
+func isDeepSeekV4(model string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(model)), "deepseek-v4")
+}
+
+func deepSeekReasoningEffort(effort ReasoningEffort) string {
+	if effort == ReasoningMax {
+		return string(ReasoningMax)
+	}
+	return string(ReasoningHigh)
 }
 
 // firstCompatibleText extracts text from the common OpenAI-compatible content
