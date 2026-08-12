@@ -500,6 +500,25 @@ var migrations = []Migration{
 			`ALTER TABLE ai_domain_valuations_v2 ADD COLUMN core_analysis TEXT NOT NULL DEFAULT ''`,
 		},
 	},
+	{
+		Version: "016",
+		Name:    "deepseek_official_default",
+		Stmts: []string{
+			`UPDATE ai_profiles
+				SET name='DeepSeek 官方 · V4 Flash', provider='openai_compatible',
+					base_url='https://api.deepseek.com', base_url_host='api.deepseek.com',
+					model='deepseek-v4-flash', thinking_type='disabled', updated_at=CURRENT_TIMESTAMP
+				WHERE is_default=1 AND base_url_host='opencode.ai' AND model='deepseek-v4-flash-free'`,
+			`UPDATE ai_provider_profiles
+				SET name='DeepSeek 官方 · V4 Flash', provider='openai_compatible',
+					base_url='https://api.deepseek.com', model='deepseek-v4-flash', updated_at=CURRENT_TIMESTAMP
+				WHERE is_default=1 AND base_url LIKE 'https://opencode.ai/%' AND model='deepseek-v4-flash-free'`,
+			`UPDATE ai_provider_settings
+				SET provider='openai_compatible', base_url='https://api.deepseek.com',
+					model='deepseek-v4-flash', updated_at=CURRENT_TIMESTAMP
+				WHERE base_url LIKE 'https://opencode.ai/%' AND model='deepseek-v4-flash-free'`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录

@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-13 · Monad UI、AI 鉴定报告、注册商直达与 OpenCode Zen 配置已部署 · Pi 版本 `v2.9.0-ui-20260813`
+> 最后更新：2026-08-13 · 圆润卡片、AI 限流重试与 DeepSeek 官方 V4 Flash 配置已部署 · Pi 版本 `v2.9.1-card-ai-20260813`
 
 ## 本次目标
 
@@ -63,8 +63,8 @@ Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动
 
 ## 数据库变化
 
-新增 `schema_migrations` 并按版本执行 14 条迁移，**全部是新增，没有任何列被
-重命名或删除**：
+新增 `schema_migrations` 并按版本执行 16 条迁移；结构迁移不删除任何列，016 只把旧的
+OpenCode 默认档案更新为 DeepSeek 官方配置：
 
 | 版本 | 内容 |
 | --- | --- |
@@ -83,8 +83,9 @@ Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动
 | 013 | 严格研究性估价的 `ai_profiles` / `ai_valuation_jobs` / `ai_domain_valuations_v2` / `ai_audit_log` |
 | 014 | `domain_results.confidence` 可信度字段 |
 | 015 | 严格 AI 人民币价格区间与核心分析字段 |
+| 016 | 默认 AI 档案切换到 `api.deepseek.com` / `deepseek-v4-flash` |
 
-因此 **v1 二进制仍能读 v2 的库**；迁移 010–014 仅新增表和索引/字段，旧字段与旧 API 不变，
+因此 **v1 二进制仍能读 v2 的库**；迁移 010–015 仅新增表和索引/字段，旧字段与旧 API 不变，
 回滚程序不会删除 P1 数据。
 
 数据文件：默认 `domainhunter.db`；**已存在 `puff.db` 的部署继续使用 puff.db，

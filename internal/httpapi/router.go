@@ -132,6 +132,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v2/ai/jobs", s.withAuthScope("read", s.handleAIJobs))
 	mux.HandleFunc("POST /api/v2/ai/jobs", s.withAuthScope("write", s.handleAIJobs))
 	mux.HandleFunc("POST /api/v2/ai/jobs/{id}/cancel", s.withAuthScope("write", s.handleAICancelJobCompat))
+	mux.HandleFunc("POST /api/v2/ai/jobs/{id}/retry", s.withAuthScope("write", s.handleAIJobRetry))
 	mux.HandleFunc("GET /api/v2/ai/valuations/{domain}", s.withAuthScope("read", s.handleAIValuation))
 	mux.HandleFunc("GET /api/v2/ai/valuation-policy", s.withAuthScope("read", s.handleAIValuationPolicy))
 	mux.HandleFunc("GET /api/v2/ai/profiles", s.withAuthScope("read", s.handleAIProfiles))

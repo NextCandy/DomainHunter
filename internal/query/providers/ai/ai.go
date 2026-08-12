@@ -54,11 +54,11 @@ func New(timeout time.Duration) *Provider {
 	}
 	baseURL := strings.TrimRight(os.Getenv("DOMAINHUNTER_AI_BASE_URL"), "/")
 	if baseURL == "" {
-		baseURL = "https://opencode.ai/zen/v1"
+		baseURL = "https://api.deepseek.com"
 	}
 	model := strings.TrimSpace(os.Getenv("DOMAINHUNTER_AI_MODEL"))
 	if model == "" {
-		model = "deepseek-v4-flash-free"
+		model = "deepseek-v4-flash"
 	}
 	return &Provider{
 		baseURL: baseURL,

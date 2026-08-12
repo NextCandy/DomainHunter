@@ -198,12 +198,12 @@ func DefaultPolicy() Policy {
 
 func DefaultDeepSeekProfile() ProfileInput {
 	return ProfileInput{
-		Name:            "OpenAI Compatible · OpenCode Zen",
+		Name:            "DeepSeek 官方 · V4 Flash",
 		Provider:        ProviderOpenAICompatible,
 		Enabled:         true,
 		IsDefault:       true,
-		BaseURL:         "https://opencode.ai/zen/v1",
-		Model:           "deepseek-v4-flash-free",
+		BaseURL:         "https://api.deepseek.com",
+		Model:           "deepseek-v4-flash",
 		ThinkingType:    ThinkingDisabled,
 		ReasoningEffort: ReasoningLow,
 		TimeoutSeconds:  30,

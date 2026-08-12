@@ -58,7 +58,7 @@ func TestValidateOutput(t *testing.T) {
 
 func TestSystemPromptContainsRequestedReportRules(t *testing.T) {
 	prompt := SystemPrompt()
-	for _, required := range []string{"域名鉴定师", "price_evaluation_cny", "core_analysis", "谐音", "完整的词"} {
+	for _, required := range []string{"域名鉴定师", `{"low":整数,"high":整数,"currency":"CNY"}`, "core_analysis", "谐音", "完整的词"} {
 		if !contains(prompt, required) {
 			t.Fatalf("system prompt missing %q", required)
 		}
@@ -74,13 +74,22 @@ func TestEvaluateParsesChineseReportContract(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
 			t.Fatalf("unexpected authorization header: %q", got)
 		}
+		var payload struct {
+			Thinking map[string]string `json:"thinking"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode AI request: %v", err)
+		}
+		if payload.Thinking["type"] != "disabled" {
+			t.Fatalf("DeepSeek V4 must explicitly disable thinking, got %#v", payload.Thinking)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"model":"test-model","choices":[{"message":{"content":` + mustJSONString(content) + `}}]}`))
 	}))
 	defer server.Close()
 
 	client := DeepSeekCompatibleClient{Policy: BaseURLPolicy{AllowInsecureLocal: true}}
-	output, _, err := client.Evaluate(context.Background(), Profile{BaseURL: server.URL, Model: "test-model", TimeoutSeconds: 5, MaxTokens: 600}, "test-key", SanitizedInput{Domain: "daydream.im", TLD: ".im"})
+	output, _, err := client.Evaluate(context.Background(), Profile{BaseURL: server.URL, Model: "deepseek-v4-flash", ThinkingType: ThinkingDisabled, TimeoutSeconds: 5, MaxTokens: 600}, "test-key", SanitizedInput{Domain: "daydream.im", TLD: ".im"})
 	if err != nil {
 		t.Fatalf("evaluate failed: %v", err)
 	}
@@ -121,6 +130,30 @@ func TestEvaluateMapsUnauthorizedToActionableError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrProviderAuth) {
 		t.Fatalf("expected provider auth sentinel, got %v", err)
+	}
+}
+
+func TestEvaluateIncludesSafeProviderRateLimitType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"type":"FreeUsageLimitError","message":"private upstream details"}}`))
+	}))
+	defer server.Close()
+
+	client := DeepSeekCompatibleClient{Policy: BaseURLPolicy{AllowInsecureLocal: true}}
+	_, _, err := client.Evaluate(context.Background(), Profile{BaseURL: server.URL, Model: "test-model", TimeoutSeconds: 5, MaxTokens: 600}, "test-key", SanitizedInput{Domain: "daydream.im", TLD: ".im"})
+	if err == nil || !strings.Contains(err.Error(), "FreeUsageLimitError") || strings.Contains(err.Error(), "private upstream details") {
+		t.Fatalf("expected safe rate limit classification, got %v", err)
+	}
+}
+
+func TestDeepSeekV4ReasoningEffortUsesSupportedValues(t *testing.T) {
+	if got := deepSeekReasoningEffort(ReasoningLow); got != "high" {
+		t.Fatalf("DeepSeek V4 low effort must map to high, got %q", got)
+	}
+	if got := deepSeekReasoningEffort(ReasoningMax); got != "max" {
+		t.Fatalf("DeepSeek V4 max effort must remain max, got %q", got)
 	}
 }
 

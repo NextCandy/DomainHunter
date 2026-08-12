@@ -102,7 +102,7 @@ import { DeepSeekProfileForm } from "../features/ai-valuation";
 />
 ```
 
-默认档案使用 OpenAI Compatible / OpenCode Zen：`https://opencode.ai/zen/v1` 和 `deepseek-v4-flash-free`；用户也可以在表单中切换 DeepSeek 官方或其他已允许的 OpenAI-compatible 网关。用户只填写 **Base URL**；前端会阻止 `/chat/completions`、query、fragment、userinfo 与非 HTTPS 输入，但这些只是体验校验。后端必须再次执行 DNS/IP 私网拒绝、出站 allowlist、重定向逐跳检查与 URL 规范化。
+默认档案使用 DeepSeek 官方 OpenAI-compatible 接口：`https://api.deepseek.com` 和 `deepseek-v4-flash`；用户也可以在表单中切换其他已允许的 OpenAI-compatible 网关。用户只填写 **Base URL**；前端会阻止 `/chat/completions`、query、fragment、userinfo 与非 HTTPS 输入，但这些只是体验校验。后端必须再次执行 DNS/IP 私网拒绝、出站 allowlist、重定向逐跳检查与 URL 规范化。
 
 ## 4. UI 精致化接入
 

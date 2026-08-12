@@ -109,7 +109,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
       </header>
 
       <div className="overview-stats-band">
-        <div className="relative grid grid-cols-2 gap-0 border-y border-line sm:grid-cols-3 lg:grid-cols-6">
+        <div className="relative grid grid-cols-2 gap-0 sm:grid-cols-3 lg:grid-cols-6">
           <StatTile label="总域名" value={data.total} tone="ink" />
           {STATUS_ORDER.filter((status) =>
             ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
@@ -302,7 +302,7 @@ function ActionQueue({ counts }: { counts: Overview["action_counts"] }) {
     { label: "续费风险", count: counts.renewal_risk, hint: "未来 7 天内到期", href: "/domains?sort=expiry", tone: "text-ink" },
     { label: "需要复核", count: counts.review, hint: "查询事实或证据异常", href: "/domains?statuses=error,unknown,skipped", tone: "text-review" },
   ];
-  return <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{items.map((item) => <Link key={item.label} to={item.href} className="action-queue-item card block p-3 transition-colors hover:bg-accent-soft/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"><div className="flex items-start justify-between gap-2"><span className={cx("text-[13px] font-semibold", item.tone)}>{item.label}</span><span className="tabular text-[24px] font-semibold leading-none text-ink">{item.count}</span></div><p className="mt-2 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-2 block text-[11px] font-medium text-accent">打开工作区 →</span></Link>)}</div>;
+  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map((item) => <Link key={item.label} to={item.href} className="action-queue-item card block min-h-[134px] px-6 py-5 transition-colors hover:bg-accent-soft/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7"><div className="flex items-start justify-between gap-4"><span className={cx("text-[13px] font-semibold", item.tone)}>{item.label}</span><span className="tabular text-[24px] font-semibold leading-none text-ink">{item.count}</span></div><p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-3 block text-[11px] font-medium text-accent">打开工作区 →</span></Link>)}</div>;
 }
 
 function ProviderAlert({ providers }: { providers: ProviderHealth[] | null }) {
@@ -403,7 +403,7 @@ function StatTile({
   tone: "ink" | "accent";
 }) {
   return (
-    <div className="border-r border-line px-3 py-4 last:border-r-0 sm:px-4">
+    <div className="overview-stat-tile min-h-[126px] px-5 py-5 sm:px-6 sm:py-6">
       <div className="font-mono text-[10px] uppercase tracking-[-0.02em] text-ink-muted">{label}</div>
       <div
         className={cx(

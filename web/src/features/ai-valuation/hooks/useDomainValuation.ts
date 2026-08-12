@@ -20,12 +20,16 @@ export interface DomainValuationController {
   refresh: () => Promise<void>;
   enqueue: (input?: EnqueueValuationInput) => Promise<ValuationJob | null>;
   cancel: () => Promise<void>;
+  retry: () => Promise<void>;
   clearError: () => void;
 }
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 409) return "该域名已在估价队列中，请等待当前任务完成。";
+    if (error.status === 409) {
+      if (error.message.includes("重试") || error.message.includes("任务状态")) return error.message;
+      return "该域名已在估价队列中，请等待当前任务完成。";
+    }
     if (error.status === 422) {
       if (error.message.includes("API Key") || error.message.includes("模型") || error.message.includes("接口地址")) return error.message;
       return "当前域名状态或证据不足，暂不能加入 AI 估价。";
@@ -128,6 +132,21 @@ export function useDomainValuation(
     }
   }, [job, onUnauthorized]);
 
+  const retry = useCallback(async () => {
+    if (!job || job.state !== "deferred") return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const queued = await valuationApi.valuations.retry(job.id);
+      setJob(queued);
+    } catch (requestError) {
+      if (requestError instanceof UnauthorizedError) onUnauthorized?.();
+      setError(errorMessage(requestError));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [job, onUnauthorized]);
+
   return {
     job,
     loading,
@@ -136,6 +155,7 @@ export function useDomainValuation(
     refresh,
     enqueue,
     cancel,
+    retry,
     clearError: () => setError(null),
   };
 }
