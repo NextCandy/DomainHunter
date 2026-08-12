@@ -48,7 +48,7 @@ export function RegistrarLookupMenu({ domain }: { domain: string }) {
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full z-20 mt-1 min-w-[168px] rounded-md border border-line bg-surface-raised p-1 shadow-lg"
+          className="absolute left-0 top-full z-20 mt-1 min-w-[168px] rounded-card border border-line bg-surface-raised p-1"
           role="menu"
           aria-label="选择注册商查询"
         >

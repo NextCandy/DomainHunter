@@ -6,6 +6,7 @@ export default {
     extend: {
       fontFamily: {
         sans: [
+          "var(--font-sofia-pro)",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",
@@ -16,7 +17,8 @@ export default {
           "Arial",
           "sans-serif",
         ],
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+        display: ["var(--font-display)", "Georgia", "serif"],
+        mono: ["var(--font-ibm-plex-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
       colors: {
         surface: {
@@ -36,11 +38,36 @@ export default {
           DEFAULT: "rgb(var(--accent) / <alpha-value>)",
           soft: "rgb(var(--accent-soft) / <alpha-value>)",
         },
+        paper: "rgb(var(--paper) / <alpha-value>)",
+        "card-mint": "rgb(var(--card-mint) / <alpha-value>)",
+        blush: "rgb(var(--blush) / <alpha-value>)",
+        "sea-foam": "rgb(var(--sea-foam) / <alpha-value>)",
+        "mint-mist": "rgb(var(--mint-mist) / <alpha-value>)",
+        "deep-teal": "rgb(var(--deep-teal) / <alpha-value>)",
+        pine: "rgb(var(--pine) / <alpha-value>)",
+        sage: "rgb(var(--sage) / <alpha-value>)",
+        lake: "rgb(var(--lake) / <alpha-value>)",
+        forest: "rgb(var(--forest) / <alpha-value>)",
+        navy: "rgb(var(--navy) / <alpha-value>)",
+        rose: "rgb(var(--rose) / <alpha-value>)",
+        charcoal: "rgb(var(--charcoal) / <alpha-value>)",
+        "illustration-ink": "rgb(var(--illustration-ink) / <alpha-value>)",
         review: "rgb(var(--review) / <alpha-value>)",
         danger: "rgb(var(--danger) / <alpha-value>)",
       },
       borderRadius: {
-        card: "10px",
+        card: "12px",
+        button: "48px",
+        pill: "1000px",
+        nav: "88px",
+        tag: "100px",
+      },
+      maxWidth: {
+        workbench: "1200px",
+      },
+      spacing: {
+        18: "4.5rem",
+        22: "5.5rem",
       },
     },
   },

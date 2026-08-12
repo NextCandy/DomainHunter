@@ -272,7 +272,7 @@ function DropBoard({ counts }: { counts: Map<string, number> }) {
                   className={cx(
                     "z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[12px] font-semibold tabular transition-colors",
                     active
-                      ? "border-accent bg-accent text-white shadow-sm"
+                      ? "border-accent bg-accent text-white"
                       : "border-line bg-surface-raised text-ink-faint",
                   )}
                 >

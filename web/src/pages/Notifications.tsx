@@ -60,10 +60,11 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
+      <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">通知</h1>
-          <p className="text-[12px] text-ink-muted">
+          <span className="workspace-kicker">NOTIFICATION CENTER</span>
+          <h1>通知</h1>
+          <p className="mt-1 text-[12px] text-ink-muted">
             首次查询不通知；从查询失败恢复不通知；可注册结论证据不足时也不会通知
           </p>
         </div>

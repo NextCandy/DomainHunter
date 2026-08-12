@@ -112,7 +112,7 @@ export function DeepSeekProfileForm({ profile, onUnauthorized, onSaved, onCancel
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-surface">
+    <section className="overflow-hidden rounded-card border border-line bg-surface">
       <header className="border-b border-line bg-surface-subtle px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><span className="mono text-[11px] font-semibold tracking-[0.12em] text-accent">AI PROVIDER PROFILE</span><h2 className="mt-1 text-[16px] font-semibold text-ink">{profile ? "编辑 AI 估价档案" : "新建 DeepSeek 估价档案"}</h2><p className="mt-1 text-[12px] leading-5 text-ink-muted">密钥从不由读取接口回显；留空表示保留已保存的密钥或继续使用部署环境变量。</p></div>

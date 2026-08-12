@@ -18,6 +18,8 @@
   <a href="https://github.com/NextCandy/DomainHunter"><img src="https://img.shields.io/badge/architecture-Go%20%2B%20SQLite-4a4636.svg" alt="Go and SQLite" /></a>
 </p>
 
+> 当前工作区版本：`v2.7.0-ui-20260812` · 纸张薄荷编辑式工作台 UI · `.im` / `.do` 查询源路由修复
+
 DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。查询链路建立在
 "RDAP 优先、WHOIS 兼容、**无法确认就不报告可注册**"的安全模型上，
 并为每个结论保留可追溯的查询证据。
@@ -89,6 +91,12 @@ HTTP  →  Service  →  Scheduler  →  Worker Pool  →  Query Engine  →  Pr
 React + TypeScript + Vite + Tailwind，构建产物经 `go:embed` 打进同一个二进制，
 **生产运行时不需要 Node，仍然只有一个容器**。支持浅色 / 深色 / 跟随系统，
 窄屏下表格自动换成卡片列表。
+
+本次 UI 按 `DESIGN (1).md` 的编辑式研究工作台方向整理：页面使用纸张薄荷色画布
+(`#f2f8f7`)，卡片使用薄荷/腮红平面色块，标题使用文学衬线风格，区块标注使用
+IBM Plex Mono 大写字距；按钮和导航使用胶囊几何，卡片、抽屉和弹窗不使用投影，
+依靠 1px 细线与色块层级表达信息密度。桌面端采用左侧工作区导航，移动端提供顶部菜单
+与底部主导航，保留数据表、详情抽屉、AI 估价和通知配置的原有操作逻辑。
 
 | 页面 | 作用 |
 | --- | --- |
@@ -203,30 +211,32 @@ data/
 | Provider | 类型 | 说明 |
 | --- | --- | --- |
 | `who_dat` | 首选 | Pi 上的 lissy93/who-dat；生产部署默认端口 59090 |
-| `whois_domain_lookup` | 次选 | Pi 上的 whois-domain-lookup 结构化 API |
+| `whois_domain_lookup` | 通用回退 | Pi 上的 whois-domain-lookup 结构化 API；`.im` / `.do` 已有专用源时不重复调用 |
 | `vercel_who_dat` | 三选 | `https://rdap.re` 的 who-dat 兼容 API |
 | `rdap` | 通用 | 结构化优先；只有合法的 RDAP 错误对象 + 明确的"不存在"语义才判可注册 |
 | `rdap_org` | 五选 | `https://rdap.org/domain/{domain}` |
 | `ai_fallback` | 兜底 | 当前默认 AI 配置；仅输出研究性说明，不判定可注册 |
 | `whois` | 通用 | 注册局 43 端口；状态识别词表见 `internal/registry/detection_patterns.json` |
-| `whois_ls` | 按后缀启用 | WHOIS.LS JSON 网关，部署上用于 `.im` |
-| `fallback` | 按后缀启用 | 本地 whois-domain-lookup 结构化服务，部署上用于 `.im` / `.do` |
+| `whois_ls` | 专用源 | WHOIS.LS JSON 网关，部署上用于 `.im`，避免访问不可达的 `whois.nic.im:43` |
+| `fallback` | 专用源 | 本地 whois-domain-lookup 结构化服务，部署上用于 `.do`；`.im` 优先走 WHOIS.LS |
 
 查询顺序与"可注册"的采信程度可以按 TLD 配置（管理端「查询源」页，或
-`app_settings.query_policy`）：
+`app_settings.query_policy`）。未写自定义 TLD 计划时，`.im` 会优先使用
+WHOIS.LS，`.do` 会优先使用结构化 `fallback`；这两个 TLD 已有专用源时，默认会跳过
+重复访问的通用 `whois_domain_lookup`：
 
 ```json
 {
   "default": {
-    "providers": ["who_dat", "whois_domain_lookup", "vercel_who_dat", "rdap", "rdap_org", "ai_fallback"]
+    "providers": ["who_dat", "whois_ls", "fallback", "whois_domain_lookup", "vercel_who_dat", "rdap", "rdap_org", "ai_fallback"]
   },
   "rate_limits": { "whois_domain_lookup": "1s" }
 }
 ```
 
 `validate_available` 取 `true`（= `"distrust"`，不单独采信）、`"confirm"`
-（需要第二个来源印证）或 `"trust"`。**留空即使用默认五级顺序**：
-`who_dat → whois_domain_lookup → vercel_who_dat → rdap → rdap_org → ai_fallback`。
+（需要第二个来源印证）或 `"trust"`。**留空即使用默认顺序**：
+`who_dat → whois_ls/fallback（按 TLD）→ whois_domain_lookup → vercel_who_dat → rdap → rdap_org → ai_fallback`。
 
 `rate_limits` 按 `provider` 或 `provider:tld` 限制两次查询的最小间隔。
 `whois_ls` 与 `fallback` 默认各 `1s`：它们指向公共网关或单实例本地服务，
@@ -452,6 +462,12 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 4. 用临时容器验证 `/health`，再运行 `docker compose config -q`。
 5. 只重建 `DomainHunter` 服务，不触碰 who-dat、whois-domain-lookup、FRP 或其他项目。
 6. 验证 HTTP 200、容器健康、重启次数、OOM 状态、数据库完整性和 fatal 日志。
+
+2026-08-12 的实例发布版本为 `v2.7.0-ui-20260812`：包含编辑式工作台 UI、浅色/深色
+主题、桌面侧栏、移动端导航，以及 `.im` 使用 WHOIS.LS、`.do` 使用结构化 fallback
+时跳过通用 `whois-domain-lookup` 的路由修复。此次发布只重建 `DomainHunter` 容器，
+保留 545 个域名和现有 SQLite 数据；who-dat、whois-domain-lookup、Bark、FRP 与其他
+Compose 项目不参与重建。
 
 详细升级、迁移和回滚步骤见 [MIGRATION.md](MIGRATION.md)；项目历史交接与实例记录见
 [HANDOFF.md](HANDOFF.md)。

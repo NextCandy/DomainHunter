@@ -312,6 +312,36 @@ func TestDefaultPlanUsesProductFallbackOrder(t *testing.T) {
 	}
 }
 
+func TestDefaultPlanSkipsGenericLookupWhenTLDSourceIsConfigured(t *testing.T) {
+	registryOf := NewRegistry(
+		provider(ProviderWhoDat, domain.StatusUnknown),
+		provider(ProviderWhoisLS, domain.StatusUnknown),
+		provider(ProviderFallback, domain.StatusUnknown),
+		provider(ProviderWhoisDomainLookup, domain.StatusUnknown),
+		provider(ProviderVercelWhoDat, domain.StatusUnknown),
+		provider(ProviderRDAP, domain.StatusUnknown),
+		provider(ProviderRdapOrg, domain.StatusUnknown),
+		provider(ProviderAIFallback, domain.StatusUnknown),
+	)
+
+	steps := NewPolicy(Config{}).Plan(context.Background(), Request{Domain: "example.im", TLD: "im"}, registryOf)
+	for _, step := range steps {
+		if step.Provider == ProviderWhoisDomainLookup {
+			t.Fatalf(".im 已有 WHOIS.LS 专用源时不应再次调用通用 whois-domain-lookup: %+v", steps)
+		}
+	}
+	if len(steps) < 2 || steps[1].Provider != ProviderWhoisLS {
+		t.Fatalf(".im 默认计划应优先使用 WHOIS.LS: %+v", steps)
+	}
+
+	doSteps := NewPolicy(Config{}).Plan(context.Background(), Request{Domain: "example.do", TLD: "do"}, registryOf)
+	for _, step := range doSteps {
+		if step.Provider == ProviderWhoisDomainLookup {
+			t.Fatalf(".do 已有 fallback 专用源时不应再次调用通用 whois-domain-lookup: %+v", doSteps)
+		}
+	}
+}
+
 func TestLoadConfigAcceptsBooleanAndString(t *testing.T) {
 	cfg, err := LoadConfig(`{"tlds":{"im":{"providers":["whois_ls","rdap"],"validate_available":true}}}`)
 	if err != nil {

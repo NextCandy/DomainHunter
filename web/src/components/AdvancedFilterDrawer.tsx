@@ -62,7 +62,7 @@ export function AdvancedFilterDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="高级筛选">
       <button type="button" className="absolute inset-0 cursor-default bg-black/30" aria-label="关闭高级筛选" onClick={onClose} />
-      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-line bg-surface-raised p-4 shadow-xl">
+      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-line bg-surface-raised p-4">
         <header className="flex items-start justify-between gap-3 border-b border-line pb-3">
           <div>
             <h2 className="text-[15px] font-semibold">高级筛选</h2>

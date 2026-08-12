@@ -24,10 +24,13 @@ const (
 )
 
 // canonicalOrder 是未做任何配置时的默认查询顺序。
-// 按产品约定优先走可控的 who-dat，再走本地结构化服务、用户的 Vercel
-// who-dat、注册局 RDAP、rdap.org，最后才是研究性 AI 兜底。
+// 专用 TLD 源（whois_ls / fallback）放在通用 whois-domain-lookup 之前；
+// Plan 会在同一 TLD 已有专用源时跳过通用服务，避免 .im/.do 重复打到
+// 不适合该注册局的上游 WHOIS 端口。
 var canonicalOrder = []string{
 	ProviderWhoDat,
+	ProviderWhoisLS,
+	ProviderFallback,
 	ProviderWhoisDomainLookup,
 	ProviderVercelWhoDat,
 	ProviderRDAP,
@@ -304,6 +307,14 @@ func (p *Policy) Plan(ctx context.Context, req Request, reg *Registry) []Step {
 		if !ok || !p.providerEnabled(cfg, name) || !provider.Supports(ctx, req) {
 			continue
 		}
+		// The standalone whois-domain-lookup service is useful for generic TLDs,
+		// but its .im path falls through to whois.nic.im:43, which is unreachable
+		// from the production Pi. Once a TLD-specific source is configured, the
+		// specialized source is authoritative for that TLD and the generic call
+		// is redundant and noisy. An explicit TLD policy remains an override.
+		if explicit == nil && name == ProviderWhoisDomainLookup && hasOptInProviderForTLD(available) {
+			continue
+		}
 		available = append(available, name)
 		if optInProviders[name] {
 			hasOptIn = true
@@ -325,6 +336,15 @@ func (p *Policy) Plan(ctx context.Context, req Request, reg *Registry) []Step {
 		steps = append(steps, Step{Provider: name, Available: mode})
 	}
 	return steps
+}
+
+func hasOptInProviderForTLD(available []string) bool {
+	for _, name := range available {
+		if optInProviders[name] {
+			return true
+		}
+	}
+	return false
 }
 
 func hasNewChainProvider(reg *Registry) bool {

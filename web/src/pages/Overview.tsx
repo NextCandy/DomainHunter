@@ -94,7 +94,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="workspace-kicker">DOMAIN WORKSPACE</span>
-          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">今日工作台</h1>
+          <h1 className="editorial-title mt-2 text-[32px] leading-tight sm:text-[38px]">今日工作台</h1>
           <p className="text-[12px] text-ink-muted">
             共 {data.total} 个域名 · 调度器
             <span className={cx("ml-1", monitorRunning ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>
@@ -103,7 +103,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
             （{workers} worker，队列 {queued}）
           </p>
         </div>
-        <button type="button" className="btn h-8" onClick={reload}>
+        <button type="button" className="btn btn-secondary" onClick={reload}>
           刷新
         </button>
       </header>
@@ -401,11 +401,11 @@ function StatTile({
   tone: "ink" | "accent";
 }) {
   return (
-    <div className="card px-3 py-2.5">
+    <div className="card px-3 py-3 sm:px-4">
       <div className="text-[11px] text-ink-muted">{label}</div>
       <div
         className={cx(
-          "tabular mt-0.5 text-[20px] font-semibold leading-tight",
+          "tabular mt-1 text-[24px] font-semibold leading-tight",
           tone === "accent" && value > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-ink",
         )}
       >

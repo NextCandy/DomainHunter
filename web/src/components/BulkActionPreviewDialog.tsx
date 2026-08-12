@@ -53,7 +53,7 @@ export function BulkActionPreviewDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="批量操作预览">
       <button type="button" className="absolute inset-0 cursor-default bg-black/40" onClick={onClose} aria-label="关闭预览" />
-      <div className="card relative w-full max-w-lg p-4 shadow-xl">
+      <div className="card relative w-full max-w-lg p-4">
         <header><h2 className="text-[15px] font-semibold">批量操作预览</h2><p className="mt-1 text-[12px] text-ink-muted">先确认影响范围，再执行。后端不会为大批量域名发起 N 个 PATCH。</p></header>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="text-[12px] text-ink-muted">动作<select className="input mt-1" value={type} onChange={(event) => setType(event.target.value as BulkAction["type"])}><option value="ai_valuation">加入 AI 估价</option><option value="tag">添加标签</option><option value="priority">设置优先级</option><option value="folder">移动文件夹</option><option value="notification">通知开关</option><option value="monitor">监控开关</option></select></label>

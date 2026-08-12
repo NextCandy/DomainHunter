@@ -136,7 +136,7 @@ export function StatusBadge({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] font-medium leading-4",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-tag border px-2 py-0.5 text-[11px] font-medium leading-4",
         STATUS_CLASSES[status] ?? STATUS_CLASSES.unknown,
         className,
       )}
@@ -178,7 +178,7 @@ export function Pill({
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded border border-line bg-surface-muted px-1.5 py-0.5 text-[11px] leading-4 text-ink-muted",
+        "inline-flex items-center rounded-tag border border-line bg-surface-muted px-2 py-0.5 text-[11px] leading-4 text-ink-muted",
         className,
       )}
       title={title}
@@ -336,7 +336,7 @@ export function Drawer({
       />
       <aside
         className={cx(
-          "absolute inset-x-0 bottom-0 flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-surface-raised shadow-xl transition-transform duration-200 ease-out motion-reduce:transition-none",
+          "absolute inset-x-0 bottom-0 flex max-h-[92vh] w-full flex-col rounded-t-card border border-line bg-surface-raised transition-transform duration-200 ease-out motion-reduce:transition-none",
           "lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:max-h-none lg:max-w-[560px] lg:rounded-none",
           visible ? "translate-y-0 lg:translate-x-0" : "translate-y-full lg:translate-y-0 lg:translate-x-full",
         )}
@@ -457,7 +457,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             className={cx(
-              "toast pointer-events-auto flex items-start gap-2 rounded-md border px-3 py-2 text-[13px] shadow-sm",
+              "toast pointer-events-auto flex items-start gap-2 rounded-card border px-3 py-2 text-[13px]",
               toast.leaving ? "toast-leave" : "toast-enter",
               toast.tone === "error"
                 ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200"

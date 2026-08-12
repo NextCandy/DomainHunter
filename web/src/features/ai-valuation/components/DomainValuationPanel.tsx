@@ -62,7 +62,7 @@ export function DomainValuationPanel({
   }
 
   return (
-    <section className="ai-valuation-panel overflow-hidden rounded-xl border border-line bg-surface">
+    <section className="ai-valuation-panel">
       <header className="flex items-start justify-between gap-3 border-b border-line bg-accent-soft/45 px-4 py-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

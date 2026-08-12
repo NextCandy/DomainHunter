@@ -47,7 +47,7 @@ export function SavedViewMenu({
     <div className="relative">
       <button type="button" className="btn h-8" onClick={() => setOpen((value) => !value)} aria-expanded={open}>智能视图</button>
       {open && (
-        <div className="absolute right-0 top-10 z-20 w-80 rounded-lg border border-line bg-surface-raised p-3 shadow-lg">
+        <div className="absolute right-0 top-10 z-20 w-80 rounded-card border border-line bg-surface-raised p-3">
           <div className="flex gap-2">
             <input className="input h-8 min-w-0 flex-1 text-[12px]" value={name} onChange={(event) => setName(event.target.value)} placeholder="新视图名称" onKeyDown={(event) => { if (event.key === "Enter") void save(); }} />
             <button type="button" className="btn btn-primary h-8 px-2 text-[12px]" onClick={() => void save()} disabled={!name.trim()}>保存</button>

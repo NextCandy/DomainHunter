@@ -3,19 +3,21 @@
  * Import once from the feature entry point or DomainValuationPanel.
  * Token definitions intentionally have fallbacks so the module can land before the global theme refactor.
  */
-/* A quiet framed surface: depth comes from a fine highlight and 1px border, never a heavy shadow. */
+/* A quiet framed surface: depth comes from a flat mint plane and 1px border, never a heavy shadow. */
 .ai-valuation-panel {
   position: relative;
-  background: rgb(var(--surface-raised));
-  box-shadow: 0 1px 0 rgb(var(--ink) / 0.08);
+  overflow: hidden;
+  background: rgb(var(--card-mint));
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
 }
 
 .ai-valuation-panel::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 3px;
-  background: rgb(var(--accent));
+  width: 4px;
+  background: rgb(var(--sage));
 }
 
 .ai-valuation-panel .mono {
@@ -29,13 +31,13 @@
 
 /* Project-wide polish utilities. Apply deliberately to page shells rather than globally replacing every card. */
 .workspace-header {
-  background: rgb(var(--surface-raised));
-  border-bottom: 1px solid rgb(var(--line));
+  background: transparent;
+  border-bottom: 0;
 }
 
 .workspace-kicker {
   color: rgb(var(--accent));
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-ibm-plex-mono);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.13em;
@@ -51,6 +53,7 @@
 
 .review-badge {
   border: 1px solid rgb(var(--review) / 0.34);
+  border-radius: 100px;
   background: rgb(var(--review) / 0.09);
   color: rgb(var(--review));
   font-size: 0.6875rem;
@@ -60,6 +63,7 @@
 
 .action-queue-item {
   border-bottom: 1px solid rgb(var(--line));
+  transition: background-color 160ms ease, border-color 160ms ease;
 }
 
 .action-queue-item:last-child {

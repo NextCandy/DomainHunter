@@ -26,18 +26,19 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center px-4 py-10">
-      <div className="w-full max-w-[340px]">
-        <div className="mb-6 flex items-center gap-2">
-          <Logo className="h-7 w-7" />
+    <div className="flex min-h-full items-center justify-center bg-canvas px-4 py-10 sm:px-6">
+      <div className="w-full max-w-[420px]">
+        <div className="mb-7 flex items-start gap-3">
+          <Logo className="h-10 w-10 shrink-0" />
           <div>
-            <h1 className="text-[16px] font-semibold tracking-tight">DomainHunter</h1>
-            <p className="text-[12px] text-ink-muted">域名状态长期监控</p>
+            <p className="workspace-kicker">DOMAIN INTELLIGENCE</p>
+            <h1 className="editorial-title mt-2 text-[30px] leading-tight">DomainHunter</h1>
+            <p className="mt-1 text-[13px] text-ink-muted">域名状态长期监控与研究工作台</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="card p-4">
-          <div className="mb-3">
+        <form onSubmit={handleSubmit} className="card bg-card-mint p-5 sm:p-6">
+          <div className="mb-4">
             <label className="label" htmlFor="username">
               用户名
             </label>
@@ -50,7 +51,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
               required
             />
           </div>
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="label" htmlFor="password">
               密码
             </label>
@@ -64,7 +65,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
               required
             />
           </div>
-          <label className="mb-4 flex items-center gap-2 text-[12px] text-ink-muted">
+          <label className="mb-5 flex items-center gap-2 text-[12px] text-ink-muted">
             <input
               type="checkbox"
               checked={remember}
@@ -74,7 +75,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           </label>
 
           {error && (
-            <p className="mb-3 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[12px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+            <p className="mb-3 rounded-[10px] border border-danger/30 bg-blush px-2.5 py-2 text-[12px] text-danger dark:bg-danger/10 dark:text-red-200">
               {error}
             </p>
           )}
