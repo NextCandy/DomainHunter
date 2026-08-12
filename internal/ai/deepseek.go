@@ -216,10 +216,37 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		return Output{}, latency, errors.New("AI 结果包含多余内容")
 	}
+	output.EvidenceUsed = normalizeEvidenceUsed(output.EvidenceUsed)
 	if err := ValidateOutput(output); err != nil {
 		return Output{}, latency, err
 	}
 	return output, latency, nil
+}
+
+func normalizeEvidenceUsed(values []string) []string {
+	allowed := map[string]bool{
+		"domain": true, "tld": true, "lexical": true, "system_facts": true, "user_metadata": true,
+		"status": true, "confidence": true, "expiry_date": true, "registrar": true,
+		"epp_statuses": true, "provider_consensus": true, "review_required": true, "review_reasons": true,
+		"tags": true, "priority": true,
+	}
+	result := make([]string, 0, min(len(values), 3))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if !allowed[value] {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+		if len(result) == 3 {
+			break
+		}
+	}
+	return result
 }
 
 func compatibleProviderError(body []byte) string {
