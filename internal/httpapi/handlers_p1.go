@@ -169,6 +169,46 @@ func (s *Server) handleAISettings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleAIProviders(w http.ResponseWriter, r *http.Request) {
+	p1Service := s.p1OrError(w, r)
+	if p1Service == nil {
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		profiles, err := p1Service.AIProviderProfiles(r.Context())
+		if err != nil {
+			s.writeError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.writeJSON(w, r, http.StatusOK, map[string]any{"providers": profiles})
+	case http.MethodPost:
+		var input p1.AISettingsInput
+		if !s.decodeJSON(w, r, &input) {
+			return
+		}
+		profile, err := p1Service.CreateAIProviderProfile(r.Context(), input)
+		if err != nil {
+			s.writeError(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+		s.writeJSON(w, r, http.StatusCreated, profile)
+	case http.MethodDelete:
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil {
+			s.writeError(w, r, http.StatusBadRequest, "AI 配置 ID 无效")
+			return
+		}
+		if err := p1Service.DeleteAIProviderProfile(r.Context(), id); err != nil {
+			s.writeError(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+		s.writeJSON(w, r, http.StatusOK, map[string]any{"status": "deleted", "id": id})
+	default:
+		s.writeError(w, r, http.StatusMethodNotAllowed, "不允许的请求方法")
+	}
+}
+
 func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
 	p1Service := s.p1OrError(w, r)
 	if p1Service == nil {

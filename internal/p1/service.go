@@ -76,6 +76,15 @@ func (s *Service) AISettings(ctx context.Context) (AISettingsPublic, error) {
 func (s *Service) SaveAISettings(ctx context.Context, input AISettingsInput) (AISettingsPublic, error) {
 	return s.ai.SaveSettings(ctx, input)
 }
+func (s *Service) AIProviderProfiles(ctx context.Context) ([]AIProviderProfilePublic, error) {
+	return s.ai.ListProviderProfiles(ctx)
+}
+func (s *Service) CreateAIProviderProfile(ctx context.Context, input AISettingsInput) (AIProviderProfilePublic, error) {
+	return s.ai.CreateProviderProfile(ctx, input)
+}
+func (s *Service) DeleteAIProviderProfile(ctx context.Context, id int64) error {
+	return s.ai.DeleteProviderProfile(ctx, id)
+}
 func (s *Service) AIModels(ctx context.Context) ([]string, error) { return s.ai.ListModels(ctx) }
 func (s *Service) AIUsage(ctx context.Context) (AIUsage, error)   { return s.ai.Usage(ctx) }
 func (s *Service) AIJobs(ctx context.Context, limit int) ([]AIJob, error) {

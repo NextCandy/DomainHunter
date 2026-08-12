@@ -1,6 +1,6 @@
 # DomainHunter 重构交接
 
-> 最后更新：2026-08-12 · P0–P2 与 P1 研究/自动化已合并 · Pi 版本 `v2.5.0-p1-3cb9599`
+> 最后更新：2026-08-12 · 多 AI 配置与附件图标已部署 · Pi 版本 `v2.5.0-p1-ai-20260812-r2`
 
 ## 本次目标
 
@@ -32,9 +32,9 @@
 | 通知 | 邮件 / Telegram / **Bark** / **飞书机器人** / **自定义 Webhook** |
 | 前端 | React 18 + TS + Vite + Tailwind，7 个页面，文件夹/导入导出/通知规则/Token 管理，go:embed 进单容器 |
 | P1 筛选与批量 | 版本化高级筛选树、可分享智能视图、批量动作影响预览与单事务安全执行 |
-| P1 AI | DeepSeek provider、AES-GCM Key 密文、SSRF 防护、持久化 Job/租约/重试/限额/TTL 估价 |
+| P1 AI | 多 Provider 配置档案、OpenAI Compatible 默认项、AES-GCM Key 密文、SSRF 防护、持久化 Job/租约/重试/限额/TTL 估价 |
 | P1 自动化 | 触发器/条件/白名单动作/冷却/每日上限、Dry-run、事件桥接、幂等运行审计与批量审计 |
-| 文档 | README / ARCHITECTURE.md / MIGRATION.md / 本文件 |
+| 文档与图标 | README / ARCHITECTURE.md / MIGRATION.md / 本文件；`web/public/DomainHunter.svg` 与 `.png` |
 | 改名 | 仓库、镜像、树莓派部署目录与 compose 项目名统一为 DomainHunter |
 
 Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动页脚，仅保留状态摘要，正文约 480 字节以内。
@@ -60,7 +60,7 @@ Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动
 
 ## 数据库变化
 
-新增 `schema_migrations` 并按版本执行 11 条迁移，**全部是新增，没有任何列被
+新增 `schema_migrations` 并按版本执行 12 条迁移，**全部是新增，没有任何列被
 重命名或删除**：
 
 | 版本 | 内容 |
@@ -76,6 +76,7 @@ Bark 通知使用精简正文：去掉 WHOIS/RDAP 原文、详细信息和自动
 | 009 | `notification_rules` / `notification_templates` / `notification_digest` |
 | 010 | P1 `saved_views` / `ai_provider_settings` / `ai_jobs` / `ai_domain_valuations` / `automation_rules` / `automation_runs` |
 | 011 | P1 `automation_cursors` / `bulk_action_audits`，事件游标与批量审计 |
+| 012 | `ai_provider_profiles` 多 AI 配置档案，并把新安装默认项设为 OpenAI Compatible |
 
 因此 **v1 二进制仍能读 v2 的库**；迁移 010–011 仅新增表和索引，旧字段与旧 API 不变，
 回滚程序不会删除 P1 数据。
@@ -188,11 +189,12 @@ Bark 精简正文回归测试                            PASS
 未配置渠道给出明确提示                          PASS
 /health                                        PASS
 P1 migration 010–011 / 新增表与索引                     PASS
-P1 ARM64 image build / version v2.5.0-p1-3cb9599         PASS
-P1 health / schema integrity / 550 domains               PASS
+P1 ARM64 image build / version v2.5.0-p1-ai-20260812-r2 PASS
+P1 health / schema 012 / integrity / 545 domains         PASS
 P1 未登录访问 AI/视图/高级列表接口 → 401                  PASS
 P1 未登录访问批量审计接口 → 401                           PASS
-P1 前端 go:embed 新资产 index-BV0B_DpN.js                PASS
+P1 多 AI 配置默认项 / Provider models 200                PASS
+P1 前端 go:embed 图标与 AI 配置表单                       PASS
 ```
 
 ## 测试结果
@@ -206,7 +208,8 @@ go vet ./...          PASS
 前端 npm run build    PASS（gzip JS 94KB）
 前端 npm ci            PASS（npm audit 报现有依赖树 4 个漏洞，未执行 audit fix）
 docker compose config PASS
-docker build          PASS（Pi arm64，镜像 `domainhunter:p1-3cb9599`）
+docker build          PASS（Pi arm64，镜像 `domainhunter:v2.5.0-p1-ai-20260812-r2`）
+browser QA             PASS（本地隔离环境 390/1440，无横向溢出，配置交互可见）
 ```
 
 > `go test -race` **无法在树莓派上运行**：该机内核是 47 位 VMA，
@@ -218,24 +221,27 @@ docker build          PASS（Pi arm64，镜像 `domainhunter:p1-3cb9599`）
 
 ```
 docker compose -p domainhunter -f compose.yaml config -q   PASS
-docker build --build-arg VERSION=v2.5.0-p1-3cb9599 -t domainhunter:p1-3cb9599   PASS（Pi arm64）
+docker build --build-arg VERSION=v2.5.0-p1-ai-20260812 -t domainhunter:v2.5.0-p1-ai-20260812   PASS（Pi arm64）
 docker compose -p domainhunter up -d                        PASS
 HEALTHCHECK                                                 healthy
+Provider `/models`                                            HTTP 200（63 个模型）
+`domainhunter.im` / `yu.is` + SVG/PNG 资产                         HTTP 200
 ```
 
 ## 当前部署状态
 
 ```
 主机        树莓派 Pi (aarch64)，SSH 192.168.50.180:22370
-容器        DomainHunter        镜像 domainhunter:latest (= v2.5.0-p1-3cb9599)
+容器        DomainHunter        镜像 domainhunter:latest (= v2.5.0-p1-ai-20260812-r2)
 端口        22334 → 8080        网络 domainhunter_default
 compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/compose.yaml
 数据目录    /opt/docker-migrated/domainhunter （即容器内 /app/data）
-数据库      domainhunter.db（约16MB，550 个域名）—— 2026-08-11 停机由 puff.db 改名
+数据库      domainhunter.db（约17MB，545 个域名）—— 2026-08-11 停机由 puff.db 改名
 资源        内存限制 0 / cpu_shares 512 / 重启 0 / 当前健康
 容器总数    35（与改动前一致，未影响任何其他项目）
-备份        backups/domainhunter-20260812-070555-pre-mobile.db
-回滚镜像    domainhunter:rollback-p1-mobile-20260812
+备份        backups/domainhunter-ai-20260812-085234-pre-ui-recreate/domainhunter.db
+回滚镜像    domainhunter:rollback-ai-ui-20260812-085234
+运行时配置  `.env`（权限 600；API Key 未写入 Git 或数据库明文）
 ```
 
 ## 回滚方式
@@ -246,7 +252,7 @@ compose     项目名 domainhunter，配置 /opt/docker-migrated/domainhunter/co
 
 ```bash
 cd /opt/docker-migrated/domainhunter
-docker tag domainhunter:rollback-p1-mobile-20260812 domainhunter:latest
+docker tag domainhunter:rollback-ai-20260812 domainhunter:latest
 docker compose -p domainhunter -f compose.yaml up -d
 curl -f http://127.0.0.1:22334/health
 ```

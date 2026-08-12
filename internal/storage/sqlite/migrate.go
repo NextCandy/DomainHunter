@@ -330,6 +330,55 @@ var migrations = []Migration{
 			`CREATE INDEX IF NOT EXISTS idx_bulk_action_audits_created ON bulk_action_audits(created_at DESC)`,
 		},
 	},
+	{
+		Version: "012",
+		Name:    "ai_provider_profiles",
+		Stmts: []string{
+			`CREATE TABLE IF NOT EXISTS ai_provider_profiles (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					name TEXT NOT NULL UNIQUE,
+					provider TEXT NOT NULL,
+					base_url TEXT NOT NULL,
+					model TEXT NOT NULL,
+					encrypted_api_key TEXT NOT NULL DEFAULT '',
+					timeout_seconds INTEGER NOT NULL DEFAULT 30,
+					concurrency INTEGER NOT NULL DEFAULT 1,
+					max_output_tokens INTEGER NOT NULL DEFAULT 1200,
+					daily_limit INTEGER NOT NULL DEFAULT 50,
+					cache_ttl_seconds INTEGER NOT NULL DEFAULT 86400,
+					enabled INTEGER NOT NULL DEFAULT 0,
+					is_default INTEGER NOT NULL DEFAULT 0,
+					created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+				)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_provider_profiles_default ON ai_provider_profiles(is_default) WHERE is_default = 1`,
+			`INSERT INTO ai_provider_profiles(name,provider,base_url,model,encrypted_api_key,timeout_seconds,concurrency,max_output_tokens,daily_limit,cache_ttl_seconds,enabled,is_default)
+					SELECT
+						CASE
+							WHEN provider = 'deepseek' AND base_url = 'https://api.deepseek.com' AND model = 'deepseek-v4-flash' AND encrypted_api_key = '' THEN 'OpenAI Compatible'
+							WHEN provider = 'deepseek' THEN 'DeepSeek'
+							ELSE provider
+						END,
+						CASE
+							WHEN provider = 'deepseek' AND base_url = 'https://api.deepseek.com' AND model = 'deepseek-v4-flash' AND encrypted_api_key = '' THEN 'openai_compatible'
+							ELSE provider
+						END,
+						CASE
+							WHEN provider = 'deepseek' AND base_url = 'https://api.deepseek.com' AND model = 'deepseek-v4-flash' AND encrypted_api_key = '' THEN 'https://opencode.ai/zen/v1'
+							ELSE base_url
+						END,
+						CASE
+							WHEN provider = 'deepseek' AND base_url = 'https://api.deepseek.com' AND model = 'deepseek-v4-flash' AND encrypted_api_key = '' THEN 'deepseek-v4-flash-free'
+							ELSE model
+						END,
+						encrypted_api_key,timeout_seconds,concurrency,max_output_tokens,daily_limit,cache_ttl_seconds,enabled,1
+					FROM ai_provider_settings
+					WHERE id = 1 AND NOT EXISTS (SELECT 1 FROM ai_provider_profiles WHERE is_default = 1)`,
+			`UPDATE ai_provider_settings
+					SET provider = 'openai_compatible', base_url = 'https://opencode.ai/zen/v1', model = 'deepseek-v4-flash-free'
+					WHERE id = 1 AND provider = 'deepseek' AND base_url = 'https://api.deepseek.com' AND model = 'deepseek-v4-flash' AND encrypted_api_key = ''`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录

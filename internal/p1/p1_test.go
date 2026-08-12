@@ -124,6 +124,68 @@ func TestEncryptedAPIKeyAndDryRunHaveNoDomainSideEffect(t *testing.T) {
 	}
 }
 
+func TestAIProviderProfilesCanSwitchDefaultWithoutLeakingKeys(t *testing.T) {
+	t.Setenv("DOMAINHUNTER_SECRET_KEY", "profile-test-secret")
+	t.Setenv("DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL", "true")
+	db, err := sqlite.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	service := New(db)
+	base := AISettingsInput{Provider: "openai_compatible", Name: "OpenAI Compatible", BaseURL: "http://127.0.0.1:18080", Model: "deepseek-v4-flash-free", TimeoutSeconds: 5, Concurrency: 1, MaxOutputTokens: 128, DailyLimit: 10, CacheTTLSeconds: 300, Enabled: true, IsDefault: true}
+	if _, err := service.SaveAISettings(context.Background(), base); err != nil {
+		t.Fatal(err)
+	}
+	profile, err := service.CreateAIProviderProfile(context.Background(), AISettingsInput{Provider: "deepseek", Name: "备用 DeepSeek", BaseURL: "http://127.0.0.1:18080", Model: "deepseek-test", TimeoutSeconds: 5, Concurrency: 1, MaxOutputTokens: 128, DailyLimit: 10, CacheTTLSeconds: 300, APIKey: "secondary-secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.IsDefault || !profile.APIKeySet || profile.KeySource != "encrypted" {
+		t.Fatalf("unexpected secondary profile metadata: %+v", profile)
+	}
+	var encrypted string
+	if err := db.QueryRow(`SELECT encrypted_api_key FROM ai_provider_profiles WHERE id=?`, profile.ProfileID).Scan(&encrypted); err != nil {
+		t.Fatal(err)
+	}
+	if encrypted == "" || strings.Contains(encrypted, "secondary-secret") {
+		t.Fatalf("secondary API key was not encrypted: %q", encrypted)
+	}
+
+	base.ProfileID = profile.ProfileID
+	base.Name = "备用 DeepSeek"
+	base.Provider = "deepseek"
+	base.Model = "deepseek-test"
+	base.IsDefault = true
+	base.APIKey = ""
+	if _, err := service.SaveAISettings(context.Background(), base); err != nil {
+		t.Fatal(err)
+	}
+	settings, err := service.AISettings(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.ProfileID != profile.ProfileID || settings.Provider != "deepseek" || settings.ProfileName != "备用 DeepSeek" {
+		t.Fatalf("default profile was not switched: %+v", settings)
+	}
+	profiles, err := service.ai.ListProviderProfiles(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults := 0
+	for _, item := range profiles {
+		if item.IsDefault {
+			defaults++
+		}
+	}
+	if len(profiles) != 2 || defaults != 1 {
+		t.Fatalf("unexpected profiles: %+v", profiles)
+	}
+}
+
 func TestFilterValueHelpers(t *testing.T) {
 	if !compareValue([]string{"High Value", "im"}, "contains", "high") {
 		t.Fatal("tag contains comparison failed")

@@ -40,6 +40,9 @@ type DomainListResult struct {
 }
 
 type AISettingsInput struct {
+	ProfileID       int64  `json:"profile_id,omitempty"`
+	Name            string `json:"name,omitempty"`
+	IsDefault       bool   `json:"is_default,omitempty"`
 	Provider        string `json:"provider"`
 	BaseURL         string `json:"base_url"`
 	Model           string `json:"model"`
@@ -53,6 +56,26 @@ type AISettingsInput struct {
 }
 
 type AISettingsPublic struct {
+	ProfileID       int64  `json:"profile_id"`
+	ProfileName     string `json:"profile_name"`
+	IsDefault       bool   `json:"is_default"`
+	Provider        string `json:"provider"`
+	BaseURL         string `json:"base_url"`
+	Model           string `json:"model"`
+	APIKeySet       bool   `json:"api_key_set"`
+	KeySource       string `json:"key_source"`
+	TimeoutSeconds  int    `json:"timeout_seconds"`
+	Concurrency     int    `json:"concurrency"`
+	MaxOutputTokens int    `json:"max_output_tokens"`
+	DailyLimit      int    `json:"daily_limit"`
+	CacheTTLSeconds int    `json:"cache_ttl_seconds"`
+	Enabled         bool   `json:"enabled"`
+}
+
+type AIProviderProfilePublic struct {
+	ProfileID       int64  `json:"profile_id"`
+	ProfileName     string `json:"profile_name"`
+	IsDefault       bool   `json:"is_default"`
 	Provider        string `json:"provider"`
 	BaseURL         string `json:"base_url"`
 	Model           string `json:"model"`

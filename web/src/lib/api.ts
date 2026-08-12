@@ -221,6 +221,12 @@ export const api = {
       settings: () => request<AISettings>("/api/v2/ai/settings"),
       saveSettings: (input: AISettingsInput) =>
         request<AISettings>("/api/v2/ai/settings", { method: "PUT", body: JSON.stringify(input) }),
+      providers: {
+        list: () => request<{ providers: AIProviderProfile[] }>("/api/v2/ai/providers"),
+        create: (input: AISettingsInput) =>
+          request<AIProviderProfile>("/api/v2/ai/providers", { method: "POST", body: JSON.stringify(input) }),
+        remove: (id: number) => request<{ status: string; id: number }>(`/api/v2/ai/providers/${id}`, { method: "DELETE" }),
+      },
       models: () => request<{ models: string[] }>("/api/v2/ai/models"),
       usage: () => request<AIUsage>("/api/v2/ai/usage"),
       jobs: () => request<{ jobs: AIJob[] }>("/api/v2/ai/jobs?limit=100"),
@@ -593,6 +599,9 @@ export interface BulkAudit {
 }
 
 export interface AISettings {
+  profile_id: number;
+  profile_name: string;
+  is_default: boolean;
   provider: string;
   base_url: string;
   model: string;
@@ -607,10 +616,30 @@ export interface AISettings {
 }
 
 export interface AISettingsInput {
+  profile_id?: number;
+  name?: string;
+  is_default?: boolean;
   provider: string;
   base_url: string;
   model: string;
   api_key?: string;
+  timeout_seconds: number;
+  concurrency: number;
+  max_output_tokens: number;
+  daily_limit: number;
+  cache_ttl_seconds: number;
+  enabled: boolean;
+}
+
+export interface AIProviderProfile {
+  profile_id: number;
+  profile_name: string;
+  is_default: boolean;
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key_set: boolean;
+  key_source: string;
   timeout_seconds: number;
   concurrency: number;
   max_output_tokens: number;

@@ -25,9 +25,9 @@ import (
 )
 
 const (
-	defaultAIProvider = "deepseek"
-	defaultAIBaseURL  = "https://api.deepseek.com"
-	defaultAIModel    = "deepseek-v4-flash"
+	defaultAIProvider = "openai_compatible"
+	defaultAIBaseURL  = "https://opencode.ai/zen/v1"
+	defaultAIModel    = "deepseek-v4-flash-free"
 	analysisVersion   = "p1-valuation-v1"
 )
 
@@ -84,6 +84,92 @@ func defaultSettings() AISettingsInput {
 		TimeoutSeconds: 30, Concurrency: 1, MaxOutputTokens: 1200, DailyLimit: 50, CacheTTLSeconds: 86400}
 }
 
+func normalizeAIProvider(raw string) (string, error) {
+	provider := strings.ToLower(strings.TrimSpace(raw))
+	switch provider {
+	case "":
+		return defaultAIProvider, nil
+	case "openai compatible", "openai-compatible", "openai_compatible", "openai":
+		return "openai_compatible", nil
+	case "deepseek":
+		return "deepseek", nil
+	}
+	if len(provider) > 64 {
+		return "", fmt.Errorf("Provider 标识不能超过64个字符")
+	}
+	for _, r := range provider {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' && r != '-' && r != '.' {
+			return "", fmt.Errorf("Provider 标识只能包含字母、数字、点、下划线或短横线")
+		}
+	}
+	return provider, nil
+}
+
+func providerDisplayName(provider string) string {
+	switch provider {
+	case "openai_compatible":
+		return "OpenAI Compatible"
+	case "deepseek":
+		return "DeepSeek"
+	default:
+		return provider
+	}
+}
+
+func normalizeProfileName(name, provider string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = providerDisplayName(provider)
+	}
+	if len(name) > 80 {
+		return "", fmt.Errorf("AI 配置名称不能超过80个字符")
+	}
+	if strings.ContainsAny(name, "\r\n\x00") {
+		return "", fmt.Errorf("AI 配置名称包含无效字符")
+	}
+	return name, nil
+}
+
+func normalizeAISettings(input AISettingsInput) (AISettingsInput, error) {
+	defaults := defaultSettings()
+	provider, err := normalizeAIProvider(input.Provider)
+	if err != nil {
+		return AISettingsInput{}, err
+	}
+	input.Provider = provider
+	input.Name, err = normalizeProfileName(input.Name, provider)
+	if err != nil {
+		return AISettingsInput{}, err
+	}
+	if strings.TrimSpace(input.BaseURL) == "" {
+		input.BaseURL = defaults.BaseURL
+	}
+	input.BaseURL = strings.TrimRight(strings.TrimSpace(input.BaseURL), "/")
+	if err := validateAIBaseURL(input.BaseURL); err != nil {
+		return AISettingsInput{}, err
+	}
+	if strings.TrimSpace(input.Model) == "" || len(input.Model) > 128 {
+		return AISettingsInput{}, fmt.Errorf("模型名称不能为空且不能超过128个字符")
+	}
+	if input.TimeoutSeconds < 5 || input.TimeoutSeconds > 300 {
+		return AISettingsInput{}, fmt.Errorf("超时必须在5到300秒之间")
+	}
+	if input.Concurrency < 1 || input.Concurrency > 4 {
+		return AISettingsInput{}, fmt.Errorf("并发必须在1到4之间")
+	}
+	if input.MaxOutputTokens < 128 || input.MaxOutputTokens > 8192 {
+		return AISettingsInput{}, fmt.Errorf("最大输出 token 必须在128到8192之间")
+	}
+	if input.DailyLimit < 1 || input.DailyLimit > 10000 {
+		return AISettingsInput{}, fmt.Errorf("每日限额必须在1到10000之间")
+	}
+	if input.CacheTTLSeconds < 300 || input.CacheTTLSeconds > 30*24*3600 {
+		return AISettingsInput{}, fmt.Errorf("缓存 TTL 必须在5分钟到30天之间")
+	}
+	input.APIKey = strings.TrimSpace(input.APIKey)
+	return input, nil
+}
+
 func (s *AIService) storedSettings(ctx context.Context) (AISettingsInput, string, error) {
 	settings := defaultSettings()
 	var encrypted string
@@ -102,50 +188,43 @@ func (s *AIService) PublicSettings(ctx context.Context) (AISettingsPublic, error
 	if err != nil {
 		return AISettingsPublic{}, err
 	}
+	var profileID int64
+	var profileName string
+	var isDefault int
+	err = s.db.QueryRowContext(ctx, `SELECT id,name,is_default FROM ai_provider_profiles WHERE is_default=1 ORDER BY id LIMIT 1`).Scan(&profileID, &profileName, &isDefault)
+	if err != nil && err != sql.ErrNoRows {
+		return AISettingsPublic{}, err
+	}
+	if profileName == "" {
+		profileName = providerDisplayName(settings.Provider)
+	}
 	_, source := configuredAPIKey(encrypted)
-	return AISettingsPublic{Provider: settings.Provider, BaseURL: settings.BaseURL, Model: settings.Model,
+	return AISettingsPublic{ProfileID: profileID, ProfileName: profileName, IsDefault: profileID > 0 && isDefault == 1,
+		Provider: settings.Provider, BaseURL: settings.BaseURL, Model: settings.Model,
 		APIKeySet: source != "none", KeySource: source, TimeoutSeconds: settings.TimeoutSeconds,
 		Concurrency: settings.Concurrency, MaxOutputTokens: settings.MaxOutputTokens, DailyLimit: settings.DailyLimit,
 		CacheTTLSeconds: settings.CacheTTLSeconds, Enabled: settings.Enabled}, nil
 }
 
 func (s *AIService) SaveSettings(ctx context.Context, input AISettingsInput) (AISettingsPublic, error) {
-	defaults := defaultSettings()
-	if strings.TrimSpace(input.Provider) == "" {
-		input.Provider = defaults.Provider
-	}
-	if input.Provider != defaultAIProvider {
-		return AISettingsPublic{}, fmt.Errorf("当前仅支持 deepseek provider")
-	}
-	if strings.TrimSpace(input.BaseURL) == "" {
-		input.BaseURL = defaults.BaseURL
-	}
-	input.BaseURL = strings.TrimRight(strings.TrimSpace(input.BaseURL), "/")
-	if err := validateAIBaseURL(input.BaseURL); err != nil {
-		return AISettingsPublic{}, err
-	}
-	if strings.TrimSpace(input.Model) == "" || len(input.Model) > 128 {
-		return AISettingsPublic{}, fmt.Errorf("模型名称不能为空且不能超过128个字符")
-	}
-	if input.TimeoutSeconds < 5 || input.TimeoutSeconds > 300 {
-		return AISettingsPublic{}, fmt.Errorf("超时必须在5到300秒之间")
-	}
-	if input.Concurrency < 1 || input.Concurrency > 4 {
-		return AISettingsPublic{}, fmt.Errorf("并发必须在1到4之间")
-	}
-	if input.MaxOutputTokens < 128 || input.MaxOutputTokens > 8192 {
-		return AISettingsPublic{}, fmt.Errorf("最大输出 token 必须在128到8192之间")
-	}
-	if input.DailyLimit < 1 || input.DailyLimit > 10000 {
-		return AISettingsPublic{}, fmt.Errorf("每日限额必须在1到10000之间")
-	}
-	if input.CacheTTLSeconds < 300 || input.CacheTTLSeconds > 30*24*3600 {
-		return AISettingsPublic{}, fmt.Errorf("缓存 TTL 必须在5分钟到30天之间")
-	}
-
-	_, oldEncrypted, err := s.storedSettings(ctx)
+	var err error
+	input, err = normalizeAISettings(input)
 	if err != nil {
 		return AISettingsPublic{}, err
+	}
+	var oldEncrypted string
+	if input.ProfileID > 0 {
+		if err := s.db.QueryRowContext(ctx, `SELECT encrypted_api_key FROM ai_provider_profiles WHERE id=?`, input.ProfileID).Scan(&oldEncrypted); err != nil {
+			if err == sql.ErrNoRows {
+				return AISettingsPublic{}, fmt.Errorf("AI 配置不存在")
+			}
+			return AISettingsPublic{}, err
+		}
+	} else {
+		_, oldEncrypted, err = s.storedSettings(ctx)
+		if err != nil {
+			return AISettingsPublic{}, err
+		}
 	}
 	encrypted := oldEncrypted
 	if strings.TrimSpace(input.APIKey) != "" {
@@ -158,13 +237,201 @@ func (s *AIService) SaveSettings(ctx context.Context, input AISettingsInput) (AI
 			return AISettingsPublic{}, fmt.Errorf("加密 API Key 失败: %w", err)
 		}
 	}
-	_, err = s.db.ExecContext(ctx, `UPDATE ai_provider_settings SET provider=?,base_url=?,model=?,encrypted_api_key=?,timeout_seconds=?,concurrency=?,max_output_tokens=?,daily_limit=?,cache_ttl_seconds=?,enabled=?,updated_at=CURRENT_TIMESTAMP WHERE id=1`,
-		input.Provider, strings.TrimRight(input.BaseURL, "/"), input.Model, encrypted, input.TimeoutSeconds, input.Concurrency,
-		input.MaxOutputTokens, input.DailyLimit, input.CacheTTLSeconds, boolInt(input.Enabled))
-	if err != nil {
+	if input.ProfileID > 0 {
+		if err := s.saveProfile(ctx, input, encrypted); err != nil {
+			return AISettingsPublic{}, err
+		}
+		return s.PublicSettings(ctx)
+	}
+	if err := s.saveDefaultSettings(ctx, input, encrypted); err != nil {
 		return AISettingsPublic{}, err
 	}
 	return s.PublicSettings(ctx)
+}
+
+func (s *AIService) saveDefaultSettings(ctx context.Context, input AISettingsInput, encrypted string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE ai_provider_settings SET provider=?,base_url=?,model=?,encrypted_api_key=?,timeout_seconds=?,concurrency=?,max_output_tokens=?,daily_limit=?,cache_ttl_seconds=?,enabled=?,updated_at=CURRENT_TIMESTAMP WHERE id=1`,
+		input.Provider, input.BaseURL, input.Model, encrypted, input.TimeoutSeconds, input.Concurrency, input.MaxOutputTokens,
+		input.DailyLimit, input.CacheTTLSeconds, boolInt(input.Enabled)); err != nil {
+		return err
+	}
+	var profileID int64
+	err = tx.QueryRowContext(ctx, `SELECT id FROM ai_provider_profiles WHERE is_default=1 ORDER BY id LIMIT 1`).Scan(&profileID)
+	switch err {
+	case nil:
+		_, err = tx.ExecContext(ctx, `UPDATE ai_provider_profiles SET name=?,provider=?,base_url=?,model=?,encrypted_api_key=?,timeout_seconds=?,concurrency=?,max_output_tokens=?,daily_limit=?,cache_ttl_seconds=?,enabled=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+			input.Name, input.Provider, input.BaseURL, input.Model, encrypted, input.TimeoutSeconds, input.Concurrency, input.MaxOutputTokens,
+			input.DailyLimit, input.CacheTTLSeconds, boolInt(input.Enabled), profileID)
+	case sql.ErrNoRows:
+		_, err = tx.ExecContext(ctx, `INSERT INTO ai_provider_profiles(name,provider,base_url,model,encrypted_api_key,timeout_seconds,concurrency,max_output_tokens,daily_limit,cache_ttl_seconds,enabled,is_default) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)`,
+			input.Name, input.Provider, input.BaseURL, input.Model, encrypted, input.TimeoutSeconds, input.Concurrency, input.MaxOutputTokens,
+			input.DailyLimit, input.CacheTTLSeconds, boolInt(input.Enabled))
+	}
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *AIService) saveProfile(ctx context.Context, input AISettingsInput, encrypted string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var currentDefault int
+	if err := tx.QueryRowContext(ctx, `SELECT is_default FROM ai_provider_profiles WHERE id=?`, input.ProfileID).Scan(&currentDefault); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("AI 配置不存在")
+		}
+		return err
+	}
+	makeDefault := input.IsDefault || currentDefault == 1
+	if makeDefault {
+		if _, err := tx.ExecContext(ctx, `UPDATE ai_provider_profiles SET is_default=0,updated_at=CURRENT_TIMESTAMP WHERE is_default=1 AND id<>?`, input.ProfileID); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE ai_provider_profiles SET name=?,provider=?,base_url=?,model=?,encrypted_api_key=?,timeout_seconds=?,concurrency=?,max_output_tokens=?,daily_limit=?,cache_ttl_seconds=?,enabled=?,is_default=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+		input.Name, input.Provider, input.BaseURL, input.Model, encrypted, input.TimeoutSeconds, input.Concurrency, input.MaxOutputTokens,
+		input.DailyLimit, input.CacheTTLSeconds, boolInt(input.Enabled), boolInt(makeDefault), input.ProfileID); err != nil {
+		return err
+	}
+	if makeDefault {
+		if _, err := tx.ExecContext(ctx, `UPDATE ai_provider_settings SET provider=?,base_url=?,model=?,encrypted_api_key=?,timeout_seconds=?,concurrency=?,max_output_tokens=?,daily_limit=?,cache_ttl_seconds=?,enabled=?,updated_at=CURRENT_TIMESTAMP WHERE id=1`,
+			input.Provider, input.BaseURL, input.Model, encrypted, input.TimeoutSeconds, input.Concurrency, input.MaxOutputTokens,
+			input.DailyLimit, input.CacheTTLSeconds, boolInt(input.Enabled)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *AIService) ListProviderProfiles(ctx context.Context) ([]AIProviderProfilePublic, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,name,provider,base_url,model,encrypted_api_key,timeout_seconds,concurrency,max_output_tokens,daily_limit,cache_ttl_seconds,enabled,is_default FROM ai_provider_profiles ORDER BY is_default DESC, name COLLATE NOCASE, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	profiles := make([]AIProviderProfilePublic, 0)
+	for rows.Next() {
+		var profile AIProviderProfilePublic
+		var encrypted string
+		var enabled, isDefault int
+		if err := rows.Scan(&profile.ProfileID, &profile.ProfileName, &profile.Provider, &profile.BaseURL, &profile.Model, &encrypted,
+			&profile.TimeoutSeconds, &profile.Concurrency, &profile.MaxOutputTokens, &profile.DailyLimit, &profile.CacheTTLSeconds,
+			&enabled, &isDefault); err != nil {
+			return nil, err
+		}
+		profile.Enabled = enabled == 1
+		profile.IsDefault = isDefault == 1
+		_, profile.KeySource = configuredProfileAPIKey(encrypted, profile.IsDefault)
+		profile.APIKeySet = profile.KeySource != "none"
+		profiles = append(profiles, profile)
+	}
+	return profiles, rows.Err()
+}
+
+func (s *AIService) CreateProviderProfile(ctx context.Context, input AISettingsInput) (AIProviderProfilePublic, error) {
+	input.ProfileID = 0
+	var err error
+	input, err = normalizeAISettings(input)
+	if err != nil {
+		return AIProviderProfilePublic{}, err
+	}
+	if input.APIKey != "" {
+		secret := os.Getenv("DOMAINHUNTER_SECRET_KEY")
+		if strings.TrimSpace(secret) == "" {
+			return AIProviderProfilePublic{}, fmt.Errorf("保存 API Key 前必须配置 DOMAINHUNTER_SECRET_KEY")
+		}
+		if input.APIKey, err = encryptSecret(input.APIKey, secret); err != nil {
+			return AIProviderProfilePublic{}, fmt.Errorf("加密 API Key 失败: %w", err)
+		}
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return AIProviderProfilePublic{}, err
+	}
+	defer tx.Rollback()
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_provider_profiles WHERE is_default=1`).Scan(&count); err != nil {
+		return AIProviderProfilePublic{}, err
+	}
+	makeDefault := input.IsDefault || count == 0
+	if makeDefault {
+		if _, err := tx.ExecContext(ctx, `UPDATE ai_provider_profiles SET is_default=0,updated_at=CURRENT_TIMESTAMP WHERE is_default=1`); err != nil {
+			return AIProviderProfilePublic{}, err
+		}
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO ai_provider_profiles(name,provider,base_url,model,encrypted_api_key,timeout_seconds,concurrency,max_output_tokens,daily_limit,cache_ttl_seconds,enabled,is_default) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		input.Name, input.Provider, input.BaseURL, input.Model, input.APIKey, input.TimeoutSeconds, input.Concurrency, input.MaxOutputTokens,
+		input.DailyLimit, input.CacheTTLSeconds, boolInt(input.Enabled), boolInt(makeDefault))
+	if err != nil {
+		return AIProviderProfilePublic{}, err
+	}
+	input.ProfileID, err = result.LastInsertId()
+	if err != nil {
+		return AIProviderProfilePublic{}, err
+	}
+	if makeDefault {
+		if _, err := tx.ExecContext(ctx, `UPDATE ai_provider_settings SET provider=?,base_url=?,model=?,encrypted_api_key=?,timeout_seconds=?,concurrency=?,max_output_tokens=?,daily_limit=?,cache_ttl_seconds=?,enabled=?,updated_at=CURRENT_TIMESTAMP WHERE id=1`,
+			input.Provider, input.BaseURL, input.Model, input.APIKey, input.TimeoutSeconds, input.Concurrency, input.MaxOutputTokens,
+			input.DailyLimit, input.CacheTTLSeconds, boolInt(input.Enabled)); err != nil {
+			return AIProviderProfilePublic{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return AIProviderProfilePublic{}, err
+	}
+	profiles, err := s.ListProviderProfiles(ctx)
+	if err != nil {
+		return AIProviderProfilePublic{}, err
+	}
+	for _, profile := range profiles {
+		if profile.ProfileID == input.ProfileID {
+			return profile, nil
+		}
+	}
+	return AIProviderProfilePublic{}, fmt.Errorf("创建 AI 配置后读取失败")
+}
+
+func (s *AIService) DeleteProviderProfile(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return fmt.Errorf("AI 配置 ID 无效")
+	}
+	var isDefault int
+	if err := s.db.QueryRowContext(ctx, `SELECT is_default FROM ai_provider_profiles WHERE id=?`, id).Scan(&isDefault); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("AI 配置不存在")
+		}
+		return err
+	}
+	if isDefault == 1 {
+		return fmt.Errorf("默认 AI 配置不能删除，请先切换默认项")
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM ai_provider_profiles WHERE id=?`, id)
+	return err
+}
+
+func configuredProfileAPIKey(encrypted string, isDefault bool) (string, string) {
+	if isDefault {
+		return configuredAPIKey(encrypted)
+	}
+	if key := strings.TrimSpace(os.Getenv("DOMAINHUNTER_SECRET_KEY")); key != "" && strings.TrimSpace(encrypted) != "" {
+		if value, err := decryptSecret(encrypted, key); err == nil && value != "" {
+			return value, "encrypted"
+		}
+		return "", "encrypted_unavailable"
+	}
+	if strings.TrimSpace(encrypted) != "" {
+		return "", "encrypted_unavailable"
+	}
+	return "", "none"
 }
 
 func configuredAPIKey(encrypted string) (string, string) {
@@ -241,7 +508,7 @@ func validateAIBaseURL(raw string) error {
 	if len(allowlist) > 0 && !containsHost(allowlist, host) {
 		return fmt.Errorf("Base URL 主机不在 DOMAINHUNTER_AI_ALLOWED_HOSTS allowlist 中")
 	}
-	if len(allowlist) == 0 && host != "api.deepseek.com" && !(allowLocal && isLocalHost(host)) {
+	if len(allowlist) == 0 && host != "api.deepseek.com" && host != "opencode.ai" && !(allowLocal && isLocalHost(host)) {
 		return fmt.Errorf("自定义 Base URL 必须配置 DOMAINHUNTER_AI_ALLOWED_HOSTS allowlist")
 	}
 	if isBlockedHost(host) && !(allowLocal && isLocalHost(host)) {
@@ -349,9 +616,9 @@ func (s *AIService) process(ctx context.Context, job aiJobRecord) {
 	}
 	requestCtx, cancel := context.WithTimeout(ctx, time.Duration(settings.TimeoutSeconds)*time.Second)
 	defer cancel()
-	content, err := callDeepSeek(requestCtx, settings, key, job.InputJSON)
+	content, err := callOpenAICompatible(requestCtx, settings, key, job.InputJSON)
 	if err != nil {
-		s.fail(job, "DeepSeek 请求失败", true)
+		s.fail(job, "AI Provider 请求失败", true)
 		return
 	}
 	response, err := validateValuation(content)
@@ -403,7 +670,7 @@ func (s *AIService) fail(job aiJobRecord, message string, retry bool) {
 	_, _ = s.db.Exec(`UPDATE ai_jobs SET status='failed',lease_until=NULL,last_error=?,completed_at=?,updated_at=? WHERE id=?`, message, now, now, job.ID)
 }
 
-func callDeepSeek(ctx context.Context, settings AISettingsInput, key, inputJSON string) (string, error) {
+func callOpenAICompatible(ctx context.Context, settings AISettingsInput, key, inputJSON string) (string, error) {
 	schema := `{"analysis_version":"p1-valuation-v1","quality_score":0,"liquidity_score":0,"risk_level":"low|medium|high","value_low":0,"value_high":0,"confidence":"low|medium|high","strengths":["..."],"limitations":["..."],"data_gaps":["..."],"rationale":"...","disclaimer":"..."}`
 	system := "你是域名研究助手。只输出严格 JSON，不要 Markdown、HTML 或自然语言前后缀。不得进行商标或法律结论，不得把研究性估价当成交保证或购买建议。输出必须满足 schema: " + schema
 	body := map[string]any{"model": settings.Model, "temperature": 0.1, "max_tokens": settings.MaxOutputTokens, "messages": []map[string]string{{"role": "system", "content": system}, {"role": "user", "content": inputJSON}}}

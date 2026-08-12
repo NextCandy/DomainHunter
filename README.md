@@ -1,5 +1,9 @@
 # DomainHunter
 
+<p align="center">
+  <img src="web/public/DomainHunter.svg" alt="DomainHunter" width="180" />
+</p>
+
 DomainHunter 是一个面向**长期监控**的 Go 域名状态查询器。查询链路建立在
 "RDAP 优先、WHOIS 兼容、**无法确认就不报告可注册**"的安全模型上，
 并为每个结论保留可追溯的查询证据。
@@ -137,6 +141,9 @@ data/
 | `DOMAINHUNTER_WHOIS_LS_URL` | 空 | WHOIS.LS JSON 网关 |
 | `DOMAINHUNTER_WHOIS_LS_TLDS` | `im` | 启用 WHOIS.LS 的后缀 |
 | `DOMAINHUNTER_WHOIS_LS_TIMEOUT` | `20s` | 支持 `20` 或 `20s` |
+| `DOMAINHUNTER_AI_API_KEY` | 空 | 默认 AI 配置的运行时 Key；不会写入仓库 |
+| `DOMAINHUNTER_SECRET_KEY` | 空 | UI 保存多个 AI Key 时使用 AES-GCM 加密 |
+| `DOMAINHUNTER_AI_ALLOWED_HOSTS` | `api.deepseek.com,opencode.ai` | AI Base URL 主机 allowlist |
 | `DOMAINHUNTER_QUERY_POLICY_FILE` | 空 | 查询策略 JSON 文件（优先于数据库设置） |
 | `DOMAINHUNTER_COOKIE_SECURE` | `auto` | `auto` / `true` / `false` |
 | `DOMAINHUNTER_COOKIE_SAMESITE` | `lax` | `lax` / `strict` / `none` |
@@ -292,7 +299,9 @@ P1 的高级条件以版本化 JSON 条件树编码进 URL，支持状态、TLD�
 文件夹、通知、监控和 AI 估价都先通过 `/bulk-actions/preview` 返回实际匹配数、
 样例、任务数、缓存命中和每日限额，再执行后端批量动作。
 
-AI 默认使用 DeepSeek OpenAI-compatible `/chat/completions`。Job 写入 SQLite，
+AI 支持多个 OpenAI-compatible 配置档案，默认显示提供商为 `OpenAI Compatible`；
+新安装默认使用 `https://opencode.ai/zen/v1` 与 `deepseek-v4-flash-free`，并通过
+`/api/v2/ai/providers` 管理多个配置。Job 写入 SQLite，
 包含 `queued/running/succeeded/failed/deferred/cancelled` 状态、租约恢复、指数退避、
 输入指纹去重、TTL 缓存和每日限额。发送给模型的输入只含域名、TLD、字符特征、
 确认状态、可信度、日期、注册商及可选标签/优先级，绝不包含 WHOIS/RDAP 原文、备注、
