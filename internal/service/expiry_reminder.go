@@ -71,8 +71,10 @@ func (s *ExpiryReminderService) Start(parent context.Context) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		if _, err := s.RunOnce(ctx, time.Now()); err != nil && ctx.Err() == nil {
+		if primed, err := s.PrimeOnce(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			s.log.Warn(logger.Fields{"error": err.Error()}, "到期提醒首轮扫描失败")
+		} else if primed > 0 {
+			s.log.Info(logger.Fields{"count": primed}, "到期提醒已静默初始化现有提醒窗口")
 		}
 		ticker := time.NewTicker(s.interval)
 		defer ticker.Stop()
@@ -108,8 +110,18 @@ func (s *ExpiryReminderService) Stop() {
 	s.wg.Wait()
 }
 
+// PrimeOnce 在服务启动时只建立去重基线，不发送历史到期提醒。
+// 这样重启或升级不会把已有的 60/30/7/1 天窗口一次性推送到所有渠道。
+func (s *ExpiryReminderService) PrimeOnce(ctx context.Context, now time.Time) (int, error) {
+	return s.scan(ctx, now, false)
+}
+
 // RunOnce 扫描一次并返回本轮新建的提醒数量。
 func (s *ExpiryReminderService) RunOnce(ctx context.Context, now time.Time) (int, error) {
+	return s.scan(ctx, now, true)
+}
+
+func (s *ExpiryReminderService) scan(ctx context.Context, now time.Time, notify bool) (int, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -144,6 +156,13 @@ func (s *ExpiryReminderService) RunOnce(ctx context.Context, now time.Time) (int
 			return created, err
 		}
 		if sent {
+			continue
+		}
+		if !notify {
+			if err := s.dedup.MarkSent(ctx, entry.Name, expiryAt, milestone, now); err != nil {
+				return created, err
+			}
+			created++
 			continue
 		}
 		event := notification.Event{
