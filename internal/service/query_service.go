@@ -450,8 +450,13 @@ func suppressLegacyTransferNotification(previous, current domain.Status) bool {
 }
 
 func suppressUncertainIMLifecycleNotification(name string, previous, current domain.Status, outcome query.Outcome) bool {
-	if !strings.HasSuffix(domain.Normalize(name), ".im") || previous == current ||
-		!domain.IsRegisteredLike(previous) || !domain.IsRegisteredLike(current) {
+	if !strings.HasSuffix(domain.Normalize(name), ".im") || previous == current {
+		return false
+	}
+	if previous == domain.StatusAvailable && domain.IsRegisteredLike(current) && hasIMProviderConflict(outcome) {
+		return true
+	}
+	if !domain.IsRegisteredLike(previous) || !domain.IsRegisteredLike(current) {
 		return false
 	}
 	if outcome.Info != nil && outcome.Info.CreatedDate != nil {
@@ -463,6 +468,20 @@ func suppressUncertainIMLifecycleNotification(name string, previous, current dom
 		}
 	}
 	return true
+}
+
+func hasIMProviderConflict(outcome query.Outcome) bool {
+	hasAvailable := false
+	hasRegistered := false
+	for _, result := range outcome.Results {
+		switch {
+		case result.Status == domain.StatusAvailable:
+			hasAvailable = true
+		case domain.IsRegisteredLike(result.Status):
+			hasRegistered = true
+		}
+	}
+	return hasAvailable && hasRegistered
 }
 
 func toCST(t *time.Time) *time.Time {

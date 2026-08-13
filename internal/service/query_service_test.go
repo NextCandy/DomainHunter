@@ -115,6 +115,19 @@ func TestSuppressesUncertainIMLifecycleNotification(t *testing.T) {
 	}
 }
 
+func TestSuppressesIMAvailabilityCorrectionWhenProvidersConflict(t *testing.T) {
+	outcome := query.Outcome{
+		Info: &domain.Info{Name: "daydream.im", Status: domain.StatusRegistered},
+		Results: []query.Result{
+			{Domain: "daydream.im", Status: domain.StatusAvailable},
+			{Domain: "daydream.im", Status: domain.StatusRegistered},
+		},
+	}
+	if !suppressUncertainIMLifecycleNotification("daydream.im", domain.StatusAvailable, domain.StatusRegistered, outcome) {
+		t.Fatal(".im available/registered 冲突被纠正为 registered 时不应再次提醒")
+	}
+}
+
 type notificationSuppressionRepo struct {
 	repository.DomainRepository
 	lastReads int
