@@ -32,9 +32,11 @@ const MOBILE_NAV = [
   { to: "/", label: "概览", icon: "home", end: true },
   { to: "/domains", label: "域名", icon: "search" },
   { to: "/watchlist", label: "抢注", icon: "eye" },
-  { to: "/automation", label: "AI", icon: "spark" },
-  { to: "/settings", label: "设置", icon: "settings" },
+  { to: "/notifications", label: "通知", icon: "notifications" },
+  { to: "/more", label: "更多", icon: "more" },
 ] as const;
+
+const MOBILE_MORE = NAV.filter((item) => ["/history", "/providers", "/automation", "/settings"].includes(item.to));
 
 export function Layout({
   username,
@@ -48,6 +50,7 @@ export function Layout({
   const { mode, setMode } = useTheme();
   const { density, setDensity } = useDensity();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
   return (
     <div className="min-h-full min-w-0 bg-canvas">
@@ -145,7 +148,17 @@ export function Layout({
 
           <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-line bg-pure-white px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden" aria-label="移动端主导航">
             <div className="mx-auto grid max-w-lg grid-cols-5">
-              {MOBILE_NAV.map((item) => (
+              {MOBILE_NAV.map((item) => item.to === "/more" ? (
+                <button
+                  key={item.to}
+                  type="button"
+                  onClick={() => setMobileMoreOpen(true)}
+                  className="flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-nav px-1 py-1 text-[10px] text-ink-muted transition-colors hover:text-ink"
+                  aria-label="更多页面"
+                >
+                  <NavIcon name="more" /><span>更多</span>
+                </button>
+              ) : (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -161,6 +174,19 @@ export function Layout({
               ))}
             </div>
           </nav>
+
+          {mobileMoreOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden">
+              <button type="button" className="absolute inset-0 bg-overlay/40" onClick={() => setMobileMoreOpen(false)} aria-label="关闭更多页面" />
+              <section className="absolute inset-x-0 bottom-0 rounded-t-card border border-line bg-surface-raised p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" role="dialog" aria-modal="true" aria-label="更多页面">
+                <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-neutral/30" />
+                <h2 className="text-[18px] font-medium">更多</h2>
+                <nav className="mt-3 grid grid-cols-2 gap-2">
+                  {MOBILE_MORE.map((item) => <NavItem key={item.to} item={item} onClick={() => setMobileMoreOpen(false)} />)}
+                </nav>
+              </section>
+            </div>
+          )}
 
           <footer className="border-t border-line px-4 py-5 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-ink-faint sm:px-6 lg:px-8">
             DomainHunter · {version}
@@ -205,7 +231,7 @@ function MenuIcon() {
   return <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" /></svg>;
 }
 
-type NavIconName = "home" | "search" | "eye" | "spark" | "settings" | "history" | "providers" | "notifications";
+type NavIconName = "home" | "search" | "eye" | "spark" | "settings" | "history" | "providers" | "notifications" | "more";
 
 function NavIcon({ name }: { name: NavIconName }) {
   const common = { className: "h-4 w-4 shrink-0", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.35, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
@@ -216,5 +242,6 @@ function NavIcon({ name }: { name: NavIconName }) {
   if (name === "history") return <svg {...common}><circle cx="8" cy="8" r="5.5" /><path d="M8 4.75v3.5l2.25 1.25M2.75 3.75v2.5h2.5" /></svg>;
   if (name === "providers") return <svg {...common}><circle cx="3.25" cy="8" r="1.3" /><circle cx="12.75" cy="4" r="1.3" /><circle cx="12.75" cy="12" r="1.3" /><path d="m4.5 7.35 6.9-2.7M4.5 8.65l6.9 2.7" /></svg>;
   if (name === "notifications") return <svg {...common}><path d="M3.25 11.75h9.5l-1.1-1.5V7a3.65 3.65 0 0 0-7.3 0v3.25Z" /><path d="M6.5 13.25a1.75 1.75 0 0 0 3 0" /></svg>;
+  if (name === "more") return <svg {...common}><circle cx="3" cy="8" r=".75" fill="currentColor" stroke="none" /><circle cx="8" cy="8" r=".75" fill="currentColor" stroke="none" /><circle cx="13" cy="8" r=".75" fill="currentColor" stroke="none" /></svg>;
   return <svg {...common}><path d="M8 2.25a2 2 0 0 1 2 2v.5h.75a1.5 1.5 0 0 1 1.5 1.5v5.75a1.75 1.75 0 0 1-1.75 1.75h-5A1.75 1.75 0 0 1 3.75 12V6.25a1.5 1.5 0 0 1 1.5-1.5H6v-.5a2 2 0 0 1 2-2Z" /><path d="M6 4.75h4M6.25 8h3.5M6.25 10.5h3.5" /></svg>;
 }

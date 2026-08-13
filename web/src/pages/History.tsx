@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import type { Attempt, Observation } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
@@ -6,8 +7,11 @@ import { Card, EmptyState, ErrorNotice, Pill, Spinner, StatusBadge } from "../co
 import { CONFIDENCE_LABELS, formatDateTime, formatLatency, providerLabel } from "../lib/format";
 
 export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) {
-  const [domain, setDomain] = useState("");
-  const [input, setInput] = useState("");
+  const [params, setParams] = useSearchParams();
+  const domain = (params.get("domain") ?? "").trim().toLowerCase();
+  const [input, setInput] = useState(domain);
+
+  useEffect(() => setInput(domain), [domain]);
 
   const { data, error, loading, reload } = useAsync<{ observations: Observation[] | null }>(
     () => api.get<{ observations: Observation[] | null }>("/api/v2/observations?limit=200"),
@@ -37,7 +41,10 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             className="flex gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              setDomain(input.trim().toLowerCase());
+              const next = new URLSearchParams(params);
+              const name = input.trim().toLowerCase();
+              if (name) next.set("domain", name); else next.delete("domain");
+              setParams(next, { replace: true });
             }}
           >
             <input
@@ -77,7 +84,9 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             observations={data.observations}
             onPick={(name) => {
               setInput(name);
-              setDomain(name);
+              const next = new URLSearchParams(params);
+              next.set("domain", name);
+              setParams(next, { replace: true });
             }}
           />
         )}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import type { DomainInfo, DomainListResult, DomainStatus } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
@@ -9,6 +10,7 @@ import {
   EmptyState,
   ErrorNotice,
   Pill,
+  ReviewIndicator,
   Spinner,
   StatusBadge,
   cx,
@@ -63,6 +65,7 @@ const DROP_STAGES: Array<{ status: DomainStatus; hint: string }> = [
 
 export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [openDomain, setOpenDomain] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
   const toast = useToast();
 
@@ -187,6 +190,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
                       busy={busy === item.name}
                       onOpen={() => setOpenDomain(item.name)}
                       onCheck={() => runCheck(item.name)}
+                      onHistory={() => navigate(`/history?domain=${encodeURIComponent(item.name)}`)}
                     />
                   ))}
                 </tbody>
@@ -202,6 +206,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
                 busy={busy === item.name}
                 onOpen={() => setOpenDomain(item.name)}
                 onCheck={() => runCheck(item.name)}
+                onHistory={() => navigate(`/history?domain=${encodeURIComponent(item.name)}`)}
               />
             ))}
           </ul>
@@ -272,7 +277,7 @@ function DropBoard({ counts }: { counts: Map<string, number> }) {
                   className={cx(
                     "z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[12px] font-semibold tabular transition-colors",
                     active
-                      ? "border-accent bg-accent text-white"
+                      ? "border-accent bg-accent text-on-accent"
                       : "border-line bg-surface-raised text-ink-faint",
                   )}
                 >
@@ -298,11 +303,13 @@ function Row({
   busy,
   onOpen,
   onCheck,
+  onHistory,
 }: {
   item: DomainInfo;
   busy: boolean;
   onOpen: () => void;
   onCheck: () => void;
+  onHistory: () => void;
 }) {
   return (
     <tr className="hover:bg-surface-muted/60">
@@ -310,11 +317,10 @@ function Row({
         <DomainName name={item.name} onClick={onOpen} />
       </td>
       <td className="px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
-          {item.review?.required && <span className="review-badge">需复核</span>}
+          {item.review?.required && <ReviewIndicator explanation={item.review.explanation} />}
         </div>
-      {item.review?.required && <span className="review-badge">需复核</span>}
       </td>
       <td className="px-3 py-2 text-[12px] text-ink-muted">{STATUS_HINT[item.status] ?? "—"}</td>
       <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">
@@ -330,6 +336,7 @@ function Row({
         {formatRelative(item.last_checked)}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right">
+        <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={onHistory}>时间线</button>
         <button
           type="button"
           className="btn btn-ghost h-7 px-2 text-[12px]"
@@ -348,18 +355,20 @@ function MobileCard({
   busy,
   onOpen,
   onCheck,
+  onHistory,
 }: {
   item: DomainInfo;
   busy: boolean;
   onOpen: () => void;
   onCheck: () => void;
+  onHistory: () => void;
 }) {
   return (
     <li className="card p-3">
       <DomainName name={item.name} onClick={onOpen} className="block w-full" />
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
-        {item.review?.required && <span className="review-badge">需复核</span>}
+        {item.review?.required && <ReviewIndicator explanation={item.review.explanation} />}
         <Pill>{STATUS_HINT[item.status] ?? STATUS_LABELS[item.status]}</Pill>
       </div>
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-faint">
@@ -382,9 +391,10 @@ function MobileCard({
           <dd className="tabular text-ink-muted">{formatRelative(item.last_checked)}</dd>
         </div>
       </dl>
-      <button type="button" className="btn mt-2 h-7 w-full text-[12px]" onClick={onCheck} disabled={busy}>
-        {busy ? "查询中…" : "立即检查"}
-      </button>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button type="button" className="btn min-h-11 text-[12px]" onClick={onHistory}>状态时间线</button>
+        <button type="button" className="btn btn-primary min-h-11 text-[12px]" onClick={onCheck} disabled={busy}>{busy ? "查询中…" : "立即检查"}</button>
+      </div>
     </li>
   );
 }

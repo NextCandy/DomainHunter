@@ -1,6 +1,6 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, downloadBlob } from "../lib/api";
 import type { DomainListResult, Facets, FilterNode } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { DomainTable } from "../components/DomainTable";
@@ -25,6 +25,7 @@ const SORT_OPTIONS = [
 ];
 
 const PAGE_SIZES = [10, 20, 50, 100];
+const VIEW_STORAGE_KEY = "dh-domains-view-v1";
 const ALL_COLUMNS: Array<{ value: DomainColumn; label: string }> = [
   { value: "status", label: "状态" },
   { value: "registrar", label: "注册商" },
@@ -66,8 +67,15 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [moreOpen, setMoreOpen] = useState(false);
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<DomainColumn>>(
-    () => new Set(ALL_COLUMNS.map((item) => item.value)),
+    () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) ?? "{}") as { columns?: DomainColumn[] };
+        if (stored.columns?.length) return new Set(stored.columns);
+      } catch { /* 使用默认列 */ }
+      return new Set(ALL_COLUMNS.map((item) => item.value));
+    },
   );
+  const restoredView = useRef(false);
 
   const advancedFilter = useMemo<FilterNode>(() => {
     if (!advancedRaw) return { version: 1, logic: "and", conditions: [] };
@@ -75,6 +83,21 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   }, [advancedRaw]);
 
   useEffect(() => setSearchInput(search), [search]);
+
+  useEffect(() => {
+    if (restoredView.current) return;
+    restoredView.current = true;
+    try {
+      const stored = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) ?? "{}") as { query?: string };
+      if (!params.toString() && stored.query) setParams(new URLSearchParams(stored.query), { replace: true });
+    } catch { /* 保持默认视图 */ }
+  }, [params, setParams]); // 首次进入时才恢复；用户主动清空筛选后不能被旧状态覆盖。
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({ query: params.toString(), columns: Array.from(visibleColumns) }));
+    } catch { /* localStorage 不可用时 URL 仍是事实来源 */ }
+  }, [params, visibleColumns]);
 
   const query = useMemo(() => {
     const q = new URLSearchParams();
@@ -205,6 +228,22 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     } catch (err) {
       toast(err instanceof Error ? err.message : "移动域名失败", "error");
     }
+  }
+
+  function exportSelected() {
+    const names = Array.from(selected);
+    if (names.length === 0) return;
+    const byName = new Map(domains.map((item) => [item.name, item]));
+    const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rows = [
+      ["domain", "status", "registrar", "expiry_date", "query_method", "last_checked"].join(","),
+      ...names.map((name) => {
+        const item = byName.get(name);
+        return [name, item?.status, item?.registrar, item?.expiry_date, item?.query_method, item?.last_checked].map(escape).join(",");
+      }),
+    ];
+    downloadBlob(new Blob(["\uFEFF", rows.join("\n")], { type: "text/csv;charset=utf-8" }), "domainhunter-selected.csv");
+    toast(`已导出 ${names.length} 个选中域名`, "success");
   }
 
   async function confirmDelete() {
@@ -406,28 +445,13 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       )}
 
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2 text-[13px]">
-          <span>已选择 {selected.size} 个域名</span>
-          <button type="button" className="btn h-7 text-[12px]" onClick={runBatchCheck}>
-            批量检查
-          </button>
-          <button type="button" className="btn h-7 text-[12px]" onClick={() => setShowBulkAction(true)}>
-            批量操作预览
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger h-7 text-[12px]"
-            onClick={() => setPendingDelete(Array.from(selected))}
-          >
-            批量删除
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost h-7 text-[12px]"
-            onClick={() => setSelected(new Set())}
-          >
-            取消选择
-          </button>
+        <div className="fixed inset-x-3 bottom-20 z-40 mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-2 rounded-card border border-accent/30 bg-surface-raised p-2 text-[13px] shadow-lg lg:bottom-6">
+          <span className="rounded-button bg-accent px-3 py-2 text-on-accent">已选择 {selected.size} 项</span>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={runBatchCheck}>立即检查</button>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={() => setShowBulkAction(true)}>打标签 / 移入文件夹</button>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={exportSelected}>导出 CSV</button>
+          <button type="button" className="btn min-h-10 text-[12px] text-danger" onClick={() => setPendingDelete(Array.from(selected))}>删除</button>
+          <button type="button" className="btn btn-ghost min-h-10 min-w-10 px-0" onClick={() => setSelected(new Set())} aria-label="取消选择">×</button>
         </div>
       )}
 
