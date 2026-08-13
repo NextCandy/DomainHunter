@@ -7,10 +7,12 @@ export function SavedViewMenu({
   filter,
   onApply,
   onUnauthorized,
+  embedded = false,
 }: {
   filter: FilterNode;
   onApply: (filter: FilterNode) => void;
   onUnauthorized: () => void;
+  embedded?: boolean;
 }) {
   const [views, setViews] = useState<SavedView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,9 +47,9 @@ export function SavedViewMenu({
 
   return (
     <div className="relative">
-      <button type="button" className="btn h-8" onClick={() => setOpen((value) => !value)} aria-expanded={open}>智能视图</button>
+      <button type="button" className={embedded ? "min-h-11 w-full rounded-md px-3 text-left text-[12px] hover:bg-surface-muted" : "btn h-8"} onClick={() => setOpen((value) => !value)} aria-expanded={open}>智能视图</button>
       {open && (
-        <div className="absolute right-0 top-10 z-20 w-80 rounded-card border border-line bg-surface-raised p-3">
+        <div className={embedded ? "mt-1 w-full rounded-card border border-line bg-surface p-3" : "absolute right-0 top-10 z-20 w-80 rounded-card border border-line bg-surface-raised p-3"}>
           <div className="flex gap-2">
             <input className="input h-8 min-w-0 flex-1 text-[12px]" value={name} onChange={(event) => setName(event.target.value)} placeholder="新视图名称" onKeyDown={(event) => { if (event.key === "Enter") void save(); }} />
             <button type="button" className="btn btn-primary h-8 px-2 text-[12px]" onClick={() => void save()} disabled={!name.trim()}>保存</button>

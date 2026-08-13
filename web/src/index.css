@@ -40,8 +40,15 @@
     --graphite: var(--warm-gray);
     --smoke: var(--ash-gray);
     --ash: var(--stone-muted);
-    --danger: var(--warm-gray);
-    --review: var(--warm-gray);
+    /* Status semantics use OKLCH so hue and contrast stay stable across themes. */
+    --success: 0.44 0.13 152;
+    --warning: 0.48 0.13 70;
+    --danger: 0.51 0.19 27;
+    --info: 0.48 0.15 245;
+    --neutral: 0.46 0.025 260;
+    --review: var(--warning);
+    --on-accent: 1 0 0;
+    --overlay: 0.12 0.01 260;
 
     --canvas: var(--stone-canvas);
     --surface: var(--pure-white);
@@ -70,6 +77,7 @@
     --illustration-ink: var(--ink-black);
     --density-card-pad: 1.5rem;
     --density-card-header-pad: 1rem;
+    --density-row-height: 56px;
   }
 
   .dark {
@@ -78,7 +86,7 @@
     --surface-subtle: 44 41 39;
     --surface-muted: 54 50 47;
     --surface-raised: 43 40 38;
-    --line: 82 77 73;
+    --line: 255 255 255 / 0.12;
     --ink: 250 250 249;
     --ink-muted: 214 211 209;
     --ink-faint: 168 162 158;
@@ -97,8 +105,14 @@
     --rose: 214 211 209;
     --charcoal: 250 250 249;
     --illustration-ink: 250 250 249;
-    --danger: 214 211 209;
-    --review: 214 211 209;
+    --success: 0.78 0.14 152;
+    --warning: 0.82 0.13 78;
+    --danger: 0.72 0.17 27;
+    --info: 0.76 0.12 245;
+    --neutral: 0.74 0.025 260;
+    --on-accent: 0.18 0.035 260;
+    --overlay: 0.04 0.01 260;
+    --review: var(--warning);
   }
 
   html,
@@ -283,8 +297,14 @@
     color: rgb(var(--warm-gray));
   }
 
+  .review-dot {
+    @apply inline-flex h-2.5 w-2.5 shrink-0 rounded-full border border-warning/20 bg-warning/12;
+    box-shadow: inset 0 0 0 2px oklch(var(--warning));
+  }
+
   .data-table-refined tbody tr {
     @apply border-line transition-colors;
+    height: var(--density-row-height);
   }
 
   .data-table-refined tbody tr:hover {
@@ -292,11 +312,11 @@
   }
 
   .btn-primary {
-    @apply border-transparent bg-accent text-white hover:border-transparent hover:bg-accent;
+    @apply border-transparent bg-accent text-on-accent hover:border-transparent hover:bg-accent;
   }
 
   .btn-secondary {
-    @apply border-accent bg-accent text-white hover:border-accent hover:bg-accent;
+    @apply border-accent bg-accent text-on-accent hover:border-accent hover:bg-accent;
   }
 
   .btn-ghost {
@@ -304,7 +324,7 @@
   }
 
   .btn-danger {
-    @apply border-ink bg-ink text-white hover:border-ink hover:bg-ink;
+    @apply border-danger bg-danger text-on-accent hover:border-danger hover:bg-danger;
   }
 
   .input {
@@ -318,6 +338,16 @@
 
   .table-scroll {
     @apply min-w-0 w-full overflow-x-auto;
+    scrollbar-gutter: stable;
+  }
+
+  .table-top-scroll {
+    @apply h-3 w-full overflow-x-auto rounded-button border border-line bg-surface-muted;
+    scrollbar-color: oklch(var(--neutral) / 0.5) transparent;
+  }
+
+  .sticky-action-column {
+    box-shadow: -14px 0 20px -18px rgb(var(--ink) / 0.62);
   }
 
   .mono {
@@ -501,11 +531,13 @@
 html[data-density="compact"] {
   --density-card-pad: 1.15rem;
   --density-card-header-pad: 0.8rem;
+  --density-row-height: 44px;
 }
 
 html[data-density="dense"] {
   --density-card-pad: 0.9rem;
   --density-card-header-pad: 0.65rem;
+  --density-row-height: 36px;
 }
 
 html[data-density="compact"] .density-card-body:not(.p-0),

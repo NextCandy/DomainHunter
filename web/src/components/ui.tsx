@@ -206,7 +206,7 @@ export function DomainName({
           ★
         </span>
       )}
-      <span className="break-all">{name}</span>
+      <span className="block min-w-0 truncate whitespace-nowrap">{name}</span>
     </>
   );
 
@@ -214,16 +214,27 @@ export function DomainName({
     return (
       <button
         type="button"
-        className={cx("mono min-w-0 text-left text-ink hover:text-accent hover:underline", className)}
+        className={cx("mono block min-w-0 max-w-full truncate whitespace-nowrap text-left text-ink hover:text-accent hover:underline", className)}
         onClick={onClick}
-        title={`打开 ${name} 详情`}
+        title={name}
       >
         {content}
       </button>
     );
   }
 
-  return <span className={cx("mono min-w-0", className)}>{content}</span>;
+  return <span className={cx("mono block min-w-0 max-w-full truncate whitespace-nowrap", className)} title={name}>{content}</span>;
+}
+
+export function ReviewIndicator({ explanation }: { explanation?: string }) {
+  return (
+    <span
+      className="review-dot"
+      role="img"
+      aria-label="需复核"
+      title={explanation || "查询事实或证据需要复核"}
+    />
+  );
 }
 
 export function Spinner({ className }: { className?: string }) {

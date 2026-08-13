@@ -3,6 +3,22 @@ export default {
   darkMode: "class",
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
+    opacity: {
+      0: "0",
+      5: "0.05",
+      8: "0.08",
+      10: "0.1",
+      12: "0.12",
+      20: "0.2",
+      25: "0.25",
+      30: "0.3",
+      40: "0.4",
+      45: "0.45",
+      50: "0.5",
+      60: "0.6",
+      75: "0.75",
+      100: "1",
+    },
     extend: {
       fontFamily: {
         sans: [
@@ -68,8 +84,14 @@ export default {
         rose: "rgb(var(--rose) / <alpha-value>)",
         charcoal: "rgb(var(--charcoal) / <alpha-value>)",
         "illustration-ink": "rgb(var(--illustration-ink) / <alpha-value>)",
-        review: "rgb(var(--review) / <alpha-value>)",
-        danger: "rgb(var(--danger) / <alpha-value>)",
+        review: "oklch(var(--review) / <alpha-value>)",
+        danger: "oklch(var(--danger) / <alpha-value>)",
+        success: "oklch(var(--success) / <alpha-value>)",
+        warning: "oklch(var(--warning) / <alpha-value>)",
+        info: "oklch(var(--info) / <alpha-value>)",
+        neutral: "oklch(var(--neutral) / <alpha-value>)",
+        "on-accent": "oklch(var(--on-accent) / <alpha-value>)",
+        overlay: "oklch(var(--overlay) / <alpha-value>)",
       },
       borderRadius: {
         card: "10px",

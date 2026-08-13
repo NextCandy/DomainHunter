@@ -28,20 +28,19 @@ export const STATUS_ORDER: DomainStatus[] = [
   "skipped",
 ];
 
-/** Seline 状态色板：默认使用石色结构，只有可注册沿用青蓝信号。 */
+/** 状态色只引用语义令牌；浅深主题由 CSS 统一校准。 */
 export const STATUS_CLASSES: Record<DomainStatus, string> = {
-  available:
-    "bg-sky-wash/60 text-cyan-edge border-cyan-edge/40",
-  registered: "bg-transparent text-ink-muted border-line",
-  grace: "bg-surface-muted text-ink-muted border-stone-muted",
-  redemption: "bg-surface-muted text-ink-muted border-stone-muted",
-  pending_delete: "bg-surface-muted text-ink-muted border-stone-muted",
-  expired: "bg-surface-muted text-ink-muted border-stone-muted",
-  transfer_locked: "bg-surface-muted text-ink-muted border-stone-muted",
-  hold: "bg-surface-muted text-ink-muted border-stone-muted",
-  unknown: "bg-surface-muted text-ink-muted border-stone-muted",
-  error: "bg-surface-muted text-ink-muted border-stone-muted",
-  skipped: "bg-surface-muted text-ink-muted border-stone-muted",
+  available: "bg-success/12 text-success border-success/20",
+  registered: "bg-neutral/12 text-neutral border-neutral/20",
+  grace: "bg-warning/12 text-warning border-warning/20",
+  redemption: "bg-info/12 text-info border-info/20",
+  pending_delete: "bg-danger/12 text-danger border-danger/20",
+  expired: "bg-danger/12 text-danger border-danger/20",
+  transfer_locked: "bg-info/12 text-info border-info/20",
+  hold: "bg-info/12 text-info border-info/20",
+  unknown: "bg-neutral/12 text-neutral border-neutral/20",
+  error: "bg-danger/12 text-danger border-danger/20",
+  skipped: "bg-neutral/12 text-neutral border-neutral/20",
 };
 
 export function hasTransferLock(statuses?: string[] | null): boolean {
