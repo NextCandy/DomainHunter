@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -59,19 +58,10 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestResolveFilePrefersLegacyDatabase 既有部署的 puff.db 必须继续被使用，
-// 绝不能因为改名而在旁边新建一个空库
-func TestResolveFilePrefersLegacyDatabase(t *testing.T) {
+func TestResolveFileDefaultsToDomainHunterDatabase(t *testing.T) {
 	dir := t.TempDir()
 	if got := ResolveFile(dir); got != DefaultFile {
 		t.Fatalf("全新安装应创建 %s，实际 %s", DefaultFile, got)
-	}
-
-	if err := os.WriteFile(filepath.Join(dir, LegacyFile), []byte{}, 0o644); err != nil {
-		t.Fatalf("创建旧库失败: %v", err)
-	}
-	if got := ResolveFile(dir); got != LegacyFile {
-		t.Fatalf("存在 %s 时必须继续使用它，实际 %s", LegacyFile, got)
 	}
 
 	t.Setenv("DOMAINHUNTER_DB_FILE", "custom.db")
@@ -80,10 +70,9 @@ func TestResolveFilePrefersLegacyDatabase(t *testing.T) {
 	}
 }
 
-// TestMigrateMarksLegacyBaseline 模拟既有 Puff 数据库：已有表但没有迁移记录
-func TestMigrateMarksLegacyBaseline(t *testing.T) {
+func TestMigrateMarksExistingBaseline(t *testing.T) {
 	dir := t.TempDir()
-	raw, err := sql.Open("sqlite", filepath.Join(dir, LegacyFile))
+	raw, err := sql.Open("sqlite", filepath.Join(dir, DefaultFile))
 	if err != nil {
 		t.Fatalf("创建旧库失败: %v", err)
 	}

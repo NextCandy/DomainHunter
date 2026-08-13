@@ -20,7 +20,7 @@ internal/
 │   ├── health.go          Provider 健康度滑动窗口
 │   ├── limiter.go         provider:tld 维度的限速（默认关闭）
 │   ├── detect/            跨 Provider 共用的文本语义判定
-│   ├── envcfg/            DOMAINHUNTER_* / PUFF_* 环境变量读取
+│   ├── envcfg/            DOMAINHUNTER_* 环境变量读取
 │   └── providers/         rdap · whois · whoisls · fallback
 ├── scheduler/           调度循环 + 三级优先级队列 + worker pool
 ├── service/             业务服务：Query / Domain / Monitor / Settings / Overview

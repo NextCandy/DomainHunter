@@ -137,7 +137,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
               className={cx(
                 "tabular mt-3 text-[22px] font-semibold leading-tight",
                 status === "available" && (counts.get(status) ?? 0) > 0
-                  ? "text-emerald-600 dark:text-emerald-400"
+                  ? "text-accent"
                   : "text-ink",
               )}
             >
@@ -227,9 +227,9 @@ function DaysCell({ item }: { item: DomainInfo }) {
       className={cx(
         "tabular",
         overdue
-          ? "text-rose-600 dark:text-rose-400"
+          ? "text-ink"
           : days <= 14
-            ? "text-amber-600 dark:text-amber-400"
+            ? "text-ink-muted"
             : "text-ink-muted",
       )}
     >

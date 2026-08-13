@@ -87,8 +87,8 @@ export function DomainValuationPanel({
         {error && <ErrorNotice message={error} onRetry={() => { clearError(); void refresh(); }} />}
 
         {hasReviewConstraint && (
-          <div className="mb-3 border border-review/35 bg-review/8 px-3 py-2.5 text-[12px] leading-5 text-ink">
-            <div className="font-semibold text-review">需要先复核查询事实</div>
+          <div className="mb-3 rounded-card border border-line bg-surface-muted px-3 py-2.5 text-[12px] leading-5 text-ink">
+            <div className="font-semibold text-ink">需要先复核查询事实</div>
             <p className="mt-1 text-ink-muted">当前状态、可信度或查询结果不足以支撑研究性估价。请先完成“立即检查”并在证据一致后入队。</p>
           </div>
         )}
@@ -110,12 +110,12 @@ export function DomainValuationPanel({
 function JobStatePill({ state }: { state: ValuationJob["state"] }) {
   const classes: Record<ValuationJob["state"], string> = {
     idle: "border-line bg-surface-muted text-ink-muted",
-    queued: "border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200",
+    queued: "border-accent/30 bg-accent-soft text-accent",
     running: "border-accent/30 bg-accent-soft text-accent",
-    succeeded: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200",
-    failed: "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
+    succeeded: "border-accent/30 bg-accent-soft text-accent",
+    failed: "border-line bg-surface-muted text-ink-muted",
     cancelled: "border-line bg-surface-muted text-ink-muted",
-    deferred: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+    deferred: "border-line bg-surface-muted text-ink-muted",
   };
   return <Pill className={cx("border", classes[state])}>{VALUATION_STATE_LABELS[state]}</Pill>;
 }
@@ -166,9 +166,9 @@ function ValuationJobContent({
 
   if (job.state === "failed" || job.state === "cancelled") {
     return (
-      <div className="border border-red-200 bg-red-50/60 p-3 dark:border-red-900 dark:bg-red-950/20">
-        <p className="text-[13px] font-semibold text-red-800 dark:text-red-200">{job.state === "failed" ? "本次估价未完成" : "估价任务已取消"}</p>
-        <p className="mt-1 whitespace-pre-line text-[12px] leading-5 text-red-700 dark:text-red-300">{job.error_message || "没有生成可展示的估价结果。"}</p>
+        <div className="border border-line bg-surface-muted p-3">
+        <p className="text-[13px] font-semibold text-ink">{job.state === "failed" ? "本次估价未完成" : "估价任务已取消"}</p>
+        <p className="mt-1 whitespace-pre-line text-[12px] leading-5 text-ink-muted">{job.error_message || "没有生成可展示的估价结果。"}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="btn h-8 text-[12px]" disabled={pending || !allowRetry || job.error_code === "provider_auth" || job.error_code === "provider_config"} onClick={() => void onStart(false)}>重新加入队列</button>{allowRetry && job.error_code !== "provider_auth" && job.error_code !== "provider_config" && <button type="button" className="btn h-8 text-[12px]" disabled={pending} onClick={() => void onStart(true)}>忽略缓存重试</button>}</div>
       </div>
     );
@@ -195,15 +195,15 @@ function InProgressState({ job, pending, onCancel }: { job: ValuationJob; pendin
 
 function DeferredState({ job, pending, allowRetry, onRetry, onCancel }: { job: ValuationJob; pending: boolean; allowRetry: boolean; onRetry: () => Promise<void>; onCancel: () => Promise<void> }) {
   return (
-    <div className="rounded-[24px] border border-amber-300/80 bg-amber-50/75 px-5 py-4 dark:border-amber-700/60 dark:bg-amber-950/25">
+    <div className="rounded-card border border-line bg-surface-muted px-5 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-amber-900 dark:text-amber-100">上游 AI 暂时限流，任务会自动重试</p>
-          <p className="mt-1 whitespace-pre-line text-[12px] leading-5 text-amber-800 dark:text-amber-200">{job.error_message || "AI 提供商暂时不可用，DomainHunter 已保留任务。"}</p>
+          <p className="text-[13px] font-semibold text-ink">上游 AI 暂时限流，任务会自动重试</p>
+          <p className="mt-1 whitespace-pre-line text-[12px] leading-5 text-ink-muted">{job.error_message || "AI 提供商暂时不可用，DomainHunter 已保留任务。"}</p>
         </div>
-        <span className="mono text-[10px] text-amber-700 dark:text-amber-300">DEFERRED</span>
+        <span className="mono text-[10px] text-ink-muted">DEFERRED</span>
       </div>
-      <div className="mt-3 grid gap-1 border-t border-amber-300/60 pt-3 text-[11px] text-amber-800 dark:border-amber-700/50 dark:text-amber-200 sm:grid-cols-2">
+      <div className="mt-3 grid gap-1 border-t border-line pt-3 text-[11px] text-ink-muted sm:grid-cols-2">
         <span>入队：{formatRelative(job.queued_at)}</span>
         <span className="sm:text-right">{job.retry_after ? `自动重试：${formatDateTime(job.retry_after)}` : "等待提供商恢复"}</span>
       </div>
@@ -248,9 +248,9 @@ function ScoreCell({ label, score }: { label: string; score: number }) {
 function ResultDetails({ valuation }: { valuation: DomainValuation }) {
   return (
     <div className="mt-4 grid gap-3 border-t border-line pt-3 sm:grid-cols-3">
-      <InsightList title="优势" values={valuation.strengths} tone="text-emerald-700 dark:text-emerald-300" empty="模型未给出明确优势" />
-      <InsightList title="风险" values={valuation.risks} tone="text-amber-700 dark:text-amber-300" empty="模型未报告额外风险" />
-      <InsightList title="数据缺口" values={valuation.data_gaps} tone="text-review" empty="未报告额外数据缺口" />
+      <InsightList title="优势" values={valuation.strengths} tone="text-accent" empty="模型未给出明确优势" />
+      <InsightList title="风险" values={valuation.risks} tone="text-ink-muted" empty="模型未报告额外风险" />
+      <InsightList title="数据缺口" values={valuation.data_gaps} tone="text-ink-muted" empty="未报告额外数据缺口" />
       <div className="sm:col-span-3 border-t border-line pt-3"><p className="mono text-[11px] text-ink-muted">STATUS GUARD</p><p className="mt-1 text-[12px] leading-5 text-ink-muted">{valuation.status_guard}</p><p className="mt-2 text-[11px] leading-5 text-ink-faint">{valuation.disclaimer}</p></div>
     </div>
   );

@@ -284,7 +284,7 @@ function FolderNode({
         </button>
         <button
           type="button"
-          className="btn btn-ghost h-7 w-7 shrink-0 px-0 text-red-500 opacity-70 focus-visible:opacity-100 group-hover:opacity-100"
+          className="btn btn-ghost h-7 w-7 shrink-0 px-0 text-ink-muted opacity-70 focus-visible:opacity-100 group-hover:opacity-100"
           onClick={() => onDelete(node)}
           aria-label={`删除 ${node.name}`}
           title={`删除 ${node.name}`}

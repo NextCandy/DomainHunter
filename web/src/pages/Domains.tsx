@@ -231,7 +231,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           </button>
           <button
             type="button"
-            className={cx("btn h-8", failedCount > 0 && "border-amber-400 text-amber-700 dark:text-amber-300")}
+            className={cx("btn h-8", failedCount > 0 && "border-accent text-accent")}
             onClick={() => void runBatchRetryFailed()}
             disabled={retrying}
             aria-label="重试失败和未知域名"
@@ -365,7 +365,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       </div>
 
       {failedCount > 0 && (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+        <p className="rounded-card border border-line bg-surface-muted px-4 py-3 text-[12px] text-ink-muted">
           当前有 {failedCount} 个失败或未知域名；“重试失败”会由后端在 30 秒窗口内均摊排队，可先用“失败/未知”筛选查看。
         </p>
       )}

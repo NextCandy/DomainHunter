@@ -1,7 +1,4 @@
-// Package envcfg 处理查询源的环境变量读取。
-//
-// 兼容性约定：新的 DOMAINHUNTER_* 变量优先，旧的 PUFF_* 变量继续有效（已废弃，
-// 但不能删除，否则现有部署滚动升级时会丢配置）。
+// Package envcfg 处理查询源的 DomainHunter 环境变量读取。
 package envcfg
 
 import (
@@ -11,12 +8,9 @@ import (
 	"time"
 )
 
-// First 返回第一个非空的环境变量值（primary 优先于 legacy）
-func First(primary, legacy string) string {
-	if value := strings.TrimSpace(os.Getenv(primary)); value != "" {
-		return value
-	}
-	return strings.TrimSpace(os.Getenv(legacy))
+// Value 返回环境变量的去空格值。
+func Value(name string) string {
+	return strings.TrimSpace(os.Getenv(name))
 }
 
 // ParseTLDs 解析逗号分隔的 TLD 列表；为空时使用 defaults

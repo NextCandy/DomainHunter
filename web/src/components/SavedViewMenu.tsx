@@ -55,7 +55,7 @@ export function SavedViewMenu({
           <div className="my-3 border-t border-line" />
           {loading ? <div className="flex items-center gap-2 py-3 text-[12px] text-ink-muted"><Spinner /> 加载中…</div> : error ? <ErrorNotice message={error} /> : views.length === 0 ? <p className="py-3 text-[12px] text-ink-faint">还没有保存的视图</p> : (
             <div className="max-h-64 space-y-1 overflow-y-auto">
-              {views.map((view) => <div key={view.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-muted"><button type="button" className="min-w-0 flex-1 truncate text-left text-[12px] text-ink" onClick={() => { onApply(view.filter); setOpen(false); }}>{view.name}</button><button type="button" className="text-[11px] text-ink-faint hover:text-red-600" onClick={() => void remove(view)} aria-label={`删除${view.name}`}>删除</button></div>)}
+              {views.map((view) => <div key={view.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-muted"><button type="button" className="min-w-0 flex-1 truncate text-left text-[12px] text-ink" onClick={() => { onApply(view.filter); setOpen(false); }}>{view.name}</button><button type="button" className="text-[11px] text-ink-faint hover:text-ink" onClick={() => void remove(view)} aria-label={`删除${view.name}`}>删除</button></div>)}
             </div>
           )}
         </div>

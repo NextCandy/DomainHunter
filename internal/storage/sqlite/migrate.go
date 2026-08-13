@@ -563,7 +563,7 @@ func (d *DB) migrate() error {
 				return err
 			}
 			applied[migrations[0].Version] = true
-			logger.Info("检测到既有 Puff 数据库，已将迁移 001_baseline 标记为已应用")
+			logger.Info("检测到已有 DomainHunter 数据库，已将迁移 001_baseline 标记为已应用")
 		}
 	}
 

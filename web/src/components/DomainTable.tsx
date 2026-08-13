@@ -124,7 +124,7 @@ function DesktopTable({
                 </button>
                 <button
                   type="button"
-                  className="btn btn-ghost h-7 px-2 text-[12px] text-red-600 dark:text-red-400"
+                  className="btn btn-ghost h-7 px-2 text-[12px] text-ink-muted"
                   onClick={() => onDelete(item.name)}
                 >
                   删除
@@ -190,7 +190,7 @@ function MobileList({
                 </button>
                 <button
                   type="button"
-                  className={cx("btn h-7 px-3 text-[12px] text-red-600 dark:text-red-400")}
+                  className={cx("btn h-7 px-3 text-[12px] text-ink-muted")}
                   onClick={() => onDelete(item.name)}
                 >
                   删除

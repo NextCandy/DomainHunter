@@ -60,7 +60,7 @@ type Provider struct {
 }
 
 // New 从环境变量创建 Provider。
-// DOMAINHUNTER_WHOIS_FALLBACK_URL 默认为空；旧的 PUFF_WHOIS_FALLBACK_* 同样有效。
+// DOMAINHUNTER_WHOIS_FALLBACK_URL 默认为空。
 func New(timeout time.Duration) *Provider {
 	return NewNamed(query.ProviderFallback, timeout)
 }
@@ -72,12 +72,12 @@ func NewNamed(name string, timeout time.Duration) *Provider {
 	if timeout <= 0 {
 		timeout = 20 * time.Second
 	}
-	if configured := envcfg.First("DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT", "PUFF_WHOIS_FALLBACK_TIMEOUT"); configured != "" {
+	if configured := envcfg.Value("DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT"); configured != "" {
 		if parsed, ok := envcfg.ParseDuration(configured); ok {
 			timeout = parsed
 		}
 	}
-	tlds := envcfg.ParseTLDs(envcfg.First("DOMAINHUNTER_WHOIS_FALLBACK_TLDS", "PUFF_WHOIS_FALLBACK_TLDS"), "im", "do")
+	tlds := envcfg.ParseTLDs(envcfg.Value("DOMAINHUNTER_WHOIS_FALLBACK_TLDS"), "im", "do")
 	if name == query.ProviderWhoisDomainLookup {
 		// The standalone whois-domain-lookup container is the second product-wide
 		// fallback. Its API can query more TLDs than the legacy .im/.do opt-in.
@@ -85,7 +85,7 @@ func NewNamed(name string, timeout time.Duration) *Provider {
 	}
 	return &Provider{
 		name:    strings.TrimSpace(name),
-		baseURL: strings.TrimSpace(envcfg.First("DOMAINHUNTER_WHOIS_FALLBACK_URL", "PUFF_WHOIS_FALLBACK_URL")),
+		baseURL: envcfg.Value("DOMAINHUNTER_WHOIS_FALLBACK_URL"),
 		tlds:    tlds,
 		timeout: timeout,
 	}

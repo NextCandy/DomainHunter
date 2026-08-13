@@ -28,29 +28,20 @@ export const STATUS_ORDER: DomainStatus[] = [
   "skipped",
 ];
 
-/** Monad 状态色板：彩色只承担状态语义，基础 UI 保持暖灰与蓝色克制。 */
+/** Seline 状态色板：默认使用石色结构，只有可注册沿用青蓝信号。 */
 export const STATUS_CLASSES: Record<DomainStatus, string> = {
   available:
-    "bg-[#e2f4e9] text-[#1e6a47] border-[#b8ddc6] dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/25",
-  registered:
-    "bg-transparent text-ink-muted border-line dark:bg-zinc-500/10 dark:text-zinc-300 dark:border-zinc-500/25",
-  grace:
-    "bg-[#fff4da] text-[#8b5a12] border-[#ead39b] dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/25",
-  redemption:
-    "bg-[#fff0e8] text-[#a44b32] border-[#f0c1ae] dark:bg-orange-500/10 dark:text-orange-300 dark:border-orange-500/25",
-  pending_delete:
-    "bg-[#fff0e8] text-[#a44b32] border-[#f0c1ae] dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/25",
-  expired:
-    "bg-[#fff0e8] text-[#a44b32] border-[#f0c1ae] dark:bg-orange-500/10 dark:text-orange-300 dark:border-orange-500/25",
-  transfer_locked:
-    "bg-[#e8eefc] text-[#3156a7] border-[#bac9ef] dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/25",
-  hold: "bg-[#e8eefc] text-[#3156a7] border-[#bac9ef] dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/25",
-  unknown:
-    "bg-[#eeeae7] text-ink-muted border-line dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/25",
-  error:
-    "bg-[#fff0e8] text-danger border-[#f0c1ae] dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/25",
-  skipped:
-    "bg-[#eeeae7] text-ink-muted border-line dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/25",
+    "bg-sky-wash/60 text-cyan-edge border-cyan-edge/40",
+  registered: "bg-transparent text-ink-muted border-line",
+  grace: "bg-surface-muted text-ink-muted border-stone-muted",
+  redemption: "bg-surface-muted text-ink-muted border-stone-muted",
+  pending_delete: "bg-surface-muted text-ink-muted border-stone-muted",
+  expired: "bg-surface-muted text-ink-muted border-stone-muted",
+  transfer_locked: "bg-surface-muted text-ink-muted border-stone-muted",
+  hold: "bg-surface-muted text-ink-muted border-stone-muted",
+  unknown: "bg-surface-muted text-ink-muted border-stone-muted",
+  error: "bg-surface-muted text-ink-muted border-stone-muted",
+  skipped: "bg-surface-muted text-ink-muted border-stone-muted",
 };
 
 export function hasTransferLock(statuses?: string[] | null): boolean {

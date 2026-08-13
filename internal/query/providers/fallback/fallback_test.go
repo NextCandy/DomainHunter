@@ -29,9 +29,8 @@ func TestEndpointUsesAPIPathAndQuery(t *testing.T) {
 
 func newTestProvider(t *testing.T, baseURL string) *Provider {
 	t.Helper()
-	// 使用旧变量名，同时验证 PUFF_* 兼容性没有被破坏
-	t.Setenv("PUFF_WHOIS_FALLBACK_URL", baseURL)
-	t.Setenv("PUFF_WHOIS_FALLBACK_TLDS", "im,do")
+	t.Setenv("DOMAINHUNTER_WHOIS_FALLBACK_URL", baseURL)
+	t.Setenv("DOMAINHUNTER_WHOIS_FALLBACK_TLDS", "im,do")
 	return New(5 * time.Second)
 }
 

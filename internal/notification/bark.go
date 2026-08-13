@@ -19,7 +19,7 @@ import (
 // BarkNotifier 通过 Bark 推送到 iOS。
 //
 // 配置里的 URL 是完整的推送地址（含设备 key），既支持官方 api.day.app，
-// 也支持自建服务器。这与原 Puff 的 bark_url 格式一致，升级后无需重新配置。
+// 也支持自建服务器。
 type BarkNotifier struct {
 	mu  sync.RWMutex
 	cfg config.BarkConfig

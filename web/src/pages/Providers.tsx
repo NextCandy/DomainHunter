@@ -26,10 +26,10 @@ const STATE_LABEL: Record<ProviderHealth["state"], string> = {
 };
 
 const STATE_CLASS: Record<ProviderHealth["state"], string> = {
-  healthy: "bg-emerald-500",
-  degraded: "bg-amber-500",
-  offline: "bg-red-500",
-  unknown: "bg-zinc-400",
+  healthy: "bg-cyan-signal",
+  degraded: "bg-warm-gray",
+  offline: "bg-stone-muted",
+  unknown: "bg-stone-muted",
 };
 
 const POLICY_EXAMPLE = `{
@@ -109,7 +109,7 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
                 {provider.state_reason && <p className="mt-2 text-[11px] text-ink-faint">{provider.state_reason}</p>}
                 {provider.last_error && (
                   <p
-                    className="mt-2 truncate text-[11px] text-red-600 dark:text-red-400"
+                    className="mt-2 truncate text-[11px] text-ink-muted"
                     title={provider.last_error}
                   >
                     {provider.last_error}

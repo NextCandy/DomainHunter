@@ -186,7 +186,7 @@ function ChannelTitle({ label, enabled }: { label: string; enabled: boolean }) {
   return (
     <span className="flex items-center gap-2">
       {label}
-      <Pill className={enabled ? "text-emerald-600 dark:text-emerald-400" : undefined}>
+      <Pill className={enabled ? "border-accent/35 bg-accent-soft text-accent" : undefined}>
         {enabled ? "已启用" : "未启用"}
       </Pill>
     </span>

@@ -41,7 +41,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="card bg-periwinkle-mist p-6 sm:p-8">
+        <form onSubmit={handleSubmit} className="card p-6 sm:p-8">
           <div className="mb-4">
             <label className="label" htmlFor="username">
               用户名
@@ -79,7 +79,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           </label>
 
           {error && (
-            <p className="mb-3 rounded-[10px] border border-danger/30 bg-blush px-2.5 py-2 text-[12px] text-danger dark:bg-danger/10 dark:text-red-200">
+            <p className="mb-3 rounded-[6px] border border-line bg-surface-muted px-2.5 py-2 text-[12px] text-ink-muted">
               {error}
             </p>
           )}

@@ -202,7 +202,7 @@ export function DomainName({
   const content = (
     <>
       {favorite && (
-        <span className="mr-1 text-amber-500" aria-hidden="true">
+        <span className="mr-1 text-accent" aria-hidden="true">
           ★
         </span>
       )}
@@ -269,7 +269,7 @@ export function EmptyState({
 
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-danger/35 bg-blush px-4 py-3 text-[12px] text-danger dark:border-danger/30 dark:bg-danger/10 dark:text-red-200">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface-muted px-4 py-3 text-[12px] text-ink-muted">
       <span>{message}</span>
       {onRetry && (
         <button type="button" className="btn btn-ghost h-7 px-2 text-[12px]" onClick={onRetry}>
@@ -459,11 +459,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={cx(
               "toast pointer-events-auto flex items-start gap-2 rounded-card border px-3 py-2 text-[13px]",
               toast.leaving ? "toast-leave" : "toast-enter",
-              toast.tone === "error"
-                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200"
-                : toast.tone === "success"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200"
-                  : "border-line bg-surface-raised text-ink",
+              toast.tone === "info"
+                ? "border-accent/30 bg-accent-soft text-ink"
+                : "border-line bg-surface-muted text-ink-muted",
             )}
             role="status"
             aria-live="polite"

@@ -31,16 +31,16 @@ const HEALTH_LABELS: Record<ProviderHealth["state"], string> = {
 };
 
 const HEALTH_DOT: Record<ProviderHealth["state"], string> = {
-  healthy: "bg-emerald-500",
-  degraded: "bg-amber-500",
-  offline: "bg-red-500",
-  unknown: "bg-zinc-400",
+  healthy: "bg-cyan-signal",
+  degraded: "bg-warm-gray",
+  offline: "bg-stone-muted",
+  unknown: "bg-stone-muted",
 };
 
 const TREND_COLORS = {
   total: "rgb(var(--accent))",
-  available: "rgb(16 185 129)",
-  highScore: "rgb(245 158 11)",
+  available: "rgb(var(--cyan-edge))",
+  highScore: "rgb(var(--warm-gray))",
 };
 
 export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void }) {
@@ -97,7 +97,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
           <h1 className="editorial-title mt-2 text-[38px] leading-tight sm:text-[52px]">今日工作台</h1>
           <p className="text-[12px] text-ink-muted">
             共 {data.total} 个域名 · 调度器
-            <span className={cx("ml-1", monitorRunning ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>
+            <span className={cx("ml-1", monitorRunning ? "text-accent" : "text-ink-muted")}>
               {monitorRunning ? "运行中" : "已停止"}
             </span>
             （{workers} worker，队列 {queued}）
@@ -161,7 +161,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
                   <span
                     className={cx(
                       "tabular text-[12px]",
-                      days !== null && days <= 7 ? "text-red-600 dark:text-red-400" : "text-ink-faint",
+                      days !== null && days <= 7 ? "text-ink" : "text-ink-faint",
                     )}
                   >
                     {days !== null ? `${days} 天` : "—"}
@@ -308,7 +308,7 @@ function ActionQueue({ counts }: { counts: Overview["action_counts"] }) {
 function ProviderAlert({ providers }: { providers: ProviderHealth[] | null }) {
   const degraded = (providers ?? []).filter((provider) => provider.state === "degraded" || provider.state === "offline");
   if (degraded.length === 0) return null;
-  return <div className="flex flex-wrap items-center justify-between gap-2 border border-amber-300/60 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/30 dark:bg-amber-950/20 dark:text-amber-200"><span><strong>查询源正在降权或离线：</strong> {degraded.map((provider) => `${providerLabel(provider.provider)}（${HEALTH_LABELS[provider.state]}）`).join("、")}</span><Link to="/providers" className="font-medium underline">查看健康详情</Link></div>;
+  return <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-surface-muted px-4 py-3 text-[12px] text-ink"><span><strong>查询源需要关注：</strong> {degraded.map((provider) => `${providerLabel(provider.provider)}（${HEALTH_LABELS[provider.state]}）`).join("、")}</span><Link to="/providers" className="font-medium text-accent underline">查看健康详情</Link></div>;
 }
 
 function normalizeTrend(payload: unknown): OverviewTrendPoint[] {
@@ -408,7 +408,7 @@ function StatTile({
       <div
         className={cx(
           "tabular mt-2 font-display text-[30px] font-normal leading-tight",
-          tone === "accent" && value > 0 ? "text-[#1e6a47] dark:text-emerald-300" : "text-ink",
+          tone === "accent" && value > 0 ? "text-accent" : "text-ink",
         )}
       >
         {value}

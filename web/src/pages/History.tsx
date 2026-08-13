@@ -240,7 +240,7 @@ function DomainHistory({
                         <StatusBadge status={attempt.status} />
                       ) : (
                         <span
-                          className="text-[12px] text-red-600 dark:text-red-400"
+                          className="text-[12px] text-ink-muted"
                           title={attempt.error_message}
                         >
                           {attempt.error_message || "失败"}

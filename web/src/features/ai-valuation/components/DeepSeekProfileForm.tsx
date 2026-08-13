@@ -172,5 +172,5 @@ function NumberField({ label, suffix, min, max, value, onChange }: { label: stri
 }
 
 function TestResult({ result }: { result: ConnectionTestResult }) {
-  return <div className={result.ok ? "border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" : "border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"}><strong>{result.ok ? "连接成功" : "连接失败"}</strong><span className="ml-2">{result.message}</span>{result.ok && <span className="ml-2 mono">{result.latency_ms ?? "—"} ms · {result.model ?? "—"}</span>}</div>;
+  return <div className={result.ok ? "rounded-card border border-accent/30 bg-accent-soft/45 px-3 py-2 text-[12px] text-ink" : "rounded-card border border-line bg-surface-muted px-3 py-2 text-[12px] text-ink-muted"}><strong>{result.ok ? "连接成功" : "连接失败"}</strong><span className="ml-2">{result.message}</span>{result.ok && <span className="ml-2 mono">{result.latency_ms ?? "—"} ms · {result.model ?? "—"}</span>}</div>;
 }

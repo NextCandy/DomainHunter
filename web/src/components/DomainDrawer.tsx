@@ -275,7 +275,7 @@ function OverviewTab({ info, onUnauthorized, onCompleted }: { info: DomainInfo; 
       <Field label="加入时间">{formatDateTime(info.added_at)}</Field>
       {info.error_message && (
         <Field label="备注">
-          <span className="text-amber-700 dark:text-amber-400">{info.error_message}</span>
+          <span className="text-ink-muted">{info.error_message}</span>
         </Field>
       )}
     </div>
@@ -331,7 +331,7 @@ function EvidenceTab({ info, attempts }: { info: DomainInfo; attempts: Attempt[]
                       {attempt.success ? (
                         <StatusBadge status={attempt.status} />
                       ) : (
-                        <span className="text-red-600 dark:text-red-400" title={attempt.error_message}>
+                        <span className="text-ink-muted" title={attempt.error_message}>
                           {attempt.error_message || "失败"}
                         </span>
                       )}

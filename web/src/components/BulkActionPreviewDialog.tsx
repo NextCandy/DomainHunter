@@ -64,7 +64,22 @@ export function BulkActionPreviewDialog({
           {type === "monitor" && <label className="flex items-center gap-2 self-end text-[12px] text-ink-muted"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />启用监控</label>}
         </div>
         <div className="mt-4 rounded-md border border-line bg-surface-muted p-3 text-[12px]">
-          {loading ? <div className="flex items-center gap-2 text-ink-muted"><Spinner /> 正在计算影响范围…</div> : preview ? <div className="grid grid-cols-2 gap-2"><div>实际匹配 <strong>{preview.matched}</strong> 个</div><div>将创建任务 <strong>{preview.task_count}</strong> 个</div>{type === "ai_valuation" && <><div>缓存命中 <strong>{preview.cache_hits}</strong> 个</div><div>今日额度 <strong>{preview.daily_used}/{preview.daily_limit}</strong></div></>}<div className="col-span-2 text-ink-faint">样例：{preview.samples.length ? preview.samples.join("、") : "无"}</div>{preview.warning && <p className="col-span-2 text-amber-700 dark:text-amber-300">{preview.warning}</p>}</div> : null}
+          {loading ? (
+            <div className="flex items-center gap-2 text-ink-muted"><Spinner /> 正在计算影响范围…</div>
+          ) : preview ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div>实际匹配 <strong>{preview.matched}</strong> 个</div>
+              <div>将创建任务 <strong>{preview.task_count}</strong> 个</div>
+              {type === "ai_valuation" && (
+                <>
+                  <div>缓存命中 <strong>{preview.cache_hits}</strong> 个</div>
+                  <div>今日额度 <strong>{preview.daily_used}/{preview.daily_limit}</strong></div>
+                </>
+              )}
+              <div className="col-span-2 text-ink-faint">样例：{preview.samples.length ? preview.samples.join("、") : "无"}</div>
+              {preview.warning && <p className="col-span-2 text-ink-muted">{preview.warning}</p>}
+            </div>
+          ) : null}
         </div>
         <footer className="mt-4 flex justify-end gap-2"><button type="button" className="btn" onClick={onClose}>取消</button><button type="button" className="btn btn-primary" disabled={!preview || loading || executing || Boolean(preview && !preview.within_limit)} onClick={() => void execute()}>{executing && <Spinner />}{type === "ai_valuation" ? "确认入队" : "确认执行"}</button></footer>
       </div>
