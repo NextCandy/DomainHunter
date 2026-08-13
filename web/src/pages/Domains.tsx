@@ -12,7 +12,7 @@ import { ImportExportDialog } from "../components/ImportExportDialog";
 import { AdvancedFilterDrawer } from "../components/AdvancedFilterDrawer";
 import { SavedViewMenu } from "../components/SavedViewMenu";
 import { BulkActionPreviewDialog } from "../components/BulkActionPreviewDialog";
-import { ConfirmDialog, EmptyState, ErrorNotice, Spinner, cx, useToast } from "../components/ui";
+import { ConfirmDialog, EmptyState, ErrorNotice, Skeleton, Spinner, cx, useDensity, useToast } from "../components/ui";
 import { STATUS_LABELS, STATUS_ORDER } from "../lib/format";
 
 const SORT_OPTIONS = [
@@ -22,9 +22,10 @@ const SORT_OPTIONS = [
   { value: "expiry", label: "到期时间" },
   { value: "last_checked", label: "最后查询" },
   { value: "next_check", label: "下次查询" },
+  { value: "ai_score", label: "AI 评分" },
 ];
 
-const PAGE_SIZES = [10, 20, 50, 100];
+const PAGE_SIZES = [20, 50, 100, 1000];
 const VIEW_STORAGE_KEY = "dh-domains-view-v1";
 const ALL_COLUMNS: Array<{ value: DomainColumn; label: string }> = [
   { value: "status", label: "状态" },
@@ -51,6 +52,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const order = params.get("order") ?? "asc";
   const favoriteOnly = params.get("favorite") === "true";
   const advancedRaw = params.get("filter") ?? "";
+  const columnsParam = params.get("columns") ?? "";
   const page = Number(params.get("page") ?? "1") || 1;
   const limit = Number(params.get("limit") ?? "20") || 20;
 
@@ -67,11 +69,14 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [showBulkAction, setShowBulkAction] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const { density, setDensity } = useDensity();
   const [visibleColumns, setVisibleColumns] = useState<Set<DomainColumn>>(
     () => {
+      const fromURL = columnsParam.split(",").filter((item): item is DomainColumn => ALL_COLUMNS.some((column) => column.value === item));
+      if (fromURL.length > 0) return new Set(fromURL);
       try {
         const stored = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) ?? "{}") as { columns?: DomainColumn[] };
-        if (stored.columns?.length) return new Set(stored.columns);
+        if (Array.isArray(stored.columns)) return new Set(stored.columns);
       } catch { /* 使用默认列 */ }
       return new Set(ALL_COLUMNS.map((item) => item.value));
     },
@@ -86,6 +91,29 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   }, [advancedRaw]);
 
   useEffect(() => setSearchInput(search), [search]);
+
+  useEffect(() => {
+    const requested = params.get("density");
+    if (requested === "comfortable" || requested === "compact" || requested === "dense") {
+      if (requested !== density) setDensity(requested);
+    }
+  }, [density, params, setDensity]);
+
+  useEffect(() => {
+    const encoded = Array.from(visibleColumns).join(",");
+    if (encoded === columnsParam) return;
+    const next = new URLSearchParams(params);
+    if (encoded) next.set("columns", encoded); else next.delete("columns");
+    setParams(next, { replace: true });
+  }, [columnsParam, params, setParams, visibleColumns]);
+
+  useEffect(() => {
+    if (!columnsParam) return;
+    const requested = new Set(columnsParam.split(",").filter((item): item is DomainColumn => ALL_COLUMNS.some((column) => column.value === item)));
+    if (requested.size === 0 || requested.size !== visibleColumns.size || Array.from(requested).some((item) => !visibleColumns.has(item))) {
+      setVisibleColumns(requested.size > 0 ? requested : new Set(ALL_COLUMNS.map((item) => item.value)));
+    }
+  }, [columnsParam, visibleColumns]);
 
   useEffect(() => {
     if (restoredView.current) return;
@@ -117,7 +145,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     if (favoriteOnly) q.set("favorite", "true");
     if (advancedRaw) q.set("filter", advancedRaw);
     q.set("page", String(page));
-    q.set("limit", String(folderSelection === "all" ? limit : 500));
+    q.set("limit", String(folderSelection === "all" ? limit : 2000));
     return q.toString();
   }, [search, status, statuses, tld, registrar, provider, sort, order, page, limit, favoriteOnly, advancedRaw, folderSelection]);
 
@@ -467,7 +495,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           <div className="absolute right-0 top-10 z-20 grid w-48 gap-1 rounded-card border border-line bg-surface-raised p-2 shadow-lg">
             {ALL_COLUMNS.map((column) => (
               <label key={column.value} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-[12px] hover:bg-surface-muted">
-                <input type="checkbox" checked={visibleColumns.has(column.value)} onChange={() => setVisibleColumns((current) => { const next = new Set(current); if (next.has(column.value)) next.delete(column.value); else next.add(column.value); return next; })} />
+                <input type="checkbox" checked={visibleColumns.has(column.value)} onChange={() => setVisibleColumns((current) => { if (current.has(column.value) && current.size === 1) return current; const next = new Set(current); if (next.has(column.value)) next.delete(column.value); else next.add(column.value); return next; })} />
                 {column.label}
               </label>
             ))}
@@ -495,8 +523,9 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       {error && <ErrorNotice message={error} onRetry={refresh} />}
 
       {loading && domains.length === 0 ? (
-        <div className="flex items-center gap-2 py-12 text-ink-muted">
-          <Spinner /> 加载中…
+        <div className="space-y-3" aria-label="域名列表加载中">
+          <Skeleton className="h-12 w-full rounded-card" />
+          <div className="card overflow-hidden">{Array.from({ length: 7 }, (_, index) => <div key={index} className="flex items-center gap-3 border-b border-line p-4 last:border-0"><Skeleton className="h-4 w-4 rounded" /><Skeleton className="h-4 w-44" /><Skeleton className="ml-auto h-4 w-20" /><Skeleton className="h-4 w-24" /></div>)}</div>
         </div>
       ) : domains.length === 0 ? (
         <div className="card">
@@ -681,7 +710,7 @@ function AddDomainsDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} role="presentation" />
+      <div className="absolute inset-0 bg-overlay/40" onClick={onClose} role="presentation" />
       <div className="card relative w-full max-w-lg p-4" role="dialog" aria-modal="true">
         <h3 className="text-[14px] font-semibold">添加域名</h3>
         <p className="mt-1 text-[12px] text-ink-muted">

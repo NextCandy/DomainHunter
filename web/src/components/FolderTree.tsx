@@ -331,7 +331,7 @@ function FolderFormDialog({
   const [name, setName] = useState(folder?.name ?? "");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel} role="presentation" />
+      <div className="absolute inset-0 bg-overlay/40" onClick={onCancel} role="presentation" />
       <form
         className="card relative w-full max-w-sm p-4"
         role="dialog"

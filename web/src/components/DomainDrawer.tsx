@@ -30,17 +30,17 @@ interface DetailResponse {
 }
 
 const TIMELINE_COLORS: Record<DomainStatus, string> = {
-  available: "rgb(16 185 129)",
-  registered: "rgb(113 113 122)",
-  grace: "rgb(245 158 11)",
-  redemption: "rgb(249 115 22)",
-  pending_delete: "rgb(244 63 94)",
-  expired: "rgb(249 115 22)",
-  transfer_locked: "rgb(14 165 233)",
-  hold: "rgb(14 165 233)",
-  unknown: "rgb(161 161 170)",
-  error: "rgb(239 68 68)",
-  skipped: "rgb(100 116 139)",
+  available: "oklch(var(--success))",
+  registered: "oklch(var(--neutral))",
+  grace: "oklch(var(--warning))",
+  redemption: "oklch(var(--info))",
+  pending_delete: "oklch(var(--danger))",
+  expired: "oklch(var(--danger))",
+  transfer_locked: "oklch(var(--info))",
+  hold: "oklch(var(--info))",
+  unknown: "oklch(var(--neutral))",
+  error: "oklch(var(--danger))",
+  skipped: "oklch(var(--neutral))",
 };
 
 type Tab = "overview" | "evidence" | "timeline" | "raw";
@@ -141,6 +141,19 @@ export function DomainDrawer({
     }
   }
 
+  async function toggleNotify() {
+    if (!domain || !detail) return;
+    const next = detail.info.notify === false;
+    try {
+      const updated = await api.patch<DomainInfo>(`/api/v2/domains/${encodeURIComponent(domain)}`, { notify: next });
+      setDetail({ ...detail, info: updated });
+      toast(next ? "已恢复该域名的到期与状态提醒" : "已忽略该域名的后续提醒", "success");
+      onChanged?.();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "更新提醒设置失败", "error");
+    }
+  }
+
   const info = detail?.info;
   const navigation = useMemo(() => {
     const index = domain && domains ? domains.indexOf(domain) : -1;
@@ -212,6 +225,7 @@ export function DomainDrawer({
             <OverviewTab
               info={info}
               onUnauthorized={onUnauthorized}
+              onToggleNotify={toggleNotify}
               onCompleted={() => {
                 onChanged?.();
                 void load();
@@ -236,7 +250,7 @@ function Field({ label, children, align = "right" }: { label: string; children: 
   );
 }
 
-function OverviewTab({ info, onUnauthorized, onCompleted }: { info: DomainInfo; onUnauthorized: () => void; onCompleted: () => void }) {
+function OverviewTab({ info, onUnauthorized, onToggleNotify, onCompleted }: { info: DomainInfo; onUnauthorized: () => void; onToggleNotify: () => void; onCompleted: () => void }) {
   const evidence = info.evidence ?? [];
   const statuses = new Set(evidence.filter((item) => item.status !== "unknown" && item.status !== "skipped").map((item) => item.status));
   const consistent = statuses.size <= 1;
@@ -284,6 +298,11 @@ function OverviewTab({ info, onUnauthorized, onCompleted }: { info: DomainInfo; 
       <Field label="下次查询">
         {formatDateTime(info.next_check_at)}
         <span className="ml-1 text-[12px] text-ink-faint">({formatRelative(info.next_check_at)})</span>
+      </Field>
+      <Field label="到期与状态提醒">
+        <button type="button" className="btn h-8 px-2 text-[11px]" onClick={() => void onToggleNotify()}>
+          {info.notify === false ? "恢复提醒" : "忽略此域名"}
+        </button>
       </Field>
       <Field label="加入时间">{formatDateTime(info.added_at)}</Field>
       {info.error_message && (

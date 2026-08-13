@@ -114,6 +114,51 @@ func (e *Engine) QueryUncached(ctx context.Context, name string) Outcome {
 	return e.query(ctx, domain.Normalize(name))
 }
 
+// TestProvider 只调用指定查询源并更新该源健康指标，不写入域名结果，也不改变默认路由策略。
+func (e *Engine) TestProvider(ctx context.Context, providerName, name string) (Result, error) {
+	name = domain.Normalize(name)
+	providerName = strings.TrimSpace(providerName)
+	if name == "" || providerName == "" {
+		return Result{}, fmt.Errorf("查询源测试参数无效")
+	}
+	tld := registry.FindBestTLD(name)
+	if tld == "" {
+		return Result{}, fmt.Errorf("域名后缀不受支持")
+	}
+	provider, ok := e.providers.Get(providerName)
+	if !ok {
+		return Result{}, fmt.Errorf("查询源不存在: %s", providerName)
+	}
+	req := Request{Domain: name, TLD: tld}
+	if !provider.Supports(ctx, req) {
+		return Result{}, fmt.Errorf("查询源不支持 .%s", tld)
+	}
+	release, err := e.limiter.Acquire(ctx, providerName, tld)
+	if err != nil {
+		return Result{}, err
+	}
+	started := time.Now()
+	result := provider.Query(ctx, req)
+	release()
+	result = NormalizeIMLifecycle(result)
+	if result.Provider == "" {
+		result.Provider = providerName
+	}
+	if result.Domain == "" {
+		result.Domain = name
+	}
+	if result.StartedAt.IsZero() {
+		result.StartedAt = started
+	}
+	if result.FinishedAt.IsZero() {
+		result.FinishedAt = time.Now()
+	}
+	result.Latency = result.FinishedAt.Sub(result.StartedAt)
+	e.metrics.Observe(providerName, result.Latency, result.Err != nil)
+	e.health.Record(result)
+	return result, nil
+}
+
 func (e *Engine) cached(name string) (Outcome, bool) {
 	e.cacheMu.Lock()
 	defer e.cacheMu.Unlock()

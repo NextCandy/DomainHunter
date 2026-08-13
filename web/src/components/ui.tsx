@@ -338,7 +338,7 @@ export function Drawer({
     <div className="fixed inset-0 z-50">
       <div
         className={cx(
-          "absolute inset-0 bg-black/40 transition-opacity duration-200 motion-reduce:transition-none",
+          "absolute inset-0 bg-overlay/40 transition-opacity duration-200 motion-reduce:transition-none",
           visible ? "opacity-100" : "opacity-0",
         )}
         onClick={onClose}
@@ -347,7 +347,7 @@ export function Drawer({
       />
       <aside
         className={cx(
-          "absolute inset-x-0 bottom-0 flex max-h-[92vh] w-full flex-col rounded-t-card border border-line bg-surface-raised transition-transform duration-200 ease-out motion-reduce:transition-none",
+          "absolute inset-x-0 bottom-0 flex h-[100dvh] max-h-[100dvh] w-full flex-col rounded-none border border-line bg-surface-raised transition-transform duration-200 ease-out motion-reduce:transition-none",
           "lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:max-h-none lg:w-[min(560px,92vw)] lg:rounded-none",
           visible ? "translate-y-0 lg:translate-x-0" : "translate-y-full lg:translate-y-0 lg:translate-x-full",
         )}
@@ -379,7 +379,7 @@ export function Drawer({
             </svg>
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto overscroll-contain p-6">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">{children}</div>
       </aside>
     </div>
   );
@@ -405,7 +405,7 @@ export function ConfirmDialog({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel} role="presentation" />
+      <div className="absolute inset-0 bg-overlay/40" onClick={onCancel} role="presentation" />
       <div className="card relative w-full max-w-sm p-6" role="dialog" aria-modal="true">
         <h3 className="font-display text-[24px] font-normal tracking-[-0.02em] text-ink">{title}</h3>
         {description && <p className="mt-1.5 text-[13px] text-ink-muted">{description}</p>}

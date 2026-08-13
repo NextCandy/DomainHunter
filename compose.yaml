@@ -4,7 +4,7 @@
       context: .
       dockerfile: dockerfile
       args:
-        VERSION: ${DOMAINHUNTER_VERSION:-v2.0.0}
+        VERSION: ${DOMAINHUNTER_VERSION:-v2.11.0}
     image: domainhunter:latest
     container_name: DomainHunter
     restart: unless-stopped

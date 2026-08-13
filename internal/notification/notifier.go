@@ -6,6 +6,7 @@ package notification
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -65,19 +66,64 @@ type Manager struct {
 	stopOnce   sync.Once
 	aggregator *Aggregator
 	history    repository.NotificationRepository
+	settings   repository.SettingsRepository
+	mutedTypes map[string]struct{}
 	log        *logger.Logger
 }
 
 // NewManager 创建通知管理器
-func NewManager(history repository.NotificationRepository) *Manager {
+func NewManager(history repository.NotificationRepository, settings ...repository.SettingsRepository) *Manager {
+	var settingsRepo repository.SettingsRepository
+	if len(settings) > 0 {
+		settingsRepo = settings[0]
+	}
 	m := &Manager{
-		enabled: true,
-		queue:   make(chan Event, 1000),
-		history: history,
-		log:     logger.Component("notification"),
+		enabled:    true,
+		queue:      make(chan Event, 1000),
+		history:    history,
+		settings:   settingsRepo,
+		mutedTypes: make(map[string]struct{}),
+		log:        logger.Component("notification"),
 	}
 	m.aggregator = NewAggregator(m, history)
 	return m
+}
+
+// SetMutedTypes 热更新按类别静音设置。静音只作用于外部渠道投递；
+// 站内历史仍由聚合器保存，便于用户之后复盘。
+func (m *Manager) SetMutedTypes(types []string) {
+	allowed := map[string]bool{"drop": true, "expiry": true, "query_error": true, "ai": true}
+	next := make(map[string]struct{})
+	for _, item := range types {
+		item = strings.TrimSpace(item)
+		if allowed[item] {
+			next[item] = struct{}{}
+		}
+	}
+	m.mu.Lock()
+	m.mutedTypes = next
+	m.mu.Unlock()
+}
+
+// ReloadMutedTypes 从持久化设置刷新静音类型。
+func (m *Manager) ReloadMutedTypes(ctx context.Context) error {
+	if m.settings == nil {
+		return nil
+	}
+	raw, ok, err := m.settings.Get(ctx, "notification_muted_types")
+	if err != nil {
+		return err
+	}
+	if !ok || strings.TrimSpace(raw) == "" {
+		m.SetMutedTypes(nil)
+		return nil
+	}
+	var types []string
+	if err := json.Unmarshal([]byte(raw), &types); err != nil {
+		return err
+	}
+	m.SetMutedTypes(types)
+	return nil
 }
 
 // RegisterAll 按配置创建并注册全部内置渠道。
@@ -222,6 +268,12 @@ func (m *Manager) SendDigest(ctx context.Context, event Event) error {
 		m.log.Info(nil, "每日通知摘要被通知规则抑制")
 		return nil
 	}
+	if len(event.Batch) > 0 {
+		event.Batch = m.filterDeliverableBatch(event.Batch)
+		if len(event.Batch) == 0 {
+			return nil
+		}
+	}
 
 	notifiers := m.Notifiers()
 	enabled := make([]Notifier, 0, len(notifiers))
@@ -273,7 +325,7 @@ func (m *Manager) Allows(event Event) bool {
 func (m *Manager) RecordQuery(name string) { m.aggregator.RecordQuery(name) }
 
 func (m *Manager) enqueue(event Event) {
-	if !m.isEnabled() {
+	if !m.isEnabled() || m.isMuted(event) {
 		return
 	}
 	event.Subject = formatSubject(event)
@@ -410,6 +462,10 @@ func (m *Manager) enqueueBatch(events []Event) {
 	if !m.isEnabled() || len(events) == 0 {
 		return
 	}
+	events = m.filterDeliverableBatch(events)
+	if len(events) == 0 {
+		return
+	}
 	if len(events) == 1 {
 		m.enqueue(events[0])
 		return
@@ -430,6 +486,9 @@ func (m *Manager) enqueueBatch(events []Event) {
 }
 
 func (m *Manager) dispatch(event Event) {
+	if m.isMuted(event) {
+		return
+	}
 	notifiers := m.Notifiers()
 	var wg sync.WaitGroup
 	for _, n := range notifiers {
@@ -456,6 +515,42 @@ func (m *Manager) dispatch(event Event) {
 		}(n)
 	}
 	wg.Wait()
+}
+
+// EventCategory maps transport event names to the four user-facing mute
+// categories. Status changes are the drop/lifecycle stream.
+func EventCategory(event Event) string {
+	switch {
+	case strings.HasPrefix(event.Type, "ai"):
+		return "ai"
+	case event.Type == "expiry":
+		return "expiry"
+	case event.Type == "error", event.Type == "query_error":
+		return "query_error"
+	default:
+		return "drop"
+	}
+}
+
+func (m *Manager) isMuted(event Event) bool {
+	category := EventCategory(event)
+	m.mu.RLock()
+	_, muted := m.mutedTypes[category]
+	m.mu.RUnlock()
+	return muted
+}
+
+func (m *Manager) filterDeliverableBatch(events []Event) []Event {
+	if len(events) == 0 {
+		return nil
+	}
+	result := make([]Event, 0, len(events))
+	for _, event := range events {
+		if !m.isMuted(event) {
+			result = append(result, event)
+		}
+	}
+	return result
 }
 
 // Stats 返回通知统计

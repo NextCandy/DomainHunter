@@ -194,7 +194,7 @@ func (a *Aggregator) flush() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for _, event := range pending {
-		if err := a.history.Save(ctx, event.Domain, event.Status, event.OldStatus); err != nil {
+		if err := a.history.SaveEvent(ctx, event.Domain, event.Status, event.OldStatus, EventCategory(event)); err != nil {
 			a.log.Error(logger.Fields{"domain": event.Domain, "error": err.Error()}, "保存通知历史失败")
 		}
 	}

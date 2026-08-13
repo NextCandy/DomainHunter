@@ -438,5 +438,8 @@ func (s *Server) handleNotificationPreferences(w http.ResponseWriter, r *http.Re
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if s.deps.Notification != nil {
+		s.deps.Notification.SetMutedTypes(clean)
+	}
 	s.writeJSON(w, r, http.StatusOK, map[string]any{"status": "success", "muted_types": clean})
 }

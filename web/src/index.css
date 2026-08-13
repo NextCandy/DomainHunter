@@ -123,6 +123,7 @@
 
   html {
     background: rgb(var(--canvas));
+    overflow-x: clip;
   }
 
   body {
@@ -131,7 +132,7 @@
     font-size: 14px;
     line-height: 1.64;
     letter-spacing: 0.004em;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   * {
@@ -139,8 +140,8 @@
   }
 
   ::selection {
-    background: rgb(var(--sky-wash));
-    color: rgb(var(--ink-black));
+    background: rgb(var(--accent-soft));
+    color: rgb(var(--ink));
   }
 
   button,
@@ -198,7 +199,7 @@
   .workspace-header h1,
   .workspace-header > div > h1 {
     @apply mt-2;
-    color: rgb(var(--ink-black));
+    color: rgb(var(--ink));
     font-family: var(--font-roobert);
     font-size: clamp(2rem, 4vw, 3.25rem) !important;
     font-weight: 400 !important;
@@ -223,7 +224,7 @@
     font-family: var(--font-roobert);
     font-weight: 400;
     letter-spacing: -0.025em;
-    color: rgb(var(--ink-black));
+    color: rgb(var(--ink));
   }
 
   .page-shell h1,
@@ -269,8 +270,8 @@
   }
 
   .sidebar-link-active {
-    background: rgb(var(--sky-wash) / 0.58);
-    color: rgb(var(--ink-black));
+    background: rgb(var(--accent-soft) / 0.58);
+    color: rgb(var(--ink));
     font-weight: 500;
   }
 
@@ -279,7 +280,7 @@
   }
 
   .sidebar-link-active:hover {
-    background: rgb(var(--sky-wash) / 0.58);
+    background: rgb(var(--accent-soft) / 0.58);
   }
 
   .brand-wordmark {
@@ -287,14 +288,11 @@
     font-size: 1.125rem;
     font-weight: 500;
     letter-spacing: -0.025em;
-    color: rgb(var(--ink-black));
+    color: rgb(var(--ink));
   }
 
   .review-badge {
-    @apply inline-flex items-center rounded-tag border px-2 py-0.5 text-[10px] font-medium uppercase leading-4 tracking-[0.02em];
-    border-color: rgb(var(--stone-muted));
-    background: rgb(var(--surface-muted));
-    color: rgb(var(--warm-gray));
+    @apply inline-flex items-center rounded-tag border border-warning/20 bg-warning/12 px-2 py-0.5 text-[10px] font-medium uppercase leading-4 tracking-[0.02em] text-warning;
   }
 
   .review-dot {
@@ -307,8 +305,17 @@
     height: var(--density-row-height);
   }
 
+  .data-table-refined tbody tr.virtual-table-spacer {
+    height: 0 !important;
+  }
+
+  .data-table-refined tbody tr.virtual-table-spacer td {
+    padding: 0 !important;
+    border: 0 !important;
+  }
+
   .data-table-refined tbody tr:hover {
-    background: rgb(var(--sky-wash) / 0.24);
+    background: rgb(var(--accent-soft) / 0.24);
   }
 
   .btn-primary {
@@ -328,7 +335,7 @@
   }
 
   .input {
-    @apply w-full rounded-[6px] border border-stone-muted bg-pure-white px-3 py-2 text-[13px]
+    @apply w-full rounded-[6px] border border-stone-muted bg-surface px-3 py-2 text-[13px]
       text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:opacity-60;
   }
 
@@ -339,6 +346,23 @@
   .table-scroll {
     @apply min-w-0 w-full overflow-x-auto;
     scrollbar-gutter: stable;
+  }
+
+  .virtual-table-viewport {
+    max-height: min(68vh, 720px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .virtual-table-spacer {
+    padding: 0 !important;
+    border: 0 !important;
+    pointer-events: none;
+  }
+
+  .virtual-mobile-list > li {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 182px;
   }
 
   .table-top-scroll {
@@ -365,15 +389,15 @@
   .overview-stats-band {
     position: relative;
     overflow: hidden;
-    border: 1px solid rgb(var(--stone-border));
+    border: 1px solid rgb(var(--line));
     border-radius: 10px;
-    background: rgb(var(--pure-white));
+    background: rgb(var(--surface));
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.05);
   }
 
   .overview-stat-tile {
-    border-right: 1px solid rgb(var(--stone-border));
-    border-bottom: 1px solid rgb(var(--stone-border));
+    border-right: 1px solid rgb(var(--line));
+    border-bottom: 1px solid rgb(var(--line));
   }
 
   .overview-stat-tile:nth-child(2n),
@@ -386,11 +410,11 @@
   }
 
   @media (min-width: 640px) {
-    .overview-stat-tile:nth-child(n) { border-right: 1px solid rgb(var(--stone-border)); }
+    .overview-stat-tile:nth-child(n) { border-right: 1px solid rgb(var(--line)); }
   }
 
   @media (min-width: 768px) {
-    .overview-stat-tile:nth-child(n) { border-right: 1px solid rgb(var(--stone-border)); }
+    .overview-stat-tile:nth-child(n) { border-right: 1px solid rgb(var(--line)); }
     .overview-stat-tile:nth-child(4n),
     .overview-stat-tile:last-child { border-right: 0; }
     .overview-stat-tile:nth-last-child(-n + 4) { border-bottom: 0; }
@@ -523,6 +547,33 @@
   .page-shell {
     width: min(100%, 1200px);
     margin-inline: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Mobile touch targets are intentionally generous even when the visual
+     control is compact. This covers buttons, tabs, nav links and sheet rows. */
+  button,
+  [role="button"],
+  a[href] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  a[href] {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .btn,
+  .input,
+  select.input {
+    min-height: 44px;
+  }
+
+  .virtual-table-viewport {
+    max-height: none;
+    overflow-y: visible;
   }
 }
 

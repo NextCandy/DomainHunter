@@ -247,6 +247,37 @@ func (s *Service) Enqueue(ctx context.Context, name string, input EnqueueInput, 
 	return created, nil
 }
 
+// EnqueueBatch 将一组域名逐个放入同一持久化队列。
+// 单域名资格问题会收集到 errors，不会让其它域名整批回滚；日额度不参与此流程。
+func (s *Service) EnqueueBatch(ctx context.Context, names []string, input EnqueueInput, actor string) (*BatchEnqueueResult, error) {
+	result := &BatchEnqueueResult{}
+	seen := make(map[string]struct{}, len(names))
+	for _, raw := range names {
+		name := domain.Normalize(raw)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		result.Requested++
+		job, err := s.Enqueue(ctx, name, input, actor)
+		if err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, BatchEnqueueError{Domain: name, Error: safeError(err)})
+			continue
+		}
+		if job.Cached {
+			result.Cached++
+		} else {
+			result.Queued++
+		}
+		result.Jobs = append(result.Jobs, job)
+	}
+	return result, nil
+}
+
 func (s *Service) Cancel(ctx context.Context, jobID, actor string) (*Job, error) {
 	job, err := s.store.CancelJob(ctx, jobID, s.clock())
 	if err != nil {

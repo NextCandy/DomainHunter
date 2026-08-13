@@ -8,8 +8,8 @@ import {
   EmptyState,
   ErrorNotice,
   Pill,
+  Skeleton,
   Sparkline,
-  Spinner,
   StatusBadge,
   cx,
 } from "../components/ui";
@@ -74,8 +74,11 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
 
   if (loading && !data) {
     return (
-      <div className="flex items-center gap-2 py-16 text-ink-muted">
-        <Spinner /> 正在加载概览…
+      <div className="space-y-6 py-2" aria-label="概览加载中">
+        <div className="space-y-3"><Skeleton className="h-3 w-32" /><Skeleton className="h-12 w-64" /><Skeleton className="h-4 w-80 max-w-full" /></div>
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line md:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <Skeleton key={index} className="h-28 rounded-none bg-surface" />)}</div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-32 rounded-card" />)}</div>
+        <div className="card p-6"><Skeleton className="h-5 w-40" /><Skeleton className="mt-5 h-32 w-full" /></div>
       </div>
     );
   }
@@ -110,7 +113,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
 
       <div className="overview-stats-band">
         <div className="relative grid grid-cols-2 gap-0 md:grid-cols-4">
-          <StatTile label="总域名" value={data.total} tone="ink" />
+          <StatTile label="总域名" value={data.total} tone="ink" sparkline={trendPoints.map((point) => point.total)} sparkColor={TREND_COLORS.total} />
           {STATUS_ORDER.filter((status) =>
             ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
               status,
@@ -121,6 +124,8 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
               label={STATUS_LABELS[status]}
               value={data.status_counts?.[status] ?? 0}
               tone={status === "available" ? "accent" : "ink"}
+              sparkline={trendPoints.map((point) => status === "available" ? point.available : point.status_counts?.[status] ?? 0)}
+              sparkColor={status === "available" ? TREND_COLORS.available : TREND_COLORS.total}
             />
           ))}
         </div>
@@ -328,7 +333,7 @@ function ProviderAlert({ providers }: { providers: ProviderHealth[] | null }) {
 function normalizeTrend(payload: unknown): OverviewTrendPoint[] {
   const points = extractTrendPoints(payload);
   return points
-    .map((point, index) => {
+    .map((point, index): OverviewTrendPoint | null => {
       if (!point || typeof point !== "object") return null;
       const value = point as Record<string, unknown>;
       const day = normalizeDay(value.day ?? value.date ?? value.label ?? value.timestamp) ?? `day-${index}`;
@@ -338,6 +343,7 @@ function normalizeTrend(payload: unknown): OverviewTrendPoint[] {
         available: readNumber(value.available, value.available_count, value.free),
         high_score: readNumber(value.high_score, value.highScore, value.high, value.score_80_plus),
         changes: readNumber(value.changes, value.status_changes, value.change_count),
+        status_counts: normalizeStatusCounts(value.status_counts),
       };
     })
     .filter((point): point is OverviewTrendPoint => point !== null)
@@ -377,10 +383,10 @@ function localDayKey(date: Date): string {
 function buildFallbackTrend(data: Overview): OverviewTrendPoint[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const points = Array.from({ length: 7 }, (_, index) => {
+  const points: OverviewTrendPoint[] = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(today);
     date.setDate(today.getDate() - 6 + index);
-    return { day: localDayKey(date), total: 0, available: 0, high_score: 0, changes: 0 };
+    return { day: localDayKey(date), total: 0, available: 0, high_score: 0, changes: 0, status_counts: {} };
   });
   const byDay = new Map(points.map((point) => [point.day, point]));
 
@@ -388,14 +394,20 @@ function buildFallbackTrend(data: Overview): OverviewTrendPoint[] {
     const day = normalizeDay(item.observed_at);
     const point = day ? byDay.get(day) : undefined;
     if (point) {
+      const counts = point.status_counts ?? (point.status_counts = {});
       point.changes += 1;
       point.total += 1;
+      counts[item.status] = (counts[item.status] ?? 0) + 1;
     }
   }
   for (const item of data.recent_available ?? []) {
     const day = normalizeDay(item.observed_at);
     const point = day ? byDay.get(day) : undefined;
-    if (point) point.available += 1;
+    if (point) {
+      const counts = point.status_counts ?? (point.status_counts = {});
+      point.available += 1;
+      counts.available = (counts.available ?? 0) + 1;
+    }
   }
   return points;
 }
@@ -411,24 +423,46 @@ function StatTile({
   label,
   value,
   tone,
+  sparkline = [],
+  sparkColor = TREND_COLORS.total,
 }: {
   label: string;
   value: number;
   tone: "ink" | "accent";
+  sparkline?: number[];
+  sparkColor?: string;
 }) {
+  const previous = sparkline.length > 1 ? sparkline[sparkline.length - 2] ?? 0 : value;
+  const current = sparkline.length > 0 ? sparkline[sparkline.length - 1] ?? value : value;
+  const delta = current - previous;
   return (
     <div className="overview-stat-tile min-h-[126px] px-5 py-5 sm:px-6 sm:py-6">
       <div className="font-mono text-[10px] uppercase tracking-[-0.02em] text-ink-muted">{label}</div>
-      <div
-        className={cx(
-          "tabular mt-2 font-display text-[30px] font-normal leading-tight",
-          tone === "accent" && value > 0 ? "text-accent" : "text-ink",
-        )}
-      >
-        {value}
+      <div className="mt-2 flex items-end justify-between gap-2">
+        <div className={cx("tabular font-display text-[30px] font-normal leading-tight", tone === "accent" && value > 0 ? "text-accent" : "text-ink")}>{value}</div>
+        <MiniSparkline values={sparkline} color={sparkColor} label={`${label} 最近七天`} />
+      </div>
+      <div className={cx("mt-1 text-right text-[10px]", delta > 0 ? "text-success" : delta < 0 ? "text-danger" : "text-ink-faint")}>
+        {delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : "—"} · 7 天
       </div>
     </div>
   );
+}
+
+function MiniSparkline({ values, color, label }: { values: number[]; color: string; label: string }) {
+  const points = values.length > 1 ? values : [values[0] ?? 0, values[0] ?? 0];
+  const max = Math.max(1, ...points);
+  const path = points.map((value, index) => {
+    const x = 2 + (index / Math.max(1, points.length - 1)) * 56;
+    const y = 18 - (value / max) * 14;
+    return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ");
+  return <svg className="h-6 w-16 shrink-0 overflow-visible" viewBox="0 0 60 20" role="img" aria-label={label}><path d="M2 18H58" stroke="rgb(var(--line))" strokeWidth="0.8" /><path d={path} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+
+function normalizeStatusCounts(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, readNumber(item)]));
 }
 
 function ItemList({

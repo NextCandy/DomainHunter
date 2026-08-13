@@ -99,15 +99,25 @@ func (r *NotificationRepo) Last(ctx context.Context, name string) (*repository.N
 
 // Save 写入通知记录（同域名同状态覆盖时间）
 func (r *NotificationRepo) Save(ctx context.Context, name, status, oldStatus string) error {
+	return r.SaveEvent(ctx, name, status, oldStatus, "status_change")
+}
+
+// SaveEvent 写入一条带真实分类的通知记录。再次触发同一域名/事件时，
+// read_at 会清空，避免新消息继续显示为已读。
+func (r *NotificationRepo) SaveEvent(ctx context.Context, name, status, oldStatus, eventType string) error {
 	name = domain.Normalize(name)
 	if name == "" {
 		return fmt.Errorf("域名不能为空")
 	}
+	if strings.TrimSpace(eventType) == "" {
+		eventType = "status_change"
+	}
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO notification_history(domain, status, old_status, notification_type)
-		 VALUES(?, ?, ?, 'status_change')
-		 ON CONFLICT(domain, status) DO UPDATE SET sent_at = CURRENT_TIMESTAMP, old_status = excluded.old_status`,
-		name, status, oldStatus)
+		 VALUES(?, ?, ?, ?)
+		 ON CONFLICT(domain, status) DO UPDATE SET sent_at = CURRENT_TIMESTAMP,
+		 old_status = excluded.old_status, notification_type = excluded.notification_type, read_at = NULL`,
+		name, status, oldStatus, eventType)
 	if err != nil {
 		return fmt.Errorf("保存通知记录失败: %w", err)
 	}

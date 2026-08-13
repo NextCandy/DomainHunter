@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import type { ProviderHealth } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
-import { Card, ErrorNotice, Pill, Spinner, cx, useToast } from "../components/ui";
+import { Card, ErrorNotice, Pill, Skeleton, Spinner, cx, useToast } from "../components/ui";
 import { formatDateTime, formatLatency, providerLabel } from "../lib/format";
 
 interface ProvidersResponse {
@@ -23,10 +23,16 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
   const [policyText, setPolicyText] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
+  const [chain, setChain] = useState<string[]>(DEFAULT_CHAIN);
   const toast = useToast();
   const currentPolicy = policyText ?? (data?.policy ? JSON.stringify(data.policy, null, 2) : "");
   const providers = useMemo(() => [...(data?.providers ?? [])].sort((a, b) => STATE_ORDER[a.state] - STATE_ORDER[b.state]), [data]);
   const byName = useMemo(() => new Map((data?.providers ?? []).map((provider) => [provider.provider, provider])), [data]);
+
+  useEffect(() => {
+    const next = readProviderChain(data?.policy);
+    if (next.length > 0) setChain(next);
+  }, [data?.policy]);
 
   async function savePolicy(next = currentPolicy) {
     setSaving(true);
@@ -43,7 +49,7 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
     setTesting(provider);
     try {
       const sample = provider === "whois_domain_lookup" ? "daydream.im" : "example.com";
-      await api.post(`/api/v2/domains/${encodeURIComponent(sample)}/check`);
+      await api.post(`/api/v2/providers/${encodeURIComponent(provider)}/test`, { domain: sample });
       toast(`${providerLabel(provider)} 测试查询已完成`, "success");
       reload();
     } catch (err) { toast(err instanceof Error ? err.message : "测试失败", "error"); }
@@ -52,10 +58,11 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
 
   function moveProvider(index: number, direction: -1 | 1) {
     const target = index + direction;
-    if (target < 0 || target >= DEFAULT_CHAIN.length) return;
-    const chain = [...DEFAULT_CHAIN];
-    [chain[index], chain[target]] = [chain[target], chain[index]];
-    const next = JSON.stringify({ default: { providers: chain } }, null, 2);
+    if (target < 0 || target >= chain.length) return;
+    const nextChain = [...chain];
+    [nextChain[index], nextChain[target]] = [nextChain[target], nextChain[index]];
+    setChain(nextChain);
+    const next = JSON.stringify({ default: { providers: nextChain } }, null, 2);
     setPolicyText(next);
     void savePolicy(next);
   }
@@ -67,17 +74,17 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
         <button type="button" className="btn min-h-10" onClick={reload}>刷新</button>
       </header>
       {error && <ErrorNotice message={error} onRetry={reload} />}
-      {loading && !data && <div className="flex items-center gap-2 py-12 text-ink-muted"><Spinner /> 加载中…</div>}
+      {loading && !data && <div className="space-y-3" aria-label="查询源加载中"><Skeleton className="h-28 w-full rounded-card" /><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-52 rounded-card" />)}</div></div>}
       {data && <>
         <Card title="查询链路" action={<Pill>拖动替代：使用箭头安全调整</Pill>}>
           <ol className="flex min-w-0 gap-2 overflow-x-auto pb-2">
-            {DEFAULT_CHAIN.map((name, index) => {
+            {chain.map((name, index) => {
               const health = byName.get(name);
               return <li key={name} className="flex shrink-0 items-center gap-2">
                 <div className={cx("min-w-[150px] rounded-card border border-l-4 bg-surface px-3 py-2", STATE_EDGE[health?.state ?? "unknown"])}>
                   <div className="flex items-center gap-2"><span className={cx("h-2 w-2 rounded-full", STATE_CLASS[health?.state ?? "unknown"])} /><strong className="text-[12px]">{providerLabel(name)}</strong></div>
-                  <div className="mt-2 flex gap-1"><button type="button" className="btn h-7 w-7 px-0" disabled={index === 0 || saving} onClick={() => moveProvider(index, -1)} aria-label={`${providerLabel(name)}前移`}>←</button><button type="button" className="btn h-7 w-7 px-0" disabled={index === DEFAULT_CHAIN.length - 1 || saving} onClick={() => moveProvider(index, 1)} aria-label={`${providerLabel(name)}后移`}>→</button></div>
-                </div>{index < DEFAULT_CHAIN.length - 1 && <span className="text-ink-faint" aria-hidden="true">→</span>}
+                <div className="mt-2 flex gap-1"><button type="button" className="btn h-7 w-7 px-0" disabled={index === 0 || saving} onClick={() => moveProvider(index, -1)} aria-label={`${providerLabel(name)}前移`}>←</button><button type="button" className="btn h-7 w-7 px-0" disabled={index === chain.length - 1 || saving} onClick={() => moveProvider(index, 1)} aria-label={`${providerLabel(name)}后移`}>→</button></div>
+                </div>{index < chain.length - 1 && <span className="text-ink-faint" aria-hidden="true">→</span>}
               </li>;
             })}
           </ol>
@@ -102,6 +109,14 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
 function ErrorBars({ provider }: { provider: ProviderHealth }) {
   const rate = Math.max(0, Math.min(1, provider.error_rate ?? 0));
   return <div className="mt-3 flex h-7 items-end gap-1" title={`近 30 分钟错误率 ${(rate * 100).toFixed(1)}%`}>{Array.from({ length: 12 }, (_, index) => <span key={index} className={cx("w-full rounded-t-sm", index < Math.round(rate * 12) ? "bg-danger/70" : "bg-success/25")} style={{ height: `${30 + ((index * 17) % 70)}%` }} />)}</div>;
+}
+
+function readProviderChain(policy: unknown): string[] {
+  if (!policy || typeof policy !== "object") return [];
+  const root = policy as { default?: { providers?: unknown } };
+  if (!root.default || !Array.isArray(root.default.providers)) return [];
+  const allowed = new Set(DEFAULT_CHAIN);
+  return root.default.providers.filter((value): value is string => typeof value === "string" && allowed.has(value));
 }
 
 function Row({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between gap-3"><dt className="shrink-0 text-ink-muted">{label}</dt><dd className="tabular truncate text-right">{value}</dd></div>; }

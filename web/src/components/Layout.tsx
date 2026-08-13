@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { useTheme } from "../lib/theme";
 import type { ThemeMode } from "../lib/theme";
 import { Logo } from "./Logo";
@@ -49,9 +49,21 @@ export function Layout({
 }) {
   const { mode, setMode } = useTheme();
   const { density, setDensity } = useDensity();
+  const location = useLocation();
+  const [, setSearchParams] = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  function changeDensity(value: string) {
+    const next = value as typeof density;
+    setDensity(next);
+    if (location.pathname === "/domains") {
+      const params = new URLSearchParams(location.search);
+      params.set("density", next);
+      setSearchParams(params, { replace: true });
+    }
+  }
 
   useEffect(() => {
     const open = () => setShortcutsOpen(true);
@@ -62,7 +74,7 @@ export function Layout({
   return (
     <div className="min-h-full min-w-0 bg-canvas">
       <div className="flex min-h-full min-w-0 flex-col lg:flex-row">
-        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[248px] lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-pure-white lg:px-5 lg:py-7">
+        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[248px] lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-surface lg:px-5 lg:py-7">
           <BrandBlock />
           <div className="mt-12">
             <p className="section-label mb-3 px-3">WORKSPACE</p>
@@ -74,7 +86,7 @@ export function Layout({
           </div>
 
           <div className="mt-auto space-y-4 pt-8">
-            <div className="rounded-card border border-line bg-stone-canvas p-4">
+            <div className="rounded-card border border-line bg-surface-muted p-4">
               <p className="section-label">SESSION</p>
               <p className="mt-2 truncate text-[13px] font-medium text-ink">{username}</p>
               <p className="mt-0.5 text-[11px] text-ink-muted">DomainHunter {version}</p>
@@ -86,9 +98,9 @@ export function Layout({
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 hidden min-h-16 items-center justify-end gap-4 border-b border-line bg-surface/95 px-8 backdrop-blur lg:flex">
             <SegmentedControl label="主题" value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />
-            <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={(value) => setDensity(value as typeof density)} />
+            <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={changeDensity} />
           </header>
-          <header className="sticky top-0 z-30 border-b border-line bg-pure-white lg:hidden">
+          <header className="sticky top-0 z-30 border-b border-line bg-surface lg:hidden">
             <div className="flex min-h-16 items-center gap-3 px-4">
               <BrandBlock compact />
               <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">WORKSPACE</span>
@@ -104,13 +116,13 @@ export function Layout({
               </button>
             </div>
             {menuOpen && (
-              <div className="border-t border-line bg-pure-white px-4 py-3">
+              <div className="border-t border-line bg-surface px-4 py-3">
                 <nav className="grid grid-cols-2 gap-1" aria-label="移动端完整导航">
                   {NAV.map((item) => <NavItem key={item.to} item={item} onClick={() => setMenuOpen(false)} />)}
                 </nav>
                 <div className="mt-3 space-y-3 border-t border-line pt-3">
                   <SegmentedControl label="主题" value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />
-                  <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={(value) => setDensity(value as typeof density)} />
+                  <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={changeDensity} />
                 </div>
                 <button type="button" className="btn btn-ghost mt-3 w-full" onClick={() => { setMenuOpen(false); onLogout(); }}>退出登录</button>
               </div>
@@ -121,7 +133,7 @@ export function Layout({
             <Outlet />
           </main>
 
-          <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-line bg-pure-white px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden" aria-label="移动端主导航">
+          <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-line bg-surface px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden" aria-label="移动端主导航">
             <div className="mx-auto grid max-w-lg grid-cols-5">
               {MOBILE_NAV.map((item) => item.to === "/more" ? (
                 <button

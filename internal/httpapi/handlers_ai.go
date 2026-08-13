@@ -155,6 +155,38 @@ func (s *Server) handleDomainValuationEnqueue(w http.ResponseWriter, r *http.Req
 	s.writeJSON(w, r, http.StatusAccepted, job)
 }
 
+func (s *Server) handleDomainValuationBatchEnqueue(w http.ResponseWriter, r *http.Request) {
+	service := s.aiService(w, r)
+	if service == nil {
+		return
+	}
+	var input struct {
+		Domains      []string       `json:"domains"`
+		ProfileID    string         `json:"profile_id,omitempty"`
+		Priority     ai.JobPriority `json:"priority,omitempty"`
+		ForceRefresh bool           `json:"force_refresh,omitempty"`
+	}
+	if !s.decodeJSON(w, r, &input) {
+		return
+	}
+	if len(input.Domains) == 0 {
+		s.writeError(w, r, http.StatusBadRequest, "至少选择一个域名")
+		return
+	}
+	if len(input.Domains) > 2000 {
+		s.writeError(w, r, http.StatusBadRequest, "批量估价一次最多2000个域名")
+		return
+	}
+	result, err := service.EnqueueBatch(r.Context(), input.Domains, ai.EnqueueInput{
+		ProfileID: input.ProfileID, Priority: input.Priority, ForceRefresh: input.ForceRefresh,
+	}, "authenticated")
+	if err != nil {
+		s.writeAIError(w, r, err)
+		return
+	}
+	s.writeJSON(w, r, http.StatusAccepted, result)
+}
+
 func (s *Server) handleAIJobGet(w http.ResponseWriter, r *http.Request) {
 	service := s.aiService(w, r)
 	if service == nil {

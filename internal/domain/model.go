@@ -64,6 +64,7 @@ type Info struct {
 	EPPStatuses []string     `json:"epp_statuses,omitempty"`
 	Evidence    []Evidence   `json:"evidence,omitempty"`
 	NextCheckAt *time.Time   `json:"next_check_at,omitempty"`
+	Notify      bool         `json:"notify"`
 	Favorite    bool         `json:"favorite,omitempty"`
 	Tags        []string     `json:"tags,omitempty"`
 	Note        string       `json:"note,omitempty"`

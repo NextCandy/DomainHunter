@@ -44,6 +44,18 @@ export function BulkActionPreviewDialog({
     if (!open) return;
     setPreview(null);
     setLoading(true);
+    if (type === "ai_valuation") {
+      setPreview({
+        action_type: "ai_valuation",
+        matched: domains.length,
+        samples: domains.slice(0, 10),
+        task_count: domains.length,
+        cache_hits: 0,
+        warning: "严格估价队列会逐个检查状态与证据；不设置每日额度，已有有效结果会自动命中缓存。",
+      });
+      setLoading(false);
+      return;
+    }
     void api.p1
       .bulkPreview(action)
       .then(setPreview)
@@ -51,16 +63,18 @@ export function BulkActionPreviewDialog({
         toast(err instanceof Error ? err.message : "预览失败", "error"),
       )
       .finally(() => setLoading(false));
-  }, [action, open, toast]);
+  }, [action, domains, open, toast, type]);
 
   async function execute() {
     setExecuting(true);
     try {
-      await api.p1.bulkExecute(action);
-      toast(
-        type === "ai_valuation" ? "AI 任务已加入持久化队列" : "批量操作已执行",
-        "success",
-      );
+      if (type === "ai_valuation") {
+        const result = await api.domains.batchValuation(domains);
+        toast(`已提交 ${result.queued + result.cached} 个 AI 估价任务${result.failed ? `，${result.failed} 个未入队` : ""}`, result.failed ? "info" : "success");
+      } else {
+        await api.p1.bulkExecute(action);
+        toast("批量操作已执行", "success");
+      }
       onDone();
       onClose();
     } catch (err) {
@@ -80,7 +94,7 @@ export function BulkActionPreviewDialog({
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-default bg-black/40"
+        className="absolute inset-0 cursor-default bg-overlay/40"
         onClick={onClose}
         aria-label="关闭预览"
       />
@@ -184,6 +198,9 @@ export function BulkActionPreviewDialog({
                 <>
                   <div>
                     缓存命中 <strong>{preview.cache_hits}</strong> 个
+                  </div>
+                  <div>
+                    预估 tokens <strong>{preview.task_count * 900}</strong>
                   </div>
                   <div>
                     每日额度 <strong>不限</strong>

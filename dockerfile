@@ -4,7 +4,7 @@
 FROM golang:1.24-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION=v2.0.0
+ARG VERSION=v2.11.0
 ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /build
 

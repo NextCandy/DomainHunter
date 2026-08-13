@@ -167,6 +167,20 @@ type EnqueueInput struct {
 	ForceRefresh bool        `json:"force_refresh,omitempty"`
 }
 
+type BatchEnqueueError struct {
+	Domain string `json:"domain"`
+	Error  string `json:"error"`
+}
+
+type BatchEnqueueResult struct {
+	Requested int                 `json:"requested"`
+	Queued    int                 `json:"queued"`
+	Cached    int                 `json:"cached"`
+	Failed    int                 `json:"failed"`
+	Jobs      []*Job              `json:"jobs,omitempty"`
+	Errors    []BatchEnqueueError `json:"errors,omitempty"`
+}
+
 type ConnectionTestResult struct {
 	OK                bool          `json:"ok"`
 	Status            ProfileStatus `json:"status"`

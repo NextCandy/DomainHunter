@@ -46,13 +46,13 @@ func (s *Server) handleDomains(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("sort") == "ai_score" && r.URL.Query().Get("filter") == "" && r.URL.Query().Get("view_id") == "" {
 		filter := parseListFilter(r)
-		filter.Page, filter.Limit, filter.Sort = 1, 500, ""
+		filter.Page, filter.Limit, filter.Sort = 1, 2000, ""
 		result, err := s.deps.Domains.List(r.Context(), filter)
 		if err != nil {
 			s.writeError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
-		page := s.newDomainListPage(result.Domains, result.Total, result.TotalFiltered, 1, 500, 1, false, false, result.DataStatus)
+		page := s.newDomainListPage(result.Domains, result.Total, result.TotalFiltered, 1, 2000, 1, false, false, result.DataStatus)
 		desc := strings.EqualFold(r.URL.Query().Get("order"), "desc")
 		sort.SliceStable(page.Domains, func(i, j int) bool {
 			left, right := -1, -1
@@ -71,7 +71,7 @@ func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 		if value, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && value > 0 {
 			requestedPage = value
 		}
-		if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 && value <= 500 {
+		if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 && value <= 2000 {
 			requestedLimit = value
 		}
 		start := (requestedPage - 1) * requestedLimit
@@ -98,7 +98,7 @@ func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 		if value, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && value > 0 {
 			page = value
 		}
-		if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 && value <= 500 {
+		if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 && value <= 2000 {
 			limit = value
 		}
 		result, err := s.deps.P1.ListDomains(r.Context(), node, page, limit)
@@ -134,6 +134,7 @@ type domainListItem struct {
 	Confidence     domain.Confidence   `json:"confidence,omitempty"`
 	EPPStatuses    []string            `json:"epp_statuses,omitempty"`
 	NextCheckAt    *time.Time          `json:"next_check_at,omitempty"`
+	Notify         bool                `json:"notify"`
 	Favorite       bool                `json:"favorite,omitempty"`
 	Tags           []string            `json:"tags,omitempty"`
 	Priority       int                 `json:"priority,omitempty"`
@@ -189,6 +190,7 @@ func (s *Server) newDomainListPage(domains []*domain.Info, total, totalFiltered,
 			LastChecked: copyInfo.LastChecked, QueryMethod: copyInfo.QueryMethod, ErrorMessage: copyInfo.ErrorMessage,
 			AddedAt: copyInfo.AddedAt, Confidence: copyInfo.Confidence, EPPStatuses: copyInfo.EPPStatuses,
 			NextCheckAt: copyInfo.NextCheckAt, Favorite: copyInfo.Favorite, Tags: copyInfo.Tags,
+			Notify:   copyInfo.Notify,
 			Priority: copyInfo.Priority, FolderID: copyInfo.FolderID, FolderName: copyInfo.FolderName,
 			Cached: copyInfo.Cached, Review: copyInfo.Review, AIQualityScore: quality,
 		})
@@ -279,7 +281,7 @@ func parseListFilter(r *http.Request) service.ListFilter {
 	if v, err := strconv.Atoi(q.Get("page")); err == nil && v > 0 {
 		filter.Page = v
 	}
-	if v, err := strconv.Atoi(q.Get("limit")); err == nil && v > 0 && v <= 500 {
+	if v, err := strconv.Atoi(q.Get("limit")); err == nil && v > 0 && v <= 2000 {
 		filter.Limit = v
 	}
 	return filter

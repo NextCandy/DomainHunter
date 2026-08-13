@@ -7,7 +7,7 @@
 .ai-valuation-panel {
   position: relative;
   overflow: hidden;
-  background: rgb(var(--pure-white));
+  background: rgb(var(--surface));
   border: 1px solid rgb(var(--line));
   border-radius: 10px;
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.05);
@@ -103,10 +103,10 @@
 }
 
 .review-badge {
-  border: 1px solid rgb(var(--review) / 0.34);
+  border: 1px solid oklch(var(--review) / 0.34);
   border-radius: 100px;
-  background: rgb(var(--review) / 0.09);
-  color: rgb(var(--review));
+  background: oklch(var(--review) / 0.09);
+  color: oklch(var(--review));
   font-size: 0.6875rem;
   font-weight: 650;
   line-height: 1.1rem;

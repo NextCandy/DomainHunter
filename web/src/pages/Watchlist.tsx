@@ -11,7 +11,7 @@ import {
   ErrorNotice,
   Pill,
   ReviewIndicator,
-  Spinner,
+  Skeleton,
   StatusBadge,
   cx,
   useToast,
@@ -73,7 +73,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
   const { data, error, loading, reload } = useAsync<DomainListResult>(
     () =>
       api.get<DomainListResult>(
-        `/api/v2/domains?statuses=${DROP_STATUSES.join(",")}&limit=500`,
+        `/api/v2/domains?statuses=${DROP_STATUSES.join(",")}&limit=2000`,
       ),
     [],
     onUnauthorized,
@@ -118,8 +118,9 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
 
   async function setReminder(item: DomainInfo) {
     try {
-      await api.patch(`/api/v2/domains/${encodeURIComponent(item.name)}`, { notify: true });
-      toast(`${item.name} 已启用掉落提醒`, "success");
+      const next = item.notify === false;
+      await api.patch(`/api/v2/domains/${encodeURIComponent(item.name)}`, { notify: next });
+      toast(next ? `${item.name} 已恢复提醒` : `${item.name} 已忽略后续提醒`, "success");
       reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "设置提醒失败", "error");
@@ -166,8 +167,10 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
       {error && <ErrorNotice message={error} onRetry={reload} />}
 
       {loading && items.length === 0 ? (
-        <div className="flex items-center gap-2 py-12 text-ink-muted">
-          <Spinner /> 加载中…
+        <div className="space-y-3" aria-label="抢注看板加载中">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-24 rounded-card" />)}</div>
+          <Skeleton className="h-56 w-full rounded-card" />
+          <div className="card space-y-3 p-4">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-10 w-full" />)}</div>
         </div>
       ) : items.length === 0 ? (
         <Card>
@@ -330,6 +333,7 @@ function Row({
   onHistory: () => void;
   onRemind: () => void;
 }) {
+  const release = predictReleaseWindow(item.name, item.expiry_date);
   return (
     <tr className="hover:bg-surface-muted/60">
       <td className="px-3 py-2">
@@ -347,7 +351,7 @@ function Row({
       </td>
       <td className="whitespace-nowrap px-3 py-2">
         <DaysCell item={item} />
-        {predictReleaseWindow(item.name, item.expiry_date) && <span className="mt-0.5 block text-[10px] text-ink-faint" title="按 TLD 通用删除节奏推算，不是注册局承诺">{predictReleaseWindow(item.name, item.expiry_date)?.label}</span>}
+        {release && <span className="mt-0.5 block text-[10px] text-ink-faint" title="按 TLD 通用删除节奏推算，不是注册局承诺">{release.label} · {release.daysRemaining <= 0 ? "已进入预测窗口" : `${release.daysRemaining} 天后`}</span>}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-ink-muted">
         {providerLabel(item.query_method)}
@@ -356,7 +360,7 @@ function Row({
         {formatRelative(item.last_checked)}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right">
-        <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={onRemind}>设为提醒</button>
+        <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={onRemind}>{item.notify === false ? "恢复提醒" : "忽略提醒"}</button>
         <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={onHistory}>时间线</button>
         <button
           type="button"
@@ -386,6 +390,7 @@ function MobileCard({
   onHistory: () => void;
   onRemind: () => void;
 }) {
+  const release = predictReleaseWindow(item.name, item.expiry_date);
   return (
     <li className="card p-3">
       <DomainName name={item.name} onClick={onOpen} className="block w-full" />
@@ -414,9 +419,9 @@ function MobileCard({
           <dd className="tabular text-ink-muted">{formatRelative(item.last_checked)}</dd>
         </div>
       </dl>
-      {predictReleaseWindow(item.name, item.expiry_date) && <p className="mt-2 rounded-md bg-info/8 px-2 py-1.5 text-[11px] text-info" title="按 TLD 通用删除节奏推算，不是注册局承诺">释放预测：{predictReleaseWindow(item.name, item.expiry_date)?.label}</p>}
+      {release && <p className="mt-2 rounded-md bg-info/8 px-2 py-1.5 text-[11px] text-info" title="按 TLD 通用删除节奏推算，不是注册局承诺">释放预测：{release.label} · {release.daysRemaining <= 0 ? "已进入预测窗口" : `${release.daysRemaining} 天后`}</p>}
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <button type="button" className="btn min-h-11 text-[12px]" onClick={onRemind}>设提醒</button>
+        <button type="button" className="btn min-h-11 text-[12px]" onClick={onRemind}>{item.notify === false ? "恢复提醒" : "忽略提醒"}</button>
         <button type="button" className="btn min-h-11 text-[12px]" onClick={onHistory}>状态时间线</button>
         <button type="button" className="btn btn-primary min-h-11 text-[12px]" onClick={onCheck} disabled={busy}>{busy ? "查询中…" : "立即检查"}</button>
       </div>

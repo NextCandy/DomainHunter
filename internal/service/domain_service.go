@@ -174,7 +174,7 @@ func (s *DomainService) List(ctx context.Context, filter ListFilter) (*ListResul
 	if page <= 0 {
 		page = 1
 	}
-	if limit <= 0 || limit > 500 {
+	if limit <= 0 || limit > 2000 {
 		limit = 10
 	}
 
@@ -224,6 +224,7 @@ func mergeEntry(entry domain.Domain, results map[string]domain.Info) *domain.Inf
 		info.Note = entry.Note
 		info.Priority = entry.Priority
 		info.NextCheckAt = entry.NextCheckAt
+		info.Notify = entry.Notify
 		info.FolderID = entry.FolderID
 		return &info
 	}
@@ -238,6 +239,7 @@ func mergeEntry(entry domain.Domain, results map[string]domain.Info) *domain.Inf
 		Note:        entry.Note,
 		Priority:    entry.Priority,
 		NextCheckAt: entry.NextCheckAt,
+		Notify:      entry.Notify,
 		FolderID:    entry.FolderID,
 	}
 }

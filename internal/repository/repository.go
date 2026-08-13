@@ -139,8 +139,15 @@ type NotificationRecord struct {
 type NotificationRepository interface {
 	Last(ctx context.Context, name string) (*NotificationRecord, error)
 	Save(ctx context.Context, name, status, oldStatus string) error
+	SaveEvent(ctx context.Context, name, status, oldStatus, eventType string) error
 	ListRecent(ctx context.Context, limit int) ([]NotificationRecord, error)
 	MarkRead(ctx context.Context, ids []int64, read bool) (int64, error)
+}
+
+// ExpiryReminderRepository 为每个域名/到期日/提醒档位去重。
+type ExpiryReminderRepository interface {
+	Sent(ctx context.Context, name string, expiryAt time.Time, milestone int) (bool, error)
+	MarkSent(ctx context.Context, name string, expiryAt time.Time, milestone int, sentAt time.Time) error
 }
 
 // FolderRepository 域名文件夹与批量移动。

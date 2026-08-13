@@ -83,6 +83,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v2/domains/batch-delete", s.withAuthScope("write", s.handleDomainBatchDelete))
 	mux.HandleFunc("POST /api/v2/domains/batch-check", s.withAuthScope("write",
 		s.withRateLimit(s.batchLimiter, "批量检查过于频繁，请1分钟后再试", s.handleDomainBatchCheck)))
+	mux.HandleFunc("POST /api/v2/domains/batch-valuation", s.withAuthScope("write", s.handleDomainValuationBatchEnqueue))
 	mux.HandleFunc("POST /api/v2/domains/batch-move-folder", s.withAuthScope("write", s.handleDomainBatchMoveFolder))
 	mux.HandleFunc("POST /api/v2/domains/batch-retry-failed", s.withAuthScope("write", s.handleDomainBatchRetryFailed))
 	mux.HandleFunc("GET /api/v2/domains/export", s.withAuthScope("read", s.handleDomainExport))
@@ -104,6 +105,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v2/folders/{id}", s.withAuthScope("write", s.handleFolderDelete))
 	mux.HandleFunc("GET /api/v2/observations", s.withAuthScope("read", s.handleRecentObservations))
 	mux.HandleFunc("GET /api/v2/providers", s.withAuthScope("read", s.handleProviders))
+	mux.HandleFunc("POST /api/v2/providers/{provider}/test", s.withAuthScope("write", s.handleProviderTest))
 	mux.HandleFunc("GET /api/v2/notifications", s.withAuthScope("read", s.handleNotificationHistory))
 	mux.HandleFunc("PATCH /api/v2/notifications/read", s.withAuthScope("write", s.handleNotificationRead))
 	mux.HandleFunc("GET /api/v2/notifications/preferences", s.withAuthScope("read", s.handleNotificationPreferences))

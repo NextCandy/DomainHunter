@@ -84,7 +84,7 @@ export function ImportExportDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} role="presentation" />
+      <div className="absolute inset-0 bg-overlay/40" onClick={onClose} role="presentation" />
       <section
         className="card relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto p-4"
         role="dialog"

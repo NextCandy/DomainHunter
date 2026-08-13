@@ -47,6 +47,13 @@ type Result struct {
 	Latency    time.Duration
 }
 
+func (r Result) ErrString() string {
+	if r.Err == nil {
+		return ""
+	}
+	return r.Err.Error()
+}
+
 // Definitive 判断该结果是否是可直接采用的明确结论
 func (r Result) Definitive() bool {
 	return r.Err == nil && domain.IsDefinitive(r.Status)

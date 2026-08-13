@@ -539,6 +539,20 @@ var migrations = []Migration{
 			`INSERT INTO app_settings(key,value) SELECT 'notification_muted_types','' WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE key='notification_muted_types')`,
 		},
 	},
+	{
+		Version: "019",
+		Name:    "expiry_reminder_deduplication",
+		Stmts: []string{
+			`CREATE TABLE IF NOT EXISTS expiry_reminders (
+				domain TEXT NOT NULL,
+				expiry_at DATETIME NOT NULL,
+				milestone INTEGER NOT NULL,
+				sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(domain, expiry_at, milestone)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_expiry_reminders_sent ON expiry_reminders(sent_at DESC)`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录

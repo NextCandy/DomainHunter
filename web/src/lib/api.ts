@@ -161,6 +161,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({}),
       }),
+    batchValuation: (domains: string[]) =>
+      request<BatchValuationResult>('/api/v2/domains/batch-valuation', {
+        method: 'POST',
+        body: JSON.stringify({ domains }),
+      }),
     exportDomains: (format: "csv" | "json") =>
       requestDownload(
         `/api/v2/domains/export?format=${encodeURIComponent(format)}`,
@@ -427,6 +432,7 @@ export interface DomainInfo {
   epp_statuses?: string[];
   evidence?: Evidence[];
   next_check_at?: string | null;
+  notify?: boolean;
   favorite?: boolean;
   tags?: string[];
   note?: string;
@@ -545,6 +551,7 @@ export interface OverviewTrendPoint {
   available: number;
   high_score: number;
   changes: number;
+  status_counts?: Record<string, number>;
 }
 
 export interface SessionInfo {
@@ -751,6 +758,15 @@ export interface BulkPreview {
   task_count: number;
   cache_hits: number;
   warning?: string;
+}
+
+export interface BatchValuationResult {
+  requested: number;
+  queued: number;
+  cached: number;
+  failed: number;
+  jobs?: Array<{ id: string; domain: string; state: string; cached?: boolean }>;
+  errors?: Array<{ domain: string; error: string }>;
 }
 
 export interface BulkAudit {

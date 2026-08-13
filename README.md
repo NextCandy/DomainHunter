@@ -23,7 +23,7 @@
   <a href="https://github.com/NextCandy/DomainHunter"><img src="https://img.shields.io/badge/stack-Go%20%2B%20React%20%2B%20SQLite-4a4636.svg" alt="Go React SQLite" /></a>
 </p>
 
-> 当前版本基线：`v2.10.0` · Seline 暖纸张工作台 · DeepSeek 官方 OpenAI-compatible · `.im` 稳定生命周期判断
+> 当前版本基线：`v2.11.0` · Seline 暖纸张工作台 · DeepSeek 官方 OpenAI-compatible · `.im` 稳定生命周期判断
 
 ## 产品定位
 
@@ -49,6 +49,14 @@ DomainHunter 是一个面向长期运行的 Go 域名监控器。它把多个查
 | 通知中心 | 邮件、Telegram、Bark、飞书机器人、自定义 Webhook；每个渠道可单独测试 |
 | AI 与自动化 | DeepSeek 档案、模型、无限估价队列、缓存、AI Job、Dry-run 自动化规则 |
 | 系统设置 | 监控参数、历史保留、账号、API Token、数据库备份和维护 |
+
+本轮工作台交付还包含：
+
+- 1000+ 域名桌面虚拟表格、顶部同步横向滚动条、固定操作列、排序 URL、列显隐和三档密度。
+- 移动端五项底部导航、筛选/更多 Sheet、卡片化列表、44px 触控目标；主题与密度可持久化。
+- 到期提醒按 60/30/7/1 天分级去重；通知中心支持分类、已读/未读和分类静音。
+- 保存视图支持应用、覆盖、改名和删除；查询源页面支持单 Provider 测试；抢注看板提供 TLD 释放窗口推算。
+- 批量 AI 估价走严格入队接口，不设置每日额度；缓存、并发、超时和上游 Provider 限流仍保留。
 
 域名详情以右侧抽屉呈现，包含：概览、查询证据、状态时间线、原始报文和研究性 AI 鉴定报告。
 
@@ -147,6 +155,8 @@ API Key 只通过 `DOMAINHUNTER_AI_API_KEY` 或管理端安全配置注入，不
 AI 是研究和排序工具，不是注册状态判定器、成交保证或投资建议。
 应用不设置每日 AI 估价额度；并发、超时、缓存和上游 Provider 限流仍然生效。
 
+严格批量估价接口为 `POST /api/v2/domains/batch-valuation`，单次请求最多 2000 个域名；这个请求上限是保护 HTTP 请求体和队列，不是每日额度。查询源单测接口为 `POST /api/v2/providers/{provider}/test`，只测试指定源，不写入域名结果。
+
 ## Docker 与树莓派部署
 
 本地 Compose：
@@ -241,6 +251,8 @@ cd web && npm run typecheck && npm run lint && npm run build
 ```
 
 CI 会验证 Go 测试、前端 lint/build、`web/dist` 与源码一致性以及 Docker 构建。部署后还需验证 `/health`、容器健康状态、SQLite integrity、重启次数、OOM 状态和查询源连通性。
+
+设计验收基线：桌面 1280/1440/1920px、移动 390px；状态颜色使用语义 token，异常状态不推断为可注册；前端回归覆盖页面级横向溢出、触控目标、筛选 Sheet、1000 条虚拟列表、主题/密度/URL 状态和控制台错误。
 
 ## 许可证
 

@@ -424,11 +424,16 @@ func (s *Service) loadDomains(ctx context.Context) ([]richDomain, error) {
 		       COALESCE(r.status,''), COALESCE(r.registrar,''), r.created_at, r.expiry_at,
 		       r.updated_at, r.last_checked, COALESCE(r.query_method,''),
 		       COALESCE(r.whois_raw,''), COALESCE(r.error_message,''),
-		       COALESCE(r.name_servers,''), COALESCE(r.epp_statuses,''),
-		       COALESCE(r.confidence,''), v.result_json
+	       COALESCE(r.name_servers,''), COALESCE(r.epp_statuses,''),
+	       COALESCE(r.confidence,''), COALESCE(v2.quality_score, v.quality_score), v.result_json
 		FROM domains d
 		LEFT JOIN domain_results r ON lower(r.domain) = lower(d.name)
 		LEFT JOIN ai_domain_valuations v ON lower(v.domain) = lower(d.name)
+		LEFT JOIN ai_domain_valuations_v2 v2 ON v2.id = (
+			SELECT v2_latest.id FROM ai_domain_valuations_v2 v2_latest
+			WHERE lower(v2_latest.domain) = lower(d.name)
+			ORDER BY v2_latest.created_at DESC LIMIT 1
+		)
 		ORDER BY d.id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("读取 P1 域名数据失败: %w", err)
@@ -442,11 +447,12 @@ func (s *Service) loadDomains(ctx context.Context) ([]richDomain, error) {
 			enabled, notify, favorite                                                              int
 			folderID                                                                               sql.NullInt64
 			createdAt, createdDate, expiryDate, updatedDate, lastChecked                           sql.NullTime
+			strictQuality                                                                          sql.NullInt64
 			resultJSON                                                                             sql.NullString
 		)
 		if err := rows.Scan(&name, &enabled, &notify, &favorite, &note, &tags, &folderID,
 			&createdAt, &status, &registrar, &createdDate, &expiryDate, &updatedDate,
-			&lastChecked, &method, &raw, &errMessage, &servers, &epp, &confidence, &resultJSON); err != nil {
+			&lastChecked, &method, &raw, &errMessage, &servers, &epp, &confidence, &strictQuality, &resultJSON); err != nil {
 			return nil, fmt.Errorf("解析 P1 域名数据失败: %w", err)
 		}
 		item.Info.Name = name
@@ -481,6 +487,12 @@ func (s *Service) loadDomains(ctx context.Context) ([]richDomain, error) {
 			if json.Unmarshal([]byte(resultJSON.String), &valuation) == nil {
 				item.AI = &valuation
 			}
+		}
+		if strictQuality.Valid {
+			if item.AI == nil {
+				item.AI = &Valuation{}
+			}
+			item.AI.QualityScore = int(strictQuality.Int64)
 		}
 		out = append(out, item)
 	}
@@ -529,7 +541,7 @@ func (s *Service) ListDomains(ctx context.Context, node FilterNode, page, limit 
 	if page <= 0 {
 		page = 1
 	}
-	if limit <= 0 || limit > 500 {
+	if limit <= 0 || limit > 2000 {
 		limit = 20
 	}
 	total := len(filtered)

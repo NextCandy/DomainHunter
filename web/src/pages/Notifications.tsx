@@ -18,6 +18,7 @@ import {
   EmptyState,
   ErrorNotice,
   Pill,
+  Skeleton,
   Spinner,
   StatusBadge,
   cx,
@@ -111,8 +112,9 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
 
       {settings.error && <ErrorNotice message={settings.error} onRetry={settings.reload} />}
       {settings.loading && !settings.data && (
-        <div className="flex items-center gap-2 py-8 text-ink-muted">
-          <Spinner /> 加载中…
+        <div className="space-y-3" aria-label="通知中心加载中">
+          <Skeleton className="h-24 w-full rounded-card" />
+          <Skeleton className="h-52 w-full rounded-card" />
         </div>
       )}
 
@@ -184,7 +186,21 @@ function NotificationInbox({ resource }: { resource: AsyncResource<{ notificatio
     try { await api.notifications.markRead(ids, read); toast(read ? "已标记为已读" : "已标记为未读", "success"); resource.reload(); }
     catch (err) { toast(err instanceof Error ? err.message : "更新失败", "error"); }
   }
-  return <Card title="站内消息" action={<div className="flex items-center gap-2"><Pill>{unread.length} 未读</Pill>{unread.length > 0 && <button type="button" className="btn h-8 px-2 text-[12px]" onClick={() => void mark(unread.map((item) => item.id), true)}>全部已读</button>}</div>} bodyClassName="p-0">{resource.loading && !resource.data ? <div className="flex items-center gap-2 p-4 text-ink-muted"><Spinner /> 加载中…</div> : records.length === 0 ? <EmptyState title="还没有站内通知" hint="这里会显示掉落、到期、查询异常与 AI 任务通知；可在上方配置静音，在推送渠道页配置 Webhook、Telegram 和邮件。" /> : <ul className="divide-y divide-line">{records.map((record) => <li key={record.id} className={cx("flex flex-wrap items-center gap-3 px-4 py-3", !record.read_at && "bg-accent-soft/25")}><span className={cx("h-2 w-2 rounded-full", record.read_at ? "bg-neutral/30" : "bg-accent")} /><span className="mono min-w-0 flex-1 truncate">{record.domain}</span><span className="flex items-center gap-2">{record.old_status && <StatusBadge status={record.old_status as DomainStatus} />}<span className="text-ink-faint">→</span><StatusBadge status={record.status as DomainStatus} /></span><span className="tabular text-[11px] text-ink-muted">{formatDateTime(record.sent_at)}</span><button type="button" className="btn h-8 px-2 text-[11px]" onClick={() => void mark([record.id], !record.read_at)}>{record.read_at ? "设为未读" : "标为已读"}</button></li>)}</ul>}</Card>;
+  return <Card title="站内消息" action={<div className="flex items-center gap-2"><Pill>{unread.length} 未读</Pill>{unread.length > 0 && <button type="button" className="btn h-8 px-2 text-[12px]" onClick={() => void mark(unread.map((item) => item.id), true)}>全部已读</button>}</div>} bodyClassName="p-0">{resource.loading && !resource.data ? <div className="flex items-center gap-2 p-4 text-ink-muted"><Spinner /> 加载中…</div> : records.length === 0 ? <EmptyState title="还没有站内通知" hint="这里会显示掉落、到期、查询异常与 AI 任务通知；可在上方配置静音，在推送渠道页配置 Webhook、Telegram 和邮件。" /> : <ul className="divide-y divide-line">{records.map((record) => <li key={record.id} className={cx("flex flex-wrap items-center gap-3 px-4 py-3", !record.read_at && "bg-accent-soft/25")}><span className={cx("h-2 w-2 rounded-full", record.read_at ? "bg-neutral/30" : "bg-accent")} /><span className="mono min-w-0 flex-1 truncate">{record.domain}</span><NotificationEvent record={record} /><span className="tabular text-[11px] text-ink-muted">{formatDateTime(record.sent_at)}</span><button type="button" className="btn h-8 px-2 text-[11px]" onClick={() => void mark([record.id], !record.read_at)}>{record.read_at ? "设为未读" : "标为已读"}</button></li>)}</ul>}</Card>;
+}
+
+function NotificationEvent({ record }: { record: NotificationRecord }) {
+  if (record.type === "expiry") {
+    const days = record.status.replace(/^expiry_/, "");
+    return <span className="flex items-center gap-2"><Pill className="border-warning/20 bg-warning/12 text-warning">到期提醒 · {days || "—"} 天</Pill></span>;
+  }
+  if (record.type === "ai") {
+    return <span className="flex items-center gap-2"><Pill className="border-info/20 bg-info/12 text-info">AI 估价完成</Pill></span>;
+  }
+  if (record.type === "query_error") {
+    return <span className="flex items-center gap-2"><Pill className="border-danger/20 bg-danger/12 text-danger">查询异常</Pill></span>;
+  }
+  return <span className="flex items-center gap-2">{record.old_status && <StatusBadge status={record.old_status as DomainStatus} />}<span className="text-ink-faint">→</span><StatusBadge status={record.status as DomainStatus} /></span>;
 }
 
 // ---------- 通用零件 ----------
