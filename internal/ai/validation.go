@@ -33,9 +33,6 @@ func validateProfileInput(input ProfileInput) error {
 	if input.Concurrency < 1 || input.Concurrency > 5 {
 		return fmt.Errorf("AI 并发必须在 1–5 之间")
 	}
-	if input.DailyLimit < 1 || input.DailyLimit > 1000 {
-		return fmt.Errorf("AI 每日额度必须在 1–1000 之间")
-	}
 	if input.CacheTTLHours < 1 || input.CacheTTLHours > 168 {
 		return fmt.Errorf("AI 缓存 TTL 必须在 1–168 小时之间")
 	}

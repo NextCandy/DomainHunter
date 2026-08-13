@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import type { DomainInfo, DomainListResult, DomainStatus } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
@@ -9,7 +10,8 @@ import {
   EmptyState,
   ErrorNotice,
   Pill,
-  Spinner,
+  ReviewIndicator,
+  Skeleton,
   StatusBadge,
   cx,
   useToast,
@@ -20,6 +22,7 @@ import {
   formatDate,
   formatRelative,
   providerLabel,
+  predictReleaseWindow,
 } from "../lib/format";
 
 /**
@@ -63,13 +66,14 @@ const DROP_STAGES: Array<{ status: DomainStatus; hint: string }> = [
 
 export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [openDomain, setOpenDomain] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
   const toast = useToast();
 
   const { data, error, loading, reload } = useAsync<DomainListResult>(
     () =>
       api.get<DomainListResult>(
-        `/api/v2/domains?statuses=${DROP_STATUSES.join(",")}&limit=500`,
+        `/api/v2/domains?statuses=${DROP_STATUSES.join(",")}&limit=2000`,
       ),
     [],
     onUnauthorized,
@@ -112,6 +116,17 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
     }
   }
 
+  async function setReminder(item: DomainInfo) {
+    try {
+      const next = item.notify === false;
+      await api.patch(`/api/v2/domains/${encodeURIComponent(item.name)}`, { notify: next });
+      toast(next ? `${item.name} 已恢复提醒` : `${item.name} 已忽略后续提醒`, "success");
+      reload();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "设置提醒失败", "error");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
@@ -137,7 +152,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
               className={cx(
                 "tabular mt-3 text-[22px] font-semibold leading-tight",
                 status === "available" && (counts.get(status) ?? 0) > 0
-                  ? "text-emerald-600 dark:text-emerald-400"
+                  ? "text-accent"
                   : "text-ink",
               )}
             >
@@ -152,8 +167,10 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
       {error && <ErrorNotice message={error} onRetry={reload} />}
 
       {loading && items.length === 0 ? (
-        <div className="flex items-center gap-2 py-12 text-ink-muted">
-          <Spinner /> 加载中…
+        <div className="space-y-3" aria-label="抢注看板加载中">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-24 rounded-card" />)}</div>
+          <Skeleton className="h-56 w-full rounded-card" />
+          <div className="card space-y-3 p-4">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-10 w-full" />)}</div>
         </div>
       ) : items.length === 0 ? (
         <Card>
@@ -187,6 +204,8 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
                       busy={busy === item.name}
                       onOpen={() => setOpenDomain(item.name)}
                       onCheck={() => runCheck(item.name)}
+                      onHistory={() => navigate(`/history?domain=${encodeURIComponent(item.name)}`)}
+                      onRemind={() => void setReminder(item)}
                     />
                   ))}
                 </tbody>
@@ -202,6 +221,8 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
                 busy={busy === item.name}
                 onOpen={() => setOpenDomain(item.name)}
                 onCheck={() => runCheck(item.name)}
+                onHistory={() => navigate(`/history?domain=${encodeURIComponent(item.name)}`)}
+                onRemind={() => void setReminder(item)}
               />
             ))}
           </ul>
@@ -210,6 +231,8 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
 
       <DomainDrawer
         domain={openDomain}
+        domains={items.map((item) => item.name)}
+        onNavigate={setOpenDomain}
         onClose={() => setOpenDomain(null)}
         onChanged={reload}
         onUnauthorized={onUnauthorized}
@@ -226,11 +249,11 @@ function DaysCell({ item }: { item: DomainInfo }) {
     <span
       className={cx(
         "tabular",
-        overdue
-          ? "text-rose-600 dark:text-rose-400"
-          : days <= 14
-            ? "text-amber-600 dark:text-amber-400"
-            : "text-ink-muted",
+        Math.abs(days) <= 7
+          ? "text-danger"
+          : Math.abs(days) <= 30
+            ? "text-warning"
+            : "text-neutral",
       )}
     >
       {overdue ? `已过期 ${-days} 天` : `${days} 天后`}
@@ -239,6 +262,7 @@ function DaysCell({ item }: { item: DomainInfo }) {
 }
 
 function DropBoard({ counts }: { counts: Map<string, number> }) {
+  const stageRanges = ["0–45 天", "到期日", "约 30 天", "约 5 天", "实时"];
   return (
     <Card
       title="掉落阶段"
@@ -272,7 +296,7 @@ function DropBoard({ counts }: { counts: Map<string, number> }) {
                   className={cx(
                     "z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[12px] font-semibold tabular transition-colors",
                     active
-                      ? "border-accent bg-accent text-white"
+                      ? "border-accent bg-accent text-on-accent"
                       : "border-line bg-surface-raised text-ink-faint",
                   )}
                 >
@@ -283,6 +307,7 @@ function DropBoard({ counts }: { counts: Map<string, number> }) {
                     <StatusBadge status={status} />
                   </span>
                   <span className="mt-1 block text-[11px] text-ink-faint">{hint}</span>
+                  <span className="mt-0.5 block font-mono text-[10px] text-ink-faint">{stageRanges[DROP_STAGES.findIndex((item) => item.status === status)]}</span>
                 </span>
               </li>
             );
@@ -298,23 +323,27 @@ function Row({
   busy,
   onOpen,
   onCheck,
+  onHistory,
+  onRemind,
 }: {
   item: DomainInfo;
   busy: boolean;
   onOpen: () => void;
   onCheck: () => void;
+  onHistory: () => void;
+  onRemind: () => void;
 }) {
+  const release = predictReleaseWindow(item.name, item.expiry_date);
   return (
     <tr className="hover:bg-surface-muted/60">
       <td className="px-3 py-2">
         <DomainName name={item.name} onClick={onOpen} />
       </td>
       <td className="px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
-          {item.review?.required && <span className="review-badge">需复核</span>}
+          {item.review?.required && <ReviewIndicator explanation={item.review.explanation} />}
         </div>
-      {item.review?.required && <span className="review-badge">需复核</span>}
       </td>
       <td className="px-3 py-2 text-[12px] text-ink-muted">{STATUS_HINT[item.status] ?? "—"}</td>
       <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">
@@ -322,6 +351,7 @@ function Row({
       </td>
       <td className="whitespace-nowrap px-3 py-2">
         <DaysCell item={item} />
+        {release && <span className="mt-0.5 block text-[10px] text-ink-faint" title="按 TLD 通用删除节奏推算，不是注册局承诺">{release.label} · {release.daysRemaining <= 0 ? "已进入预测窗口" : `${release.daysRemaining} 天后`}</span>}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-ink-muted">
         {providerLabel(item.query_method)}
@@ -330,6 +360,8 @@ function Row({
         {formatRelative(item.last_checked)}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right">
+        <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={onRemind}>{item.notify === false ? "恢复提醒" : "忽略提醒"}</button>
+        <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={onHistory}>时间线</button>
         <button
           type="button"
           className="btn btn-ghost h-7 px-2 text-[12px]"
@@ -348,18 +380,23 @@ function MobileCard({
   busy,
   onOpen,
   onCheck,
+  onHistory,
+  onRemind,
 }: {
   item: DomainInfo;
   busy: boolean;
   onOpen: () => void;
   onCheck: () => void;
+  onHistory: () => void;
+  onRemind: () => void;
 }) {
+  const release = predictReleaseWindow(item.name, item.expiry_date);
   return (
     <li className="card p-3">
       <DomainName name={item.name} onClick={onOpen} className="block w-full" />
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
-        {item.review?.required && <span className="review-badge">需复核</span>}
+        {item.review?.required && <ReviewIndicator explanation={item.review.explanation} />}
         <Pill>{STATUS_HINT[item.status] ?? STATUS_LABELS[item.status]}</Pill>
       </div>
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-faint">
@@ -382,9 +419,12 @@ function MobileCard({
           <dd className="tabular text-ink-muted">{formatRelative(item.last_checked)}</dd>
         </div>
       </dl>
-      <button type="button" className="btn mt-2 h-7 w-full text-[12px]" onClick={onCheck} disabled={busy}>
-        {busy ? "查询中…" : "立即检查"}
-      </button>
+      {release && <p className="mt-2 rounded-md bg-info/8 px-2 py-1.5 text-[11px] text-info" title="按 TLD 通用删除节奏推算，不是注册局承诺">释放预测：{release.label} · {release.daysRemaining <= 0 ? "已进入预测窗口" : `${release.daysRemaining} 天后`}</p>}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <button type="button" className="btn min-h-11 text-[12px]" onClick={onRemind}>{item.notify === false ? "恢复提醒" : "忽略提醒"}</button>
+        <button type="button" className="btn min-h-11 text-[12px]" onClick={onHistory}>状态时间线</button>
+        <button type="button" className="btn btn-primary min-h-11 text-[12px]" onClick={onCheck} disabled={busy}>{busy ? "查询中…" : "立即检查"}</button>
+      </div>
     </li>
   );
 }

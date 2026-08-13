@@ -81,7 +81,7 @@ func (s *AIService) signal() {
 
 func defaultSettings() AISettingsInput {
 	return AISettingsInput{Provider: defaultAIProvider, BaseURL: defaultAIBaseURL, Model: defaultAIModel,
-		TimeoutSeconds: 30, Concurrency: 1, MaxOutputTokens: 1200, DailyLimit: 50, CacheTTLSeconds: 86400}
+		TimeoutSeconds: 30, Concurrency: 1, MaxOutputTokens: 1200, DailyLimit: 0, CacheTTLSeconds: 86400}
 }
 
 func normalizeAIProvider(raw string) (string, error) {
@@ -160,9 +160,9 @@ func normalizeAISettings(input AISettingsInput) (AISettingsInput, error) {
 	if input.MaxOutputTokens < 128 || input.MaxOutputTokens > 8192 {
 		return AISettingsInput{}, fmt.Errorf("最大输出 token 必须在128到8192之间")
 	}
-	if input.DailyLimit < 1 || input.DailyLimit > 10000 {
-		return AISettingsInput{}, fmt.Errorf("每日限额必须在1到10000之间")
-	}
+	// Daily AI valuation limits are disabled. The legacy column remains in the
+	// schema for compatibility, but it is always written as zero.
+	input.DailyLimit = 0
 	if input.CacheTTLSeconds < 300 || input.CacheTTLSeconds > 30*24*3600 {
 		return AISettingsInput{}, fmt.Errorf("缓存 TTL 必须在5分钟到30天之间")
 	}
@@ -605,11 +605,6 @@ func (s *AIService) process(ctx context.Context, job aiJobRecord) {
 		s.deferJob(job, "AI 未启用或未配置可用 API Key")
 		return
 	}
-	var used int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_jobs WHERE created_at >= date('now') AND status IN ('queued','running','succeeded','failed')`).Scan(&used); err == nil && used > settings.DailyLimit {
-		s.deferUntilTomorrow(job, "已达到今日 AI 限额")
-		return
-	}
 	if err := validateAIBaseURL(settings.BaseURL); err != nil {
 		s.fail(job, "Base URL 安全校验失败", false)
 		return
@@ -655,11 +650,6 @@ func (s *AIService) deferJob(job aiJobRecord, message string) {
 	_, _ = s.db.Exec(`UPDATE ai_jobs SET status='deferred',lease_until=NULL,last_error=?,available_at=?,updated_at=? WHERE id=?`, message, next, time.Now().UTC(), job.ID)
 }
 
-func (s *AIService) deferUntilTomorrow(job aiJobRecord, message string) {
-	now := time.Now().UTC()
-	next := now.Truncate(24 * time.Hour).Add(24 * time.Hour)
-	_, _ = s.db.Exec(`UPDATE ai_jobs SET status='deferred',lease_until=NULL,last_error=?,available_at=?,updated_at=? WHERE id=?`, message, next, now, job.ID)
-}
 func (s *AIService) fail(job aiJobRecord, message string, retry bool) {
 	now := time.Now().UTC()
 	if retry && job.Attempts < job.MaxAttempts {
@@ -832,18 +822,6 @@ func (s *AIService) Enqueue(ctx context.Context, names []string) (int, error) {
 	seen := map[string]bool{}
 	queued := 0
 	now := time.Now().UTC()
-	settings, err := s.PublicSettings(ctx)
-	if err != nil {
-		return 0, err
-	}
-	usage, err := s.Usage(ctx)
-	if err != nil {
-		return 0, err
-	}
-	remaining := settings.DailyLimit - usage.Used
-	if remaining < 0 {
-		remaining = 0
-	}
 	for _, name := range names {
 		name = strings.ToLower(strings.TrimSpace(name))
 		if name == "" || seen[name] {
@@ -864,16 +842,9 @@ func (s *AIService) Enqueue(ctx context.Context, names []string) (int, error) {
 		if active > 0 {
 			continue
 		}
-		status := "queued"
-		if remaining <= 0 {
-			status = "deferred"
-		}
-		_, err = s.db.ExecContext(ctx, `INSERT INTO ai_jobs(domain,status,input_fingerprint,input_json,available_at) VALUES(?,?,?,?,?)`, name, status, fingerprint, input, now)
+		_, err = s.db.ExecContext(ctx, `INSERT INTO ai_jobs(domain,status,input_fingerprint,input_json,available_at) VALUES(?,?,?,?,?)`, name, "queued", fingerprint, input, now)
 		if err == nil {
 			queued++
-			if status == "queued" {
-				remaining--
-			}
 		}
 	}
 	s.signal()
@@ -881,14 +852,9 @@ func (s *AIService) Enqueue(ctx context.Context, names []string) (int, error) {
 }
 
 func (s *AIService) Usage(ctx context.Context) (AIUsage, error) {
-	settings, err := s.PublicSettings(ctx)
-	if err != nil {
-		return AIUsage{}, err
-	}
 	var usage AIUsage
 	usage.Date = time.Now().UTC().Format("2006-01-02")
-	usage.DailyLimit = settings.DailyLimit
-	err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_jobs WHERE created_at >= date('now') AND status IN ('queued','running','succeeded','failed')`).Scan(&usage.Used)
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_jobs WHERE created_at >= date('now') AND status IN ('queued','running','succeeded','failed')`).Scan(&usage.Used)
 	if err != nil {
 		return usage, err
 	}

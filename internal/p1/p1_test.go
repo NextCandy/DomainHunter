@@ -3,6 +3,7 @@ package p1
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -78,6 +79,9 @@ func TestEncryptedAPIKeyAndDryRunHaveNoDomainSideEffect(t *testing.T) {
 	}
 	if !settings.APIKeySet || settings.KeySource != "encrypted" {
 		t.Fatalf("unexpected key metadata: %+v", settings)
+	}
+	if settings.DailyLimit != 0 {
+		t.Fatalf("AI daily limit must be disabled, got %d", settings.DailyLimit)
 	}
 	var encrypted string
 	if err := db.QueryRow(`SELECT encrypted_api_key FROM ai_provider_settings WHERE id=1`).Scan(&encrypted); err != nil {
@@ -183,6 +187,45 @@ func TestAIProviderProfilesCanSwitchDefaultWithoutLeakingKeys(t *testing.T) {
 	}
 	if len(profiles) != 2 || defaults != 1 {
 		t.Fatalf("unexpected profiles: %+v", profiles)
+	}
+}
+
+func TestAIEnqueueDoesNotApplyDailyLimit(t *testing.T) {
+	t.Setenv("DOMAINHUNTER_AI_API_KEY", "test-key")
+	t.Setenv("DOMAINHUNTER_AI_ALLOW_INSECURE_LOCAL", "true")
+	db, err := sqlite.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	service := New(db)
+	if _, err := service.SaveAISettings(context.Background(), AISettingsInput{
+		Provider: "deepseek", BaseURL: "http://127.0.0.1:18080", Model: "test-model",
+		TimeoutSeconds: 5, Concurrency: 1, MaxOutputTokens: 128, DailyLimit: 1,
+		CacheTTLSeconds: 300, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 51)
+	for i := range names {
+		name := fmt.Sprintf("unlimited-%02d.example", i)
+		names[i] = name
+		if _, err := db.Exec(`INSERT INTO domains(name,enabled,notify) VALUES(?,?,?)`, name, 1, 1); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO domain_results(domain,status) VALUES(?,?)`, name, "available"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	queued, err := service.EnqueueAI(context.Background(), names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queued != len(names) {
+		t.Fatalf("daily AI limit must not defer tasks: queued=%d want=%d", queued, len(names))
 	}
 }
 

@@ -409,9 +409,9 @@ function TokenManagementCard({ onUnauthorized }: { onUnauthorized: () => void })
       </button>
 
       {createdToken && (
-        <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10" role="alert">
-          <p className="text-[12px] font-medium text-amber-900 dark:text-amber-200">请立即复制，此 Token 只显示一次</p>
-          <code className="mt-2 block break-all rounded bg-black/5 px-2 py-1.5 text-[12px] text-amber-950 dark:bg-black/20 dark:text-amber-100">{createdToken}</code>
+        <div className="mt-3 rounded-card border border-accent/30 bg-accent-soft/45 p-3" role="alert">
+          <p className="text-[12px] font-medium text-ink">请立即复制，此 Token 只显示一次</p>
+          <code className="mt-2 block break-all rounded-[6px] bg-surface px-2 py-1.5 text-[12px] text-ink">{createdToken}</code>
           <button
             type="button"
             className="btn mt-2 h-7 px-2 text-[12px]"

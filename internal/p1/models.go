@@ -50,7 +50,7 @@ type AISettingsInput struct {
 	TimeoutSeconds  int    `json:"timeout_seconds"`
 	Concurrency     int    `json:"concurrency"`
 	MaxOutputTokens int    `json:"max_output_tokens"`
-	DailyLimit      int    `json:"daily_limit"`
+	DailyLimit      int    `json:"-"`
 	CacheTTLSeconds int    `json:"cache_ttl_seconds"`
 	Enabled         bool   `json:"enabled"`
 }
@@ -67,7 +67,7 @@ type AISettingsPublic struct {
 	TimeoutSeconds  int    `json:"timeout_seconds"`
 	Concurrency     int    `json:"concurrency"`
 	MaxOutputTokens int    `json:"max_output_tokens"`
-	DailyLimit      int    `json:"daily_limit"`
+	DailyLimit      int    `json:"-"`
 	CacheTTLSeconds int    `json:"cache_ttl_seconds"`
 	Enabled         bool   `json:"enabled"`
 }
@@ -84,7 +84,7 @@ type AIProviderProfilePublic struct {
 	TimeoutSeconds  int    `json:"timeout_seconds"`
 	Concurrency     int    `json:"concurrency"`
 	MaxOutputTokens int    `json:"max_output_tokens"`
-	DailyLimit      int    `json:"daily_limit"`
+	DailyLimit      int    `json:"-"`
 	CacheTTLSeconds int    `json:"cache_ttl_seconds"`
 	Enabled         bool   `json:"enabled"`
 }
@@ -124,13 +124,12 @@ type Valuation struct {
 }
 
 type AIUsage struct {
-	Date       string `json:"date"`
-	DailyLimit int    `json:"daily_limit"`
-	Used       int    `json:"used"`
-	Queued     int    `json:"queued"`
-	Running    int    `json:"running"`
-	Succeeded  int    `json:"succeeded"`
-	Failed     int    `json:"failed"`
+	Date      string `json:"date"`
+	Used      int    `json:"used"`
+	Queued    int    `json:"queued"`
+	Running   int    `json:"running"`
+	Succeeded int    `json:"succeeded"`
+	Failed    int    `json:"failed"`
 }
 
 type BulkAction struct {
@@ -145,15 +144,12 @@ type BulkAction struct {
 }
 
 type BulkPreview struct {
-	ActionType  string   `json:"action_type"`
-	Matched     int      `json:"matched"`
-	Samples     []string `json:"samples"`
-	TaskCount   int      `json:"task_count"`
-	CacheHits   int      `json:"cache_hits"`
-	DailyLimit  int      `json:"daily_limit"`
-	DailyUsed   int      `json:"daily_used"`
-	WithinLimit bool     `json:"within_limit"`
-	Warning     string   `json:"warning,omitempty"`
+	ActionType string   `json:"action_type"`
+	Matched    int      `json:"matched"`
+	Samples    []string `json:"samples"`
+	TaskCount  int      `json:"task_count"`
+	CacheHits  int      `json:"cache_hits"`
+	Warning    string   `json:"warning,omitempty"`
 }
 
 type BulkAudit struct {

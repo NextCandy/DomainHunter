@@ -183,6 +183,7 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 	}
 	if *parsed.IsRegistered {
 		result.Status = statusFromWhoDat(parsed.Status)
+		result.LifecycleEvidence = hasLifecycleStatus(parsed.Status)
 	} else {
 		if detect.ContainsReserved(string(body), strings.Join(parsed.Status, " "), stringValue(parsed.Registrar.Name)) {
 			result.Status = domain.StatusUnknown
@@ -197,7 +198,7 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 	if parsed.Meta.Cached {
 		result.Note = "who-dat 返回缓存结果"
 	}
-	return result
+	return query.NormalizeIMLifecycle(result)
 }
 
 func (p *Provider) failure(name string, started time.Time, err error) query.Result {
@@ -266,4 +267,20 @@ func statusFromWhoDat(statuses []string) domain.Status {
 		}
 	}
 	return domain.StatusRegistered
+}
+
+func hasLifecycleStatus(statuses []string) bool {
+	for _, raw := range statuses {
+		key := strings.ToLower(strings.NewReplacer(" ", "", "_", "", "-", "").Replace(raw))
+		switch {
+		case strings.Contains(key, "hold"),
+			strings.Contains(key, "redemption"),
+			strings.Contains(key, "pendingdelete"),
+			strings.Contains(key, "expired"),
+			strings.Contains(key, "renewperiod"),
+			strings.Contains(key, "grace"):
+			return true
+		}
+	}
+	return false
 }

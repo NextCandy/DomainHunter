@@ -132,6 +132,28 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Domain string `json:"domain"`
+	}
+	if !s.decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Domain == "" {
+		input.Domain = "example.com"
+	}
+	result, err := s.deps.Engine.TestProvider(r.Context(), r.PathValue("provider"), input.Domain)
+	if err != nil {
+		s.writeError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]any{
+		"provider": result.Provider, "domain": result.Domain, "status": result.Status,
+		"confidence": result.Confidence, "latency_ms": result.Latency.Milliseconds(),
+		"error": result.ErrString(),
+	})
+}
+
 // handleProviderHealth /api/health/providers
 func (s *Server) handleProviderHealth(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, r, http.StatusOK, map[string]any{

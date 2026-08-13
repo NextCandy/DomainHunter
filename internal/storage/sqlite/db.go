@@ -1,7 +1,6 @@
 // Package sqlite 提供 DomainHunter 的 SQLite 存储实现。
 //
-// 数据文件默认是 data/domainhunter.db。从旧版 Puff 升级上来的部署里文件名是
-// puff.db，此时会继续使用它而不是在旁边新建一个空库 —— 见 ResolveFile。
+// 数据文件默认是 data/domainhunter.db。
 package sqlite
 
 import (
@@ -18,26 +17,15 @@ import (
 // DefaultDir 默认数据目录
 const DefaultDir = "data"
 
-// LegacyFile 是原 Puff 的数据库文件名。既有部署里就是它，必须优先使用。
-const LegacyFile = "puff.db"
-
 // DefaultFile 是全新安装时创建的文件名。
-// 已有 puff.db 的部署不会被改名，见 ResolveFile。
 const DefaultFile = "domainhunter.db"
 
 // ResolveFile 决定使用哪个数据库文件。
 //
-// 顺序：环境变量 > 已存在的 puff.db（既有部署，绝不改名）> 已存在的
-// domainhunter.db > 全新安装时创建 domainhunter.db。
+// DOMAINHUNTER_DB_FILE 非空时优先使用指定路径，否则使用 data/domainhunter.db。
 func ResolveFile(dir string) string {
 	if override := strings.TrimSpace(os.Getenv("DOMAINHUNTER_DB_FILE")); override != "" {
 		return override
-	}
-	if _, err := os.Stat(filepath.Join(dir, LegacyFile)); err == nil {
-		return LegacyFile
-	}
-	if _, err := os.Stat(filepath.Join(dir, DefaultFile)); err == nil {
-		return DefaultFile
 	}
 	return DefaultFile
 }

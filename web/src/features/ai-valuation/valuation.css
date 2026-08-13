@@ -3,13 +3,14 @@
  * Import once from the feature entry point or DomainValuationPanel.
  * Token definitions intentionally have fallbacks so the module can land before the global theme refactor.
  */
-/* A quiet framed surface: depth comes from a periwinkle plane and 1px border, never a heavy shadow. */
+/* A quiet research surface: depth comes from white paper, hairlines and one cyan signal. */
 .ai-valuation-panel {
   position: relative;
   overflow: hidden;
-  background: rgb(var(--periwinkle-mist));
+  background: rgb(var(--surface));
   border: 1px solid rgb(var(--line));
-  border-radius: 40px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.05);
 }
 
 .ai-valuation-panel::before {
@@ -17,7 +18,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 5px;
-  background: rgb(var(--lake-blue));
+  background: rgb(var(--cyan-signal));
 }
 
 .ai-valuation-panel .mono {
@@ -86,10 +87,10 @@
 }
 
 .workspace-kicker {
-  color: rgb(var(--accent));
+  color: rgb(var(--warm-gray));
   font-family: var(--font-abc-diatype-mono);
   font-size: 0.6875rem;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.13em;
 }
 
@@ -98,14 +99,14 @@
 }
 
 .data-table-refined tbody tr:hover {
-  background: rgb(var(--periwinkle-mist) / 0.42);
+  background: rgb(var(--sky-wash) / 0.24);
 }
 
 .review-badge {
-  border: 1px solid rgb(var(--review) / 0.34);
+  border: 1px solid oklch(var(--review) / 0.34);
   border-radius: 100px;
-  background: rgb(var(--review) / 0.09);
-  color: rgb(var(--review));
+  background: oklch(var(--review) / 0.09);
+  color: oklch(var(--review));
   font-size: 0.6875rem;
   font-weight: 650;
   line-height: 1.1rem;

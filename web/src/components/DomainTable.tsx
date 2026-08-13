@@ -1,22 +1,44 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DomainInfo } from "../lib/api";
-import { DomainName, Pill, StatusBadge, cx, useStatusChangeHighlights } from "./ui";
+import {
+  DomainName,
+  Pill,
+  ReviewIndicator,
+  StatusBadge,
+  cx,
+  useDensity,
+  useStatusChangeHighlights,
+} from "./ui";
 import { formatDate, formatDateTime, formatRelative, providerLabel } from "../lib/format";
+
+export type DomainColumn =
+  | "status"
+  | "registrar"
+  | "expiry"
+  | "provider"
+  | "ai_score"
+  | "last_checked"
+  | "next_check";
+
+export type DomainSort = "name" | "status" | "expiry" | "last_checked" | "next_check" | "ai_score" | "";
 
 interface Props {
   domains: DomainInfo[];
   selected: Set<string>;
+  visibleColumns: Set<DomainColumn>;
+  sort: DomainSort;
+  order: "asc" | "desc";
+  onSort: (sort: DomainSort) => void;
   onToggle: (name: string) => void;
   onToggleAll: (checked: boolean) => void;
   onOpen: (name: string) => void;
   onCheck: (name: string) => void;
   onDelete: (name: string) => void;
+  onHistory: (name: string) => void;
   busy: string | null;
+  keyboardIndex?: number;
 }
 
-/**
- * 桌面端用表格，窄屏（<768px）自动切换成卡片列表 —— 表格在手机上缩小后
- * 只会变得不可读，所以这里不是简单缩放而是换一种布局。
- */
 export function DomainTable(props: Props) {
   const highlighted = useStatusChangeHighlights(
     props.domains,
@@ -26,7 +48,7 @@ export function DomainTable(props: Props) {
 
   return (
     <>
-      <div className="hidden md:block">
+      <div className="hidden min-w-0 md:block">
         <DesktopTable {...props} highlighted={highlighted} />
       </div>
       <div className="md:hidden">
@@ -39,169 +61,225 @@ export function DomainTable(props: Props) {
 function DesktopTable({
   domains,
   selected,
+  visibleColumns,
+  sort,
+  order,
+  onSort,
   onToggle,
   onToggleAll,
   onOpen,
   onCheck,
   onDelete,
+  onHistory,
   busy,
+  keyboardIndex,
   highlighted,
 }: Props & { highlighted: Set<string> }) {
   const allSelected = domains.length > 0 && domains.every((item) => selected.has(item.name));
+  const { density } = useDensity();
+  const topScroll = useRef<HTMLDivElement>(null);
+  const bottomScroll = useRef<HTMLDivElement>(null);
+  const table = useRef<HTMLTableElement>(null);
+  const scrollFrame = useRef<number | null>(null);
+  const [tableWidth, setTableWidth] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(620);
+
+  const rowHeight = density === "dense" ? 36 : density === "compact" ? 44 : 56;
+  // Keep the normal table DOM small when the user selects “全部”. The server
+  // can return 1,000+ records, but only the visible window is laid out.
+  const virtualized = domains.length > 240;
+  const overscan = 10;
+  const firstVisible = virtualized ? Math.max(0, Math.floor(scrollTop / rowHeight) - overscan) : 0;
+  const visibleCount = virtualized ? Math.ceil(viewportHeight / rowHeight) + overscan * 2 : domains.length;
+  const lastVisible = virtualized ? Math.min(domains.length, firstVisible + visibleCount) : domains.length;
+  const visibleDomains = virtualized ? domains.slice(firstVisible, lastVisible) : domains;
+  const columnCount = 3 + visibleColumns.size;
+
+  const syncScroll = useCallback((source: HTMLDivElement, target: HTMLDivElement | null) => {
+    if (target && Math.abs(target.scrollLeft - source.scrollLeft) > 1) target.scrollLeft = source.scrollLeft;
+  }, []);
+
+  useEffect(() => {
+    const update = () => setTableWidth(table.current?.scrollWidth ?? 0);
+    update();
+    const observer = new ResizeObserver(update);
+    if (table.current) observer.observe(table.current);
+    return () => observer.disconnect();
+  }, [domains, visibleColumns, virtualized, density]);
+
+  useEffect(() => {
+    const viewport = bottomScroll.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(() => setViewportHeight(viewport.clientHeight || 620));
+    observer.observe(viewport);
+    setViewportHeight(viewport.clientHeight || 620);
+    return () => observer.disconnect();
+  }, [virtualized]);
+
+  useEffect(() => () => {
+    if (scrollFrame.current != null) window.cancelAnimationFrame(scrollFrame.current);
+  }, []);
+
+  const handleBottomScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const source = event.currentTarget;
+    syncScroll(source, topScroll.current);
+    if (!virtualized || scrollFrame.current != null) return;
+    scrollFrame.current = window.requestAnimationFrame(() => {
+      scrollFrame.current = null;
+      setScrollTop(source.scrollTop);
+    });
+  }, [syncScroll, virtualized]);
+
+  const renderRow = useCallback((item: DomainInfo, index: number) => (
+    <tr
+      key={item.name}
+      draggable
+      onDragStart={(event) => setDragData(event, item.name, selected)}
+      className={cx("group hover:bg-surface-muted/60", highlighted.has(item.name) && "status-change-highlight", index === keyboardIndex && "outline outline-2 outline-accent outline-offset-[-2px]")}
+    >
+      <td className="px-3 py-2">
+        <input type="checkbox" checked={selected.has(item.name)} onChange={() => onToggle(item.name)} aria-label={`选择 ${item.name}`} />
+      </td>
+      <td className="min-w-0 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <DomainName name={item.name} favorite={item.favorite} onClick={() => onOpen(item.name)} className="min-w-0 flex-1" />
+          {item.review?.required && <ReviewIndicator explanation={item.review.explanation} />}
+        </div>
+      </td>
+      {visibleColumns.has("status") && (
+        <td className="px-3 py-2">
+          <div className="flex items-center gap-1.5">
+            <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+            {item.cached && <Pill title="本次结果来自查询缓存">缓存</Pill>}
+          </div>
+        </td>
+      )}
+      {visibleColumns.has("registrar") && <td className="truncate px-3 py-2 text-ink-muted" title={item.registrar}>{item.registrar || "—"}</td>}
+      {visibleColumns.has("expiry") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">{formatDate(item.expiry_date)}</td>}
+      {visibleColumns.has("provider") && <td className="truncate whitespace-nowrap px-3 py-2 text-ink-muted" title={providerLabel(item.query_method)}>{providerLabel(item.query_method)}</td>}
+      {visibleColumns.has("ai_score") && <td className="tabular px-3 py-2"><span className={item.ai_quality_score == null ? "text-ink-faint" : item.ai_quality_score >= 80 ? "text-success" : item.ai_quality_score >= 60 ? "text-warning" : "text-danger"}>{item.ai_quality_score ?? "—"}</span></td>}
+      {visibleColumns.has("last_checked") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">{formatRelative(item.last_checked)}</td>}
+      {visibleColumns.has("next_check") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">{formatRelative(item.next_check_at)}</td>}
+      <td className="sticky-action-column sticky right-0 z-10 whitespace-nowrap bg-surface px-3 py-2 text-right group-hover:bg-surface-muted">
+        <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={() => onHistory(item.name)} title="打开状态时间线">时间线</button>
+        <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={() => onCheck(item.name)} disabled={busy === item.name}>{busy === item.name ? "查询中…" : "检查"}</button>
+        <button type="button" className="btn btn-ghost h-8 w-8 px-0 text-danger" onClick={() => onDelete(item.name)} aria-label={`删除 ${item.name}`} title="删除">×</button>
+      </td>
+    </tr>
+  ), [busy, highlighted, keyboardIndex, onCheck, onDelete, onHistory, onOpen, onToggle, selected, visibleColumns]);
 
   return (
-    <div className="table-scroll card">
-      <table className="data-table-refined w-full min-w-[960px] text-left">
-        <thead className="bg-surface-muted text-[11px] uppercase tracking-wide text-ink-muted">
-          <tr>
-            <th className="w-9 px-3 py-2">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={(event) => onToggleAll(event.target.checked)}
-                aria-label="全选"
-              />
-            </th>
-            <th className="px-3 py-2 font-medium">域名</th>
-            <th className="px-3 py-2 font-medium">状态</th>
-            <th className="px-3 py-2 font-medium">注册商</th>
-            <th className="px-3 py-2 font-medium">到期时间</th>
-            <th className="px-3 py-2 font-medium">查询来源</th>
-            <th className="px-3 py-2 font-medium">最后查询</th>
-            <th className="px-3 py-2 font-medium">下次查询</th>
-            <th className="px-3 py-2 text-right font-medium">操作</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line text-[13px]">
-          {domains.map((item) => (
-            <tr
-              key={item.name}
-              draggable
-              onDragStart={(event) => setDragData(event, item.name, selected)}
-              className={cx("hover:bg-surface-muted/60", highlighted.has(item.name) && "status-change-highlight")}
-            >
-              <td className="px-3 py-2">
+    <div className="min-w-0 space-y-2">
+      <div
+        ref={topScroll}
+        className="table-top-scroll"
+        onScroll={(event) => syncScroll(event.currentTarget, bottomScroll.current)}
+        aria-label="表格顶部横向滚动条"
+      >
+        <div style={{ width: `${tableWidth}px`, height: 1 }} />
+      </div>
+      <div
+        ref={bottomScroll}
+        className={cx("table-scroll card", virtualized && "virtual-table-viewport")}
+        onScroll={handleBottomScroll}
+      >
+        <table ref={table} className="data-table-refined w-full min-w-[1040px] table-fixed text-left">
+          <thead className="sticky top-0 z-20 bg-surface-muted text-[11px] uppercase tracking-wide text-ink-muted">
+            <tr>
+              <th className="w-11 px-3 py-2">
                 <input
                   type="checkbox"
-                  checked={selected.has(item.name)}
-                  onChange={() => onToggle(item.name)}
-                  aria-label={`选择 ${item.name}`}
+                  checked={allSelected}
+                  onChange={(event) => onToggleAll(event.target.checked)}
+                  aria-label="全选"
                 />
-              </td>
-              <td className="px-3 py-2">
-                <DomainName name={item.name} favorite={item.favorite} onClick={() => onOpen(item.name)} />
-              </td>
-              <td className="px-3 py-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
-                  {item.review?.required && <span className="review-badge">需复核</span>}
-                  {item.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
-                </div>
-              </td>
-              <td className="max-w-[180px] truncate px-3 py-2 text-ink-muted" title={item.registrar}>
-                {item.registrar || "—"}
-              </td>
-              <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">
-                {formatDate(item.expiry_date)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-ink-muted">
-                {providerLabel(item.query_method)}
-              </td>
-              <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">
-                {formatRelative(item.last_checked)}
-              </td>
-              <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">
-                {formatRelative(item.next_check_at)}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right">
-                <button
-                  type="button"
-                  className="btn btn-ghost h-7 px-2 text-[12px]"
-                  onClick={() => onCheck(item.name)}
-                  disabled={busy === item.name}
-                >
-                  {busy === item.name ? "查询中…" : "立即检查"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost h-7 px-2 text-[12px] text-red-600 dark:text-red-400"
-                  onClick={() => onDelete(item.name)}
-                >
-                  删除
-                </button>
-              </td>
+              </th>
+              <SortableHeader label="域名" field="name" width="w-[190px]" sort={sort} order={order} onSort={onSort} />
+              {visibleColumns.has("status") && <SortableHeader label="状态" field="status" width="w-[132px]" sort={sort} order={order} onSort={onSort} />}
+              {visibleColumns.has("registrar") && <th className="w-[150px] px-3 py-2 font-medium">注册商</th>}
+              {visibleColumns.has("expiry") && <SortableHeader label="到期时间" field="expiry" width="w-[122px]" sort={sort} order={order} onSort={onSort} />}
+              {visibleColumns.has("provider") && <th className="w-[150px] px-3 py-2 font-medium">查询来源</th>}
+              {visibleColumns.has("ai_score") && <SortableHeader label="AI 评分" field="ai_score" width="w-[96px]" sort={sort} order={order} onSort={onSort} />}
+              {visibleColumns.has("last_checked") && <SortableHeader label="最后查询" field="last_checked" width="w-[112px]" sort={sort} order={order} onSort={onSort} />}
+              {visibleColumns.has("next_check") && <SortableHeader label="下次查询" field="next_check" width="w-[112px]" sort={sort} order={order} onSort={onSort} />}
+              <th className="sticky-action-column sticky right-0 z-20 w-[178px] bg-surface-muted px-3 py-2 text-right font-medium">操作</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-line text-[13px]">
+            {virtualized && firstVisible > 0 && <tr className="virtual-table-spacer" aria-hidden="true"><td colSpan={columnCount} style={{ height: firstVisible * rowHeight }} /></tr>}
+            {visibleDomains.map((item, offset) => renderRow(item, firstVisible + offset))}
+            {virtualized && lastVisible < domains.length && <tr className="virtual-table-spacer" aria-hidden="true"><td colSpan={columnCount} style={{ height: (domains.length - lastVisible) * rowHeight }} /></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function MobileList({
-  domains,
-  selected,
-  onToggle,
-  onOpen,
-  onCheck,
-  onDelete,
-  busy,
-  highlighted,
-}: Props & { highlighted: Set<string> }) {
+function SortableHeader({ label, field, width, sort, order, onSort }: { label: string; field: Exclude<DomainSort, "">; width: string; sort: DomainSort; order: "asc" | "desc"; onSort: (sort: DomainSort) => void }) {
+  const active = sort === field;
   return (
-    <ul className="space-y-2">
+    <th className={cx(width, "px-3 py-2 font-medium")} aria-sort={active ? (order === "asc" ? "ascending" : "descending") : "none"}>
+      <button type="button" className={cx("inline-flex min-h-8 items-center gap-1", active && "text-accent")} onClick={() => onSort(field)}>
+        {label}<span aria-hidden="true">{active ? (order === "asc" ? "↑" : "↓") : "↕"}</span>
+      </button>
+    </th>
+  );
+}
+
+function MobileList({ domains, selected, onToggle, onOpen, onCheck, onDelete, onHistory, busy, highlighted }: Props & { highlighted: Set<string> }) {
+  return (
+    <ul className="virtual-mobile-list space-y-3">
       {domains.map((item) => (
-        <li
+        <MobileDomainCard
           key={item.name}
-          draggable
-          onDragStart={(event) => setDragData(event, item.name, selected)}
-          className={cx("card p-3", highlighted.has(item.name) && "status-change-highlight")}
-        >
-          <div className="flex items-start gap-2">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={selected.has(item.name)}
-              onChange={() => onToggle(item.name)}
-              aria-label={`选择 ${item.name}`}
-            />
-            <div className="min-w-0 flex-1">
-              <DomainName name={item.name} favorite={item.favorite} onClick={() => onOpen(item.name)} />
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-muted">
-                <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
-                {item.review?.required && <span className="review-badge">需复核</span>}
-                {item.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
-                <span className="truncate">{item.registrar || "—"}</span>
-              </div>
-              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-faint">
-                <Row label="到期" value={formatDate(item.expiry_date)} />
-                <Row label="来源" value={providerLabel(item.query_method)} />
-                <Row label="最后查询" value={formatRelative(item.last_checked)} />
-                <Row label="下次查询" value={formatRelative(item.next_check_at)} />
-              </dl>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  className="btn h-7 flex-1 text-[12px]"
-                  onClick={() => onCheck(item.name)}
-                  disabled={busy === item.name}
-                >
-                  {busy === item.name ? "查询中…" : "立即检查"}
-                </button>
-                <button
-                  type="button"
-                  className={cx("btn h-7 px-3 text-[12px] text-red-600 dark:text-red-400")}
-                  onClick={() => onDelete(item.name)}
-                >
-                  删除
-                </button>
-              </div>
-            </div>
-          </div>
-          <p className="sr-only">{formatDateTime(item.last_checked)}</p>
-        </li>
+          item={item}
+          checked={selected.has(item.name)}
+          busy={busy === item.name}
+          highlighted={highlighted.has(item.name)}
+          onToggle={() => onToggle(item.name)}
+          onOpen={() => onOpen(item.name)}
+          onCheck={() => onCheck(item.name)}
+          onDelete={() => onDelete(item.name)}
+          onHistory={() => onHistory(item.name)}
+        />
       ))}
     </ul>
+  );
+}
+
+function MobileDomainCard({ item, checked, busy, highlighted, onToggle, onOpen, onCheck, onDelete, onHistory }: { item: DomainInfo; checked: boolean; busy: boolean; highlighted: boolean; onToggle: () => void; onOpen: () => void; onCheck: () => void; onDelete: () => void; onHistory: () => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  return (
+    <li className={cx("card p-4", highlighted && "status-change-highlight")}>
+      <div className="flex min-w-0 items-center gap-2">
+        <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`选择 ${item.name}`} />
+        <DomainName name={item.name} favorite={item.favorite} onClick={onOpen} className="min-w-0 flex-1 text-[14px]" />
+        {item.review?.required && <ReviewIndicator explanation={item.review.explanation} />}
+        <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-[12px]">
+        <Row label="到期" value={formatDate(item.expiry_date)} />
+        <Row label="注册商" value={item.registrar || "—"} />
+        <Row label="查询源" value={providerLabel(item.query_method)} />
+        <Row label="最后查询" value={formatRelative(item.last_checked)} />
+      </dl>
+      <div className="mt-4 flex gap-2 border-t border-line pt-3">
+        <button type="button" className="btn btn-primary min-h-11 flex-1 text-[13px]" onClick={onCheck} disabled={busy}>{busy ? "查询中…" : "立即检查"}</button>
+        <div className="relative">
+          <button type="button" className="btn min-h-11 min-w-11 px-0 text-[18px]" onClick={() => setMenuOpen((value) => !value)} aria-label={`${item.name} 更多操作`} aria-expanded={menuOpen}>⋯</button>
+          {menuOpen && (
+            <div className="absolute bottom-12 right-0 z-20 w-36 rounded-card border border-line bg-surface-raised p-1 shadow-lg">
+              <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[13px] hover:bg-surface-muted" onClick={() => { setMenuOpen(false); onOpen(); }}>查看详情</button>
+              <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[13px] hover:bg-surface-muted" onClick={() => { setMenuOpen(false); onHistory(); }}>状态时间线</button>
+              <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[13px] text-danger hover:bg-danger/12" onClick={() => { setMenuOpen(false); onDelete(); }}>删除域名</button>
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="sr-only">{formatDateTime(item.last_checked)}</p>
+    </li>
   );
 }
 
@@ -213,10 +291,5 @@ function setDragData(event: React.DragEvent, name: string, selected: Set<string>
 }
 
 function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex gap-1">
-      <dt>{label}</dt>
-      <dd className="tabular truncate text-ink-muted">{value}</dd>
-    </div>
-  );
+  return <div className="min-w-0"><dt className="text-ink-faint">{label}</dt><dd className="tabular mt-0.5 truncate text-ink-muted" title={value}>{value}</dd></div>;
 }

@@ -519,6 +519,40 @@ var migrations = []Migration{
 				WHERE base_url LIKE 'https://opencode.ai/%' AND model='deepseek-v4-flash-free'`,
 		},
 	},
+	{
+		Version: "017",
+		Name:    "unlimited_ai_valuation",
+		Stmts: []string{
+			// Keep the columns for SQLite/schema compatibility, but zero means
+			// unlimited and all application paths now ignore daily caps.
+			`UPDATE ai_profiles SET daily_limit=0`,
+			`UPDATE ai_provider_profiles SET daily_limit=0`,
+			`UPDATE ai_provider_settings SET daily_limit=0`,
+		},
+	},
+	{
+		Version: "018",
+		Name:    "notification_inbox_preferences",
+		Stmts: []string{
+			`ALTER TABLE notification_history ADD COLUMN read_at DATETIME`,
+			`CREATE INDEX IF NOT EXISTS idx_notification_history_read ON notification_history(read_at, sent_at DESC)`,
+			`INSERT INTO app_settings(key,value) SELECT 'notification_muted_types','' WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE key='notification_muted_types')`,
+		},
+	},
+	{
+		Version: "019",
+		Name:    "expiry_reminder_deduplication",
+		Stmts: []string{
+			`CREATE TABLE IF NOT EXISTS expiry_reminders (
+				domain TEXT NOT NULL,
+				expiry_at DATETIME NOT NULL,
+				milestone INTEGER NOT NULL,
+				sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(domain, expiry_at, milestone)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_expiry_reminders_sent ON expiry_reminders(sent_at DESC)`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录
@@ -563,7 +597,7 @@ func (d *DB) migrate() error {
 				return err
 			}
 			applied[migrations[0].Version] = true
-			logger.Info("检测到既有 Puff 数据库，已将迁移 001_baseline 标记为已应用")
+			logger.Info("检测到已有 DomainHunter 数据库，已将迁移 001_baseline 标记为已应用")
 		}
 	}
 

@@ -22,7 +22,6 @@ var (
 	ErrProfileNotFound = errors.New("AI 档案不存在")
 	ErrProfileDisabled = errors.New("AI 档案未启用")
 	ErrIneligible      = errors.New("当前域名状态或证据不足，暂不能加入 AI 估价")
-	ErrQuotaExceeded   = errors.New("今日估价额度已用完")
 )
 
 type Service struct {
@@ -75,6 +74,9 @@ func (s *Service) SaveProfile(ctx context.Context, id string, input ProfileInput
 	if err := validateProfileInput(input); err != nil {
 		return nil, err
 	}
+	// Daily valuation limits are intentionally disabled. Keep the legacy field
+	// at zero when writing older-compatible SQLite schemas.
+	input.DailyLimit = 0
 	endpoint, err := NormalizeBaseURL(ctx, input.BaseURL, s.urlPolicy)
 	if err != nil {
 		return nil, err
@@ -227,31 +229,53 @@ func (s *Service) Enqueue(ctx context.Context, name string, input EnqueueInput, 
 			return nil, cacheErr
 		}
 		if cached != nil {
-			return &Job{ID: "cache:" + cached.ID, Domain: name, State: JobSucceeded, ProfileID: profile.ID, Priority: input.Priority, QueuedAt: cached.CreatedAt, CompletedAt: &cached.CreatedAt, Result: cached, Cached: true, Quota: &Quota{DailyLimit: profile.DailyLimit, RemainingToday: max(profile.DailyLimit-1, 0), UsedToday: 1}}, nil
+			return &Job{ID: "cache:" + cached.ID, Domain: name, State: JobSucceeded, ProfileID: profile.ID, Priority: input.Priority, QueuedAt: cached.CreatedAt, CompletedAt: &cached.CreatedAt, Result: cached, Cached: true}, nil
 		}
-	}
-	start, end := dayWindow(now)
-	used, err := s.store.CountStartedToday(ctx, profile.ID, start, end)
-	if err != nil {
-		return nil, err
-	}
-	if used >= profile.DailyLimit {
-		return nil, ErrQuotaExceeded
 	}
 	priority := input.Priority
 	if priority != PriorityHigh {
 		priority = PriorityNormal
 	}
-	job := Job{ID: newID("aij"), Domain: name, State: JobQueued, ProfileID: profile.ID, Priority: priority, QueuedAt: now, Quota: &Quota{UsedToday: used, DailyLimit: profile.DailyLimit, RemainingToday: profile.DailyLimit - used}}
+	job := Job{ID: newID("aij"), Domain: name, State: JobQueued, ProfileID: profile.ID, Priority: priority, QueuedAt: now}
 	created, err := s.store.CreateJob(ctx, job, fingerprint, PromptVersion, newID("cause"))
 	if err != nil {
 		return nil, err
 	}
-	created.Quota = job.Quota
 	if err = s.store.Audit(ctx, "ai_valuation_enqueued", name, profile.ID, created.ID, actor, map[string]any{"priority": priority, "force_refresh": input.ForceRefresh}); err != nil {
 		return nil, err
 	}
 	return created, nil
+}
+
+// EnqueueBatch 将一组域名逐个放入同一持久化队列。
+// 单域名资格问题会收集到 errors，不会让其它域名整批回滚；日额度不参与此流程。
+func (s *Service) EnqueueBatch(ctx context.Context, names []string, input EnqueueInput, actor string) (*BatchEnqueueResult, error) {
+	result := &BatchEnqueueResult{}
+	seen := make(map[string]struct{}, len(names))
+	for _, raw := range names {
+		name := domain.Normalize(raw)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		result.Requested++
+		job, err := s.Enqueue(ctx, name, input, actor)
+		if err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, BatchEnqueueError{Domain: name, Error: safeError(err)})
+			continue
+		}
+		if job.Cached {
+			result.Cached++
+		} else {
+			result.Queued++
+		}
+		result.Jobs = append(result.Jobs, job)
+	}
+	return result, nil
 }
 
 func (s *Service) Cancel(ctx context.Context, jobID, actor string) (*Job, error) {
@@ -425,10 +449,6 @@ func rootURL(endpoint *url.URL) string {
 	path := strings.TrimSuffix(endpoint.Path, "/chat/completions")
 	return endpoint.Scheme + "://" + endpoint.Host + path
 }
-func dayWindow(now time.Time) (time.Time, time.Time) {
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	return start, start.AddDate(0, 0, 1)
-}
 func retryAfter(job Job, now time.Time) *time.Time {
 	if job.Priority == PriorityHigh {
 		return nil
@@ -453,10 +473,4 @@ func newID(prefix string) string {
 		return prefix + "_" + hex.EncodeToString(sum[:12])
 	}
 	return prefix + "_" + hex.EncodeToString(buf)
-}
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

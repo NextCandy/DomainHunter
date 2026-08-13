@@ -25,6 +25,7 @@ import (
 	"DomainHunter/internal/query/providers/fallback"
 	"DomainHunter/internal/query/providers/rdap"
 	"DomainHunter/internal/query/providers/rdaporg"
+	"DomainHunter/internal/query/providers/spaceship"
 	"DomainHunter/internal/query/providers/whodat"
 	"DomainHunter/internal/query/providers/whois"
 	"DomainHunter/internal/query/providers/whoisls"
@@ -38,7 +39,7 @@ var (
 	// AppName 应用名称
 	AppName = "DomainHunter"
 	// AppVersion 版本号，由构建时 -ldflags 注入
-	AppVersion = "v2.0.0"
+	AppVersion = "v2.11.0"
 )
 
 func main() {
@@ -83,6 +84,7 @@ func run(dataDir string) error {
 	observationRepo := sqlite.NewObservationRepo(db)
 	settingsRepo := sqlite.NewSettingsRepo(db)
 	notificationRepo := sqlite.NewNotificationRepo(db)
+	expiryReminderRepo := sqlite.NewExpiryReminderRepo(db)
 
 	// ---- 配置与日志 ----
 	cfg, err := config.Load(ctx, settingsRepo)
@@ -132,11 +134,12 @@ func run(dataDir string) error {
 		whoisls.New(cfg.Monitor.Timeout),
 		fallback.New(cfg.Monitor.Timeout),
 		whois.New(cfg.Monitor.Timeout),
+		spaceship.New(cfg.Monitor.Timeout),
 	)
 	engine := query.NewEngine(providers, policy)
 
 	// ---- 通知 ----
-	notifier := notification.NewManager(notificationRepo)
+	notifier := notification.NewManager(notificationRepo, settingsRepo)
 	notifier.RegisterAll(cfg)
 	notifier.Start()
 	logger.Info("已启用的通知渠道: %v", notifier.EnabledNames())
@@ -152,6 +155,9 @@ func run(dataDir string) error {
 	})
 	monitorSvc := service.NewMonitorService(sched, querySvc, domainRepo, observationRepo, cfg)
 	overviewSvc := service.NewOverviewService(domainRepo, resultRepo, observationRepo, engine, monitorSvc, domainSvc)
+	expiryReminderSvc := service.NewExpiryReminderService(domainRepo, resultRepo, expiryReminderRepo, notificationRepo, notifier, time.Hour)
+	expiryReminderSvc.Start(ctx)
+	defer expiryReminderSvc.Stop()
 	domainSvc.SetEnqueuer(monitorSvc.Enqueue)
 
 	settingsSvc.OnChange(func(next *config.Config) {
