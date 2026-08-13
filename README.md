@@ -480,15 +480,19 @@ go test -race ./...    # 竞态检测（需要 CGO 与 C 编译器）
 5. 只重建 `DomainHunter` 服务，不触碰 who-dat、whois-domain-lookup、FRP 或其他项目。
 6. 验证 HTTP 200、容器健康、重启次数、OOM 状态、数据库完整性和 fatal 日志。
 
-2026-08-13 的实例发布版本为 `v2.9.2-deepseek-compat-20260813`：包含 Monad 温暖纸张工作台 UI、浅色/深色
+2026-08-13 的实例发布版本为 `v2.9.3-im-spaceship-20260813-3574847`：包含 Monad 温暖纸张工作台 UI、浅色/深色
 主题、桌面侧栏、移动端导航，以及 `.im` 使用 WHOIS.LS、`.do` 使用结构化 fallback
 时跳过通用 `whois-domain-lookup` 的路由修复；概览统计、行动卡片与抢注卡片统一 40px 圆角并增加
 内边距。AI 改用 DeepSeek 官方 `deepseek-v4-flash`，明确关闭默认 Thinking 以保证四行鉴定报告
 完整返回；上游延迟会显示原因、自动重试时间，并支持原任务立即重试。
 官方模型偶尔会在 `evidence_used` 返回解释性文本；服务端只保留真实输入字段名，避免无关标签阻断整份报告。
-Spaceship / Dynadot 注册商查询使用官方新版直达 URL。此次发布只重建 `DomainHunter` 容器，
+Spaceship / Dynadot 注册商查询使用官方新版直达 URL；`.im` 只有到期日而没有明确生命周期字段时按
+“已注册、阶段无法确认”处理，避免 `registered/grace` 反复提醒；无法确认时可选调用 Spaceship
+官方 API（当前实例未配置 Key/Secret，因此保持关闭）。此次发布只重建 `DomainHunter` 容器，
 保留 545 个域名和现有 SQLite 数据；who-dat、whois-domain-lookup、Bark、FRP 与其他
-Compose 项目不参与重建。
+Compose 项目不参与重建。部署前备份为
+`backups/im-stability-20260813-080042-pre-29a396f/`，回滚镜像为
+`domainhunter:rollback-pre-v2.9.3-im-spaceship-20260813-3574847`。
 
 详细升级、迁移和回滚步骤见 [MIGRATION.md](MIGRATION.md)；项目历史交接与实例记录见
 [HANDOFF.md](HANDOFF.md)。
