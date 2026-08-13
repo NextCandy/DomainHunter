@@ -115,6 +115,16 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
     }
   }
 
+  async function setReminder(item: DomainInfo) {
+    try {
+      await api.patch(`/api/v2/domains/${encodeURIComponent(item.name)}`, { notify: true });
+      toast(`${item.name} 已启用掉落提醒`, "success");
+      reload();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "设置提醒失败", "error");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
@@ -191,6 +201,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
                       onOpen={() => setOpenDomain(item.name)}
                       onCheck={() => runCheck(item.name)}
                       onHistory={() => navigate(`/history?domain=${encodeURIComponent(item.name)}`)}
+                      onRemind={() => void setReminder(item)}
                     />
                   ))}
                 </tbody>
@@ -207,6 +218,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
                 onOpen={() => setOpenDomain(item.name)}
                 onCheck={() => runCheck(item.name)}
                 onHistory={() => navigate(`/history?domain=${encodeURIComponent(item.name)}`)}
+                onRemind={() => void setReminder(item)}
               />
             ))}
           </ul>
@@ -215,6 +227,8 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
 
       <DomainDrawer
         domain={openDomain}
+        domains={items.map((item) => item.name)}
+        onNavigate={setOpenDomain}
         onClose={() => setOpenDomain(null)}
         onChanged={reload}
         onUnauthorized={onUnauthorized}
@@ -231,11 +245,11 @@ function DaysCell({ item }: { item: DomainInfo }) {
     <span
       className={cx(
         "tabular",
-        overdue
-          ? "text-ink"
-          : days <= 14
-            ? "text-ink-muted"
-            : "text-ink-muted",
+        Math.abs(days) <= 7
+          ? "text-danger"
+          : Math.abs(days) <= 30
+            ? "text-warning"
+            : "text-neutral",
       )}
     >
       {overdue ? `已过期 ${-days} 天` : `${days} 天后`}
@@ -244,6 +258,7 @@ function DaysCell({ item }: { item: DomainInfo }) {
 }
 
 function DropBoard({ counts }: { counts: Map<string, number> }) {
+  const stageRanges = ["0–45 天", "到期日", "约 30 天", "约 5 天", "实时"];
   return (
     <Card
       title="掉落阶段"
@@ -288,6 +303,7 @@ function DropBoard({ counts }: { counts: Map<string, number> }) {
                     <StatusBadge status={status} />
                   </span>
                   <span className="mt-1 block text-[11px] text-ink-faint">{hint}</span>
+                  <span className="mt-0.5 block font-mono text-[10px] text-ink-faint">{stageRanges[DROP_STAGES.findIndex((item) => item.status === status)]}</span>
                 </span>
               </li>
             );
@@ -304,12 +320,14 @@ function Row({
   onOpen,
   onCheck,
   onHistory,
+  onRemind,
 }: {
   item: DomainInfo;
   busy: boolean;
   onOpen: () => void;
   onCheck: () => void;
   onHistory: () => void;
+  onRemind: () => void;
 }) {
   return (
     <tr className="hover:bg-surface-muted/60">
@@ -336,6 +354,7 @@ function Row({
         {formatRelative(item.last_checked)}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right">
+        <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={onRemind}>设为提醒</button>
         <button type="button" className="btn btn-ghost h-8 px-2 text-[12px]" onClick={onHistory}>时间线</button>
         <button
           type="button"
@@ -356,12 +375,14 @@ function MobileCard({
   onOpen,
   onCheck,
   onHistory,
+  onRemind,
 }: {
   item: DomainInfo;
   busy: boolean;
   onOpen: () => void;
   onCheck: () => void;
   onHistory: () => void;
+  onRemind: () => void;
 }) {
   return (
     <li className="card p-3">
@@ -391,7 +412,8 @@ function MobileCard({
           <dd className="tabular text-ink-muted">{formatRelative(item.last_checked)}</dd>
         </div>
       </dl>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <button type="button" className="btn min-h-11 text-[12px]" onClick={onRemind}>设提醒</button>
         <button type="button" className="btn min-h-11 text-[12px]" onClick={onHistory}>状态时间线</button>
         <button type="button" className="btn btn-primary min-h-11 text-[12px]" onClick={onCheck} disabled={busy}>{busy ? "查询中…" : "立即检查"}</button>
       </div>

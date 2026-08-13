@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { ApiError } from "../lib/api";
 import type { Attempt, DomainInfo, DomainStatus, Observation } from "../lib/api";
@@ -57,11 +57,15 @@ export function DomainDrawer({
   onClose,
   onChanged,
   onUnauthorized,
+  domains,
+  onNavigate,
 }: {
   domain: string | null;
   onClose: () => void;
   onChanged?: () => void;
   onUnauthorized: () => void;
+  domains?: string[];
+  onNavigate?: (domain: string) => void;
 }) {
   const [detail, setDetail] = useState<DetailResponse | null>(null);
   const [error, setError] = useState("");
@@ -138,6 +142,10 @@ export function DomainDrawer({
   }
 
   const info = detail?.info;
+  const navigation = useMemo(() => {
+    const index = domain && domains ? domains.indexOf(domain) : -1;
+    return { previous: index > 0 ? domains?.[index - 1] : undefined, next: index >= 0 && index < (domains?.length ?? 0) - 1 ? domains?.[index + 1] : undefined };
+  }, [domain, domains]);
 
   return (
     <Drawer
@@ -166,6 +174,12 @@ export function DomainDrawer({
 
       {info && (
         <>
+          {(navigation.previous || navigation.next) && (
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <button type="button" className="btn min-h-10" disabled={!navigation.previous} onClick={() => navigation.previous && onNavigate?.(navigation.previous)}>← 上一条</button>
+              <button type="button" className="btn min-h-10" disabled={!navigation.next} onClick={() => navigation.next && onNavigate?.(navigation.next)}>下一条 →</button>
+            </div>
+          )}
           <div className="mb-4 flex flex-wrap gap-2">
             <button type="button" className="btn btn-primary h-8" onClick={runCheck} disabled={checking}>
               {checking && <Spinner />}立即检查
@@ -213,44 +227,43 @@ export function DomainDrawer({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, align = "right" }: { label: string; children: React.ReactNode; align?: "right" | "left" }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b border-line py-2 last:border-0">
       <span className="shrink-0 text-[12px] text-ink-muted">{label}</span>
-      <span className="min-w-0 break-all text-right text-[13px]">{children}</span>
+      <span className={cx("min-w-0 break-words text-[13px]", align === "right" ? "text-right" : "text-left")}>{children}</span>
     </div>
   );
 }
 
 function OverviewTab({ info, onUnauthorized, onCompleted }: { info: DomainInfo; onUnauthorized: () => void; onCompleted: () => void }) {
+  const evidence = info.evidence ?? [];
+  const statuses = new Set(evidence.filter((item) => item.status !== "unknown" && item.status !== "skipped").map((item) => item.status));
+  const consistent = statuses.size <= 1;
+  const winner = evidence.find((item) => item.provider === info.query_method) ?? evidence.find((item) => item.status === info.status);
   return (
-    <div>
+    <div className="space-y-4">
+      <section className={cx("rounded-card border border-l-4 p-4", consistent ? "border-l-success" : "border-l-warning")}>
+        <div className="flex flex-wrap items-center gap-2"><StatusBadge status={info.status} eppStatuses={info.epp_statuses} /><Pill>可信度 {CONFIDENCE_LABELS[info.confidence ?? ""] ?? info.confidence ?? "—"}</Pill><Pill className={consistent ? "text-success" : "text-warning"}>{consistent ? "多源一致" : "多源有冲突"}</Pill></div>
+        <p className="mt-2 text-[12px] text-ink-muted">{consistent ? `有效查询源结论一致，采纳 ${providerLabel(info.query_method)}。` : `按权威性与证据完整度采纳 ${providerLabel(info.query_method)}；RDAP/注册局结构化证据优先于 WHOIS 文本解析。`}</p>
+        {winner?.note && <p className="mt-1 text-[11px] text-ink-faint">采纳说明：{winner.note}</p>}
+      </section>
       {info.review?.required && (
-        <div className="mb-3 rounded-md border border-review/35 bg-review/8 px-3 py-2 text-[12px] leading-5">
+        <div className="rounded-md border border-review/35 bg-review/8 px-3 py-2 text-[12px] leading-5">
           <div className="font-semibold text-review">数据需复核</div>
           <p className="mt-0.5 text-ink-muted">{info.review.explanation ?? "请先查看查询证据并重新检查；这不是新的域名生命周期状态。"}</p>
         </div>
       )}
-      <DomainValuationPanel
-        domain={info.name}
-        status={info.status}
-        confidence={info.confidence}
-        reviewRequired={Boolean(info.review?.required)}
-        onUnauthorized={onUnauthorized}
-        onCompleted={onCompleted}
-        compact
-      />
-      <Field label="状态">
-        <StatusBadge status={info.status} eppStatuses={info.epp_statuses} />
-      </Field>
+      <section className="rounded-card border border-line px-4">
+        <h3 className="border-b border-line py-3 text-[13px] font-medium">关键事实</h3>
       {info.cached && <Field label="缓存">cached: true</Field>}
+      <Field label="到期时间">{formatDateTime(info.expiry_date)}</Field>
       <Field label="注册商">{info.registrar || "—"}</Field>
       <Field label="注册时间">{formatDateTime(info.created_date)}</Field>
       <Field label="更新时间">{formatDateTime(info.updated_date)}</Field>
-      <Field label="到期时间">{formatDateTime(info.expiry_date)}</Field>
-      <Field label="名称服务器">
+      <Field label="名称服务器" align="left">
         {info.name_servers && info.name_servers.length > 0 ? (
-          <span className="mono block whitespace-pre-line">{info.name_servers.join("\n")}</span>
+          <span className="mono block whitespace-pre-line text-left">{info.name_servers.join("\n")}</span>
         ) : (
           "—"
         )}
@@ -278,8 +291,18 @@ function OverviewTab({ info, onUnauthorized, onCompleted }: { info: DomainInfo; 
           <span className="text-ink-muted">{info.error_message}</span>
         </Field>
       )}
+      </section>
+      <DomainValuationPanel domain={info.name} status={info.status} confidence={info.confidence} reviewRequired={Boolean(info.review?.required)} onUnauthorized={onUnauthorized} onCompleted={onCompleted} compact />
+      <ConsistencyTable info={info} />
     </div>
   );
+}
+
+function ConsistencyTable({ info }: { info: DomainInfo }) {
+  const evidence = info.evidence ?? [];
+  if (evidence.length === 0) return <section className="rounded-card border border-line"><EmptyState title="暂无多源裁决数据" hint="重新检查后会展示各源结论" /></section>;
+  const conflicting = new Set(evidence.map((item) => item.status)).size > 1;
+  return <section className={cx("rounded-card border", conflicting ? "border-warning/40" : "border-line")}><h3 className="border-b border-line px-4 py-3 text-[13px] font-medium">多源一致性裁决</h3><div className="table-scroll"><table className="w-full min-w-[480px] text-left text-[11px]"><thead className="bg-surface-muted text-ink-muted"><tr><th className="px-3 py-2">源</th><th className="px-3 py-2">结论</th><th className="px-3 py-2">可信度</th><th className="px-3 py-2">耗时</th><th className="px-3 py-2">时间</th></tr></thead><tbody className="divide-y divide-line">{evidence.map((item, index) => <tr key={`${item.provider}-${index}`} className={item.provider === info.query_method ? "bg-accent-soft/30" : ""}><td className="px-3 py-2">{providerLabel(item.provider)}</td><td className="px-3 py-2"><StatusBadge status={item.status} /></td><td className="px-3 py-2">{CONFIDENCE_LABELS[item.confidence] ?? item.confidence}</td><td className="px-3 py-2">{formatLatency(item.latency_ms)}</td><td className="px-3 py-2">{formatDateTime(item.queried_at)}</td></tr>)}</tbody></table></div><p className="border-t border-line px-4 py-3 text-[11px] text-ink-muted">{conflicting ? "存在冲突：结构化 RDAP 或注册局证据优先；最终采用行已高亮。" : "有效来源结论一致；最终采用行已高亮。"}</p></section>;
 }
 
 function EvidenceTab({ info, attempts }: { info: DomainInfo; attempts: Attempt[] | null }) {

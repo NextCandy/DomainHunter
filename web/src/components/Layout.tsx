@@ -72,37 +72,15 @@ export function Layout({
               <p className="mt-2 truncate text-[13px] font-medium text-ink">{username}</p>
               <p className="mt-0.5 text-[11px] text-ink-muted">DomainHunter {version}</p>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="min-w-0">
-                <span className="sr-only">主题</span>
-                <select
-                  className="input h-9 px-2 text-[11px]"
-                  value={mode}
-                  onChange={(event) => setMode(event.target.value as ThemeMode)}
-                  aria-label="主题"
-                >
-                  {THEME_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="min-w-0">
-                <span className="sr-only">界面密度</span>
-                <select
-                  className="input h-9 px-2 text-[11px]"
-                  value={density}
-                  onChange={(event) => setDensity(event.target.value as typeof density)}
-                  aria-label="界面密度"
-                >
-                  {DENSITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              </label>
-            </div>
             <button type="button" className="btn btn-ghost w-full" onClick={onLogout}>退出登录</button>
           </div>
         </aside>
 
         <div className="min-w-0 flex-1">
+          <header className="sticky top-0 z-30 hidden min-h-16 items-center justify-end gap-4 border-b border-line bg-surface/95 px-8 backdrop-blur lg:flex">
+            <SegmentedControl label="主题" value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />
+            <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={(value) => setDensity(value as typeof density)} />
+          </header>
           <header className="sticky top-0 z-30 border-b border-line bg-pure-white lg:hidden">
             <div className="flex min-h-16 items-center gap-3 px-4">
               <BrandBlock compact />
@@ -123,19 +101,9 @@ export function Layout({
                 <nav className="grid grid-cols-2 gap-1" aria-label="移动端完整导航">
                   {NAV.map((item) => <NavItem key={item.to} item={item} onClick={() => setMenuOpen(false)} />)}
                 </nav>
-                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
-                  <label>
-                    <span className="label">主题</span>
-                    <select className="input h-9 text-[12px]" value={mode} onChange={(event) => setMode(event.target.value as ThemeMode)} aria-label="主题">
-                      {THEME_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    <span className="label">密度</span>
-                    <select className="input h-9 text-[12px]" value={density} onChange={(event) => setDensity(event.target.value as typeof density)} aria-label="密度">
-                      {DENSITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
-                  </label>
+                <div className="mt-3 space-y-3 border-t border-line pt-3">
+                  <SegmentedControl label="主题" value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />
+                  <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={(value) => setDensity(value as typeof density)} />
                 </div>
                 <button type="button" className="btn btn-ghost mt-3 w-full" onClick={() => { setMenuOpen(false); onLogout(); }}>退出登录</button>
               </div>
@@ -195,6 +163,10 @@ export function Layout({
       </div>
     </div>
   );
+}
+
+function SegmentedControl({ label, value, options, onChange }: { label: string; value: string; options: ReadonlyArray<{ value: string; label: string }>; onChange: (value: string) => void }) {
+  return <fieldset><legend className="sr-only">{label}</legend><div className="inline-flex rounded-button border border-line bg-surface-muted p-1" aria-label={label}>{options.map((option) => <button key={option.value} type="button" className={cx("min-h-9 rounded-button px-3 text-[11px] transition-colors", option.value === value ? "bg-surface text-accent shadow-sm" : "text-ink-muted hover:text-ink")} onClick={() => onChange(option.value)} aria-pressed={option.value === value}>{option.label}</button>)}</div></fieldset>;
 }
 
 function NavItem({ item, onClick }: { item: (typeof NAV)[number]; onClick?: () => void }) {

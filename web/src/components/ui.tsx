@@ -348,7 +348,7 @@ export function Drawer({
       <aside
         className={cx(
           "absolute inset-x-0 bottom-0 flex max-h-[92vh] w-full flex-col rounded-t-card border border-line bg-surface-raised transition-transform duration-200 ease-out motion-reduce:transition-none",
-          "lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:max-h-none lg:max-w-[620px] lg:rounded-none",
+          "lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:max-h-none lg:w-[min(560px,92vw)] lg:rounded-none",
           visible ? "translate-y-0 lg:translate-x-0" : "translate-y-full lg:translate-y-0 lg:translate-x-full",
         )}
         role="dialog"
@@ -510,7 +510,7 @@ export interface SparklineSeries {
   color: string;
 }
 
-export function Sparkline({ series, className }: { series: SparklineSeries[]; className?: string }) {
+export function Sparkline({ series, labels, className }: { series: SparklineSeries[]; labels?: string[]; className?: string }) {
   const width = 320;
   const height = 92;
   const padding = 8;
@@ -535,7 +535,10 @@ export function Sparkline({ series, className }: { series: SparklineSeries[]; cl
         aria-label="最近七天趋势图"
         preserveAspectRatio="none"
       >
-        <path d={`M ${padding} ${height - padding} H ${width - padding}`} stroke="rgb(var(--line))" />
+        {[0, 0.5, 1].map((ratio) => {
+          const y = padding + ratio * (height - padding * 2);
+          return <path key={ratio} d={`M ${padding} ${y} H ${width - padding}`} stroke="rgb(var(--line))" strokeDasharray="2 4" />;
+        })}
         {series.map((item) => (
           <path
             key={item.label}
@@ -547,7 +550,23 @@ export function Sparkline({ series, className }: { series: SparklineSeries[]; cl
             strokeLinejoin="round"
           />
         ))}
+        {Array.from({ length: count }, (_, index) => {
+          const x = padding + (index / Math.max(1, count - 1)) * (width - padding * 2);
+          return (
+            <g key={index}>
+              <line x1={x} y1={padding} x2={x} y2={height - padding} stroke="transparent" strokeWidth="20">
+                <title>{`${labels?.[index] ?? `第 ${index + 1} 天`} · ${series.map((item) => `${item.label} ${item.values[index] ?? 0}`).join(" · ")}`}</title>
+              </line>
+              {series.map((item) => {
+                const value = item.values[index] ?? 0;
+                const y = height - padding - (value / max) * (height - padding * 2);
+                return <circle key={item.label} cx={x} cy={y} r="2.5" fill={item.color}><title>{`${labels?.[index] ?? ""} · ${item.label} ${value}`}</title></circle>;
+              })}
+            </g>
+          );
+        })}
       </svg>
+      <div className="mt-1 flex justify-between text-[10px] text-ink-faint"><span>{max}</span><span>Y 轴：次数</span><span>0</span></div>
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
         {series.map((item) => (
           <span key={item.label} className="inline-flex items-center gap-1">

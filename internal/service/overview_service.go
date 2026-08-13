@@ -187,18 +187,41 @@ func (s *OverviewService) Build(ctx context.Context) (*Overview, error) {
 	overview.RecentAvailable = limitItems(overview.RecentAvailable, 10)
 	overview.QueryFailures = limitItems(overview.QueryFailures, 10)
 
-	if changes, err := s.observations.ListRecentChanges(ctx, 15); err == nil {
+	if changes, err := s.observations.ListRecentChanges(ctx, 80); err == nil {
+		type changeGroup struct {
+			item  OverviewItem
+			count int
+		}
+		groups := make(map[string]*changeGroup)
+		order := make([]string, 0, len(changes))
 		for _, change := range changes {
 			observed := change.ObservedAt
 			changeInfo := &domain.Info{Name: change.Domain, Status: change.Status, Registrar: change.Registrar, LastChecked: change.ObservedAt, QueryMethod: change.Provider}
-			overview.RecentChanges = append(overview.RecentChanges, OverviewItem{
+			item := OverviewItem{
 				Domain:     change.Domain,
 				Status:     change.Status,
 				Registrar:  change.Registrar,
 				Provider:   change.Provider,
 				ObservedAt: &observed,
 				Review:     domain.BuildReviewState(changeInfo, now),
-			})
+			}
+			key := strings.ToLower(change.Domain) + "|" + string(change.Status)
+			if group := groups[key]; group != nil {
+				group.count++
+				continue
+			}
+			groups[key] = &changeGroup{item: item, count: 1}
+			order = append(order, key)
+		}
+		for _, key := range order {
+			group := groups[key]
+			if group.count > 1 {
+				group.item.Message = fmt.Sprintf("同状态变化 ×%d", group.count)
+			}
+			overview.RecentChanges = append(overview.RecentChanges, group.item)
+			if len(overview.RecentChanges) == 15 {
+				break
+			}
 		}
 	}
 

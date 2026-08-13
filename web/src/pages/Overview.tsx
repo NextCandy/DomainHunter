@@ -31,16 +31,16 @@ const HEALTH_LABELS: Record<ProviderHealth["state"], string> = {
 };
 
 const HEALTH_DOT: Record<ProviderHealth["state"], string> = {
-  healthy: "bg-cyan-signal",
-  degraded: "bg-warm-gray",
-  offline: "bg-stone-muted",
-  unknown: "bg-stone-muted",
+  healthy: "bg-success",
+  degraded: "bg-warning",
+  offline: "bg-danger",
+  unknown: "bg-neutral",
 };
 
 const TREND_COLORS = {
-  total: "rgb(var(--accent))",
-  available: "rgb(var(--cyan-edge))",
-  highScore: "rgb(var(--warm-gray))",
+  total: "oklch(var(--info))",
+  available: "oklch(var(--success))",
+  highScore: "oklch(var(--warning))",
 };
 
 export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void }) {
@@ -109,7 +109,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
       </header>
 
       <div className="overview-stats-band">
-        <div className="relative grid grid-cols-2 gap-0 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="relative grid grid-cols-2 gap-0 md:grid-cols-4">
           <StatTile label="总域名" value={data.total} tone="ink" />
           {STATUS_ORDER.filter((status) =>
             ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
@@ -142,7 +142,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
             render={(item) => (
               <>
                 <StatusBadge status={item.status} />
-                {item.review?.required && <span className="review-badge">需复核</span>}
+                {item.message && <Pill>{item.message}</Pill>}
                 <span className="text-[12px] text-ink-faint">{formatRelative(item.observed_at)}</span>
               </>
             )}
@@ -286,7 +286,11 @@ function TrendCard({
         </Pill>
       }
     >
-      <Sparkline series={series} />
+      {series.every((item) => item.values.every((value) => value === 0)) ? (
+        <EmptyState title="近 7 天无状态变化" hint="下一次状态改变后会在这里形成趋势" />
+      ) : (
+        <Sparkline series={series} labels={points.map((point) => formatTrendDay(point.day))} />
+      )}
       <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
         <span>{formatTrendDay(points[0]?.day)}</span>
         <span>{formatTrendDay(points[points.length - 1]?.day)}</span>
@@ -302,7 +306,8 @@ function ActionQueue({ counts }: { counts: Overview["action_counts"] }) {
     { label: "续费风险", count: counts.renewal_risk, hint: "未来 7 天内到期", href: "/domains?sort=expiry", tone: "text-ink" },
     { label: "需要复核", count: counts.review, hint: "查询事实或证据异常", href: "/domains?statuses=error,unknown,skipped", tone: "text-review" },
   ];
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map((item) => <Link key={item.label} to={item.href} className="action-queue-item card block min-h-[134px] px-6 py-5 transition-colors hover:bg-accent-soft/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7"><div className="flex items-start justify-between gap-4"><span className={cx("text-[13px] font-semibold", item.tone)}>{item.label}</span><span className="tabular text-[24px] font-semibold leading-none text-ink">{item.count}</span></div><p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-3 block text-[11px] font-medium text-accent">打开工作区 →</span></Link>)}</div>;
+  const borders = ["border-l-success", "border-l-info", "border-l-warning", "border-l-danger"];
+  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map((item, index) => <Link key={item.label} to={item.href} className={cx("action-queue-item card block min-h-[134px] border-l-4 px-6 py-5 transition-colors hover:bg-accent-soft/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7", borders[index])}><div className="flex items-start justify-between gap-4"><span className={cx("text-[13px] font-semibold", item.tone)}>{item.label}</span><span className={cx("tabular text-[24px] font-semibold leading-none", index === 0 ? "text-success" : index === 1 ? "text-info" : index === 2 ? "text-warning" : "text-danger")}>{item.count}</span></div><p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-3 block text-[11px] font-medium text-accent">打开工作区 →</span></Link>)}</div>;
 }
 
 function ProviderAlert({ providers }: { providers: ProviderHealth[] | null }) {
@@ -435,7 +440,7 @@ function ItemList({
           className="flex items-center justify-between gap-3 px-4 py-2"
         >
           <Link
-            to={`/domains?search=${encodeURIComponent(item.domain)}`}
+            to={`/history?domain=${encodeURIComponent(item.domain)}`}
             className="mono truncate text-ink hover:text-accent hover:underline"
           >
             {item.domain}

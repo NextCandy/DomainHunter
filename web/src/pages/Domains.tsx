@@ -540,6 +540,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
 
       <DomainDrawer
         domain={openDomain}
+        domains={domains.map((item) => item.name)}
+        onNavigate={setOpenDomain}
         onClose={() => setOpenDomain(null)}
         onChanged={refresh}
         onUnauthorized={onUnauthorized}
