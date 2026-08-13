@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useTheme } from "../lib/theme";
 import type { ThemeMode } from "../lib/theme";
@@ -51,6 +51,13 @@ export function Layout({
   const { density, setDensity } = useDensity();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  useEffect(() => {
+    const open = () => setShortcutsOpen(true);
+    window.addEventListener("domainhunter:shortcuts", open);
+    return () => window.removeEventListener("domainhunter:shortcuts", open);
+  }, []);
 
   return (
     <div className="min-h-full min-w-0 bg-canvas">
@@ -153,6 +160,13 @@ export function Layout({
                   {MOBILE_MORE.map((item) => <NavItem key={item.to} item={item} onClick={() => setMobileMoreOpen(false)} />)}
                 </nav>
               </section>
+            </div>
+          )}
+
+          {shortcutsOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <button type="button" className="absolute inset-0 bg-overlay/40" onClick={() => setShortcutsOpen(false)} aria-label="关闭快捷键帮助" />
+              <section className="card relative w-full max-w-md p-5" role="dialog" aria-modal="true" aria-label="快捷键帮助"><div className="flex items-center justify-between"><h2 className="text-[20px]">快捷键</h2><button type="button" className="btn h-9 w-9 px-0" onClick={() => setShortcutsOpen(false)}>×</button></div><dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-[13px]"><dt><kbd>/</kbd></dt><dd>聚焦域名搜索</dd><dt><kbd>j / k</kbd></dt><dd>列表上下选行</dd><dt><kbd>Enter</kbd></dt><dd>打开选中域名详情</dd><dt><kbd>r</kbd></dt><dd>刷新当前数据</dd><dt><kbd>?</kbd></dt><dd>打开本帮助</dd></dl></section>
             </div>
           )}
 

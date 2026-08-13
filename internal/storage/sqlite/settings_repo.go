@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"DomainHunter/internal/domain"
 	"DomainHunter/internal/repository"
@@ -84,9 +85,9 @@ func NewNotificationRepo(db *DB) *NotificationRepo { return &NotificationRepo{db
 func (r *NotificationRepo) Last(ctx context.Context, name string) (*repository.NotificationRecord, error) {
 	var rec repository.NotificationRecord
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, domain, status, COALESCE(old_status,''), sent_at, COALESCE(notification_type,'status_change')
+		`SELECT id, domain, status, COALESCE(old_status,''), sent_at, COALESCE(notification_type,'status_change'), read_at
 		 FROM notification_history WHERE domain = ? ORDER BY sent_at DESC LIMIT 1`,
-		domain.Normalize(name)).Scan(&rec.ID, &rec.Domain, &rec.Status, &rec.OldStatus, &rec.SentAt, &rec.Type)
+		domain.Normalize(name)).Scan(&rec.ID, &rec.Domain, &rec.Status, &rec.OldStatus, &rec.SentAt, &rec.Type, &rec.ReadAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -119,7 +120,7 @@ func (r *NotificationRepo) ListRecent(ctx context.Context, limit int) ([]reposit
 		limit = 50
 	}
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, domain, status, COALESCE(old_status,''), sent_at, COALESCE(notification_type,'status_change')
+		`SELECT id, domain, status, COALESCE(old_status,''), sent_at, COALESCE(notification_type,'status_change'), read_at
 		 FROM notification_history ORDER BY sent_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -129,10 +130,30 @@ func (r *NotificationRepo) ListRecent(ctx context.Context, limit int) ([]reposit
 	var out []repository.NotificationRecord
 	for rows.Next() {
 		var rec repository.NotificationRecord
-		if err := rows.Scan(&rec.ID, &rec.Domain, &rec.Status, &rec.OldStatus, &rec.SentAt, &rec.Type); err != nil {
+		if err := rows.Scan(&rec.ID, &rec.Domain, &rec.Status, &rec.OldStatus, &rec.SentAt, &rec.Type, &rec.ReadAt); err != nil {
 			return nil, err
 		}
 		out = append(out, rec)
 	}
 	return out, rows.Err()
+}
+
+func (r *NotificationRepo) MarkRead(ctx context.Context, ids []int64, read bool) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i], args[i] = "?", id
+	}
+	value := "CURRENT_TIMESTAMP"
+	if !read {
+		value = "NULL"
+	}
+	result, err := r.db.ExecContext(ctx, `UPDATE notification_history SET read_at=`+value+` WHERE id IN (`+strings.Join(placeholders, ",")+`)`, args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

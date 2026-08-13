@@ -149,7 +149,8 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
           />
         </Card>
 
-        <Card title="即将到期（60 天内）" bodyClassName="p-0">
+      <Card title="即将到期（60 天内）" bodyClassName="p-0">
+          <RenewalSummary items={data.upcoming_expiry} />
           <ItemList
             items={data.upcoming_expiry}
             empty="60 天内没有到期的域名"
@@ -237,6 +238,14 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
       </Card>
     </div>
   );
+}
+
+function RenewalSummary({ items }: { items: OverviewItem[] | null }) {
+  const thresholds = [60, 30, 7, 1];
+  const counts = thresholds.map((threshold) => (items ?? []).filter((item) => { const days = daysUntil(item.expiry_at); return days !== null && days >= 0 && days <= threshold; }).length);
+  const registrarGroups = new Map<string, number>();
+  for (const item of items ?? []) registrarGroups.set(item.registrar || "未识别注册商", (registrarGroups.get(item.registrar || "未识别注册商") ?? 0) + 1);
+  return <div className="border-b border-line bg-surface-muted/45 px-4 py-3"><div className="grid grid-cols-4 gap-2">{thresholds.map((threshold, index) => <div key={threshold} className="text-center"><strong className={cx("tabular block text-[18px]", threshold <= 7 ? "text-danger" : threshold <= 30 ? "text-warning" : "text-neutral")}>{counts[index]}</strong><span className="text-[10px] text-ink-faint">{threshold} 天内</span></div>)}</div>{registrarGroups.size > 0 && <p className="mt-2 truncate text-[10px] text-ink-muted" title={Array.from(registrarGroups).map(([name, count]) => `${name} ${count}`).join("、")}>按注册商：{Array.from(registrarGroups).slice(0, 4).map(([name, count]) => `${name} ${count}`).join(" · ")}</p>}</div>;
 }
 
 function TrendCard({

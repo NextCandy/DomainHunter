@@ -194,6 +194,18 @@ export const api = {
       }),
   },
   notifications: {
+    markRead: (ids: number[], read: boolean) =>
+      request<{ status: string; updated: number }>("/api/v2/notifications/read", {
+        method: "PATCH",
+        body: JSON.stringify({ ids, read }),
+      }),
+    preferences: {
+      get: () => request<{ muted_types: string[] }>("/api/v2/notifications/preferences"),
+      update: (mutedTypes: string[]) => request<{ status: string; muted_types: string[] }>("/api/v2/notifications/preferences", {
+        method: "PUT",
+        body: JSON.stringify({ muted_types: mutedTypes }),
+      }),
+    },
     rules: {
       list: () =>
         request<{ rules: NotificationRule[] }>("/api/v2/notifications/rules"),
@@ -423,6 +435,7 @@ export interface DomainInfo {
   folder?: string;
   cached?: boolean;
   review?: ReviewState;
+  ai_quality_score?: number | null;
 }
 
 export type ReviewReason =
@@ -623,6 +636,7 @@ export interface NotificationRecord {
   old_status: string;
   sent_at: string;
   type: string;
+  read_at?: string | null;
 }
 
 export type ImportMode = "skip" | "overwrite" | "deduplicate";

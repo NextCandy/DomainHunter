@@ -36,6 +36,19 @@ export default function App() {
     void loadSession();
   }, [loadSession]);
 
+  useEffect(() => {
+    if (!session?.authenticated) return;
+    const editable = (target: EventTarget | null) => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+    const onKey = (event: KeyboardEvent) => {
+      if (editable(event.target)) return;
+      if (event.key === "/") { event.preventDefault(); navigate("/domains?focus=search"); }
+      else if (event.key === "r") { event.preventDefault(); window.dispatchEvent(new CustomEvent("domainhunter:refresh")); }
+      else if (event.key === "?") { event.preventDefault(); window.dispatchEvent(new CustomEvent("domainhunter:shortcuts")); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate, session?.authenticated]);
+
   const handleUnauthorized = useCallback(() => {
     setSession({ authenticated: false, auth_required: true });
   }, []);

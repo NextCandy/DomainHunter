@@ -126,12 +126,13 @@ type SettingsRepository interface {
 
 // NotificationRecord 通知历史
 type NotificationRecord struct {
-	ID        int64     `json:"id"`
-	Domain    string    `json:"domain"`
-	Status    string    `json:"status"`
-	OldStatus string    `json:"old_status"`
-	SentAt    time.Time `json:"sent_at"`
-	Type      string    `json:"type"`
+	ID        int64      `json:"id"`
+	Domain    string     `json:"domain"`
+	Status    string     `json:"status"`
+	OldStatus string     `json:"old_status"`
+	SentAt    time.Time  `json:"sent_at"`
+	Type      string     `json:"type"`
+	ReadAt    *time.Time `json:"read_at,omitempty"`
 }
 
 // NotificationRepository 通知历史
@@ -139,6 +140,7 @@ type NotificationRepository interface {
 	Last(ctx context.Context, name string) (*NotificationRecord, error)
 	Save(ctx context.Context, name, status, oldStatus string) error
 	ListRecent(ctx context.Context, limit int) ([]NotificationRecord, error)
+	MarkRead(ctx context.Context, ids []int64, read bool) (int64, error)
 }
 
 // FolderRepository 域名文件夹与批量移动。

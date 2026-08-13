@@ -329,6 +329,9 @@ func sortInfos(items []*domain.Info, field, order string) {
 		less = func(i, j int) bool { return beforePtr(items[i].NextCheckAt, items[j].NextCheckAt) }
 	case "added":
 		less = func(i, j int) bool { return beforePtr(items[i].AddedAt, items[j].AddedAt) }
+	case "ai_score":
+		// AI 评分由 v2 DTO 层补齐；基础列表保持稳定顺序。
+		return
 	default:
 		return
 	}

@@ -15,10 +15,11 @@ export type DomainColumn =
   | "registrar"
   | "expiry"
   | "provider"
+  | "ai_score"
   | "last_checked"
   | "next_check";
 
-export type DomainSort = "name" | "status" | "expiry" | "last_checked" | "next_check" | "";
+export type DomainSort = "name" | "status" | "expiry" | "last_checked" | "next_check" | "ai_score" | "";
 
 interface Props {
   domains: DomainInfo[];
@@ -34,6 +35,7 @@ interface Props {
   onDelete: (name: string) => void;
   onHistory: (name: string) => void;
   busy: string | null;
+  keyboardIndex?: number;
 }
 
 export function DomainTable(props: Props) {
@@ -69,6 +71,7 @@ function DesktopTable({
   onDelete,
   onHistory,
   busy,
+  keyboardIndex,
   highlighted,
 }: Props & { highlighted: Set<string> }) {
   const allSelected = domains.length > 0 && domains.every((item) => selected.has(item.name));
@@ -120,18 +123,19 @@ function DesktopTable({
               {visibleColumns.has("registrar") && <th className="w-[150px] px-3 py-2 font-medium">注册商</th>}
               {visibleColumns.has("expiry") && <SortableHeader label="到期时间" field="expiry" width="w-[122px]" sort={sort} order={order} onSort={onSort} />}
               {visibleColumns.has("provider") && <th className="w-[150px] px-3 py-2 font-medium">查询来源</th>}
+              {visibleColumns.has("ai_score") && <SortableHeader label="AI 评分" field="ai_score" width="w-[96px]" sort={sort} order={order} onSort={onSort} />}
               {visibleColumns.has("last_checked") && <SortableHeader label="最后查询" field="last_checked" width="w-[112px]" sort={sort} order={order} onSort={onSort} />}
               {visibleColumns.has("next_check") && <SortableHeader label="下次查询" field="next_check" width="w-[112px]" sort={sort} order={order} onSort={onSort} />}
               <th className="sticky-action-column sticky right-0 z-20 w-[178px] bg-surface-muted px-3 py-2 text-right font-medium">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line text-[13px]">
-            {domains.map((item) => (
+            {domains.map((item, index) => (
               <tr
                 key={item.name}
                 draggable
                 onDragStart={(event) => setDragData(event, item.name, selected)}
-                className={cx("group hover:bg-surface-muted/60", highlighted.has(item.name) && "status-change-highlight")}
+                className={cx("group hover:bg-surface-muted/60", highlighted.has(item.name) && "status-change-highlight", index === keyboardIndex && "outline outline-2 outline-accent outline-offset-[-2px]")}
               >
                 <td className="px-3 py-2">
                   <input type="checkbox" checked={selected.has(item.name)} onChange={() => onToggle(item.name)} aria-label={`选择 ${item.name}`} />
@@ -153,6 +157,7 @@ function DesktopTable({
                 {visibleColumns.has("registrar") && <td className="truncate px-3 py-2 text-ink-muted" title={item.registrar}>{item.registrar || "—"}</td>}
                 {visibleColumns.has("expiry") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">{formatDate(item.expiry_date)}</td>}
                 {visibleColumns.has("provider") && <td className="truncate whitespace-nowrap px-3 py-2 text-ink-muted" title={providerLabel(item.query_method)}>{providerLabel(item.query_method)}</td>}
+                {visibleColumns.has("ai_score") && <td className="tabular px-3 py-2"><span className={item.ai_quality_score == null ? "text-ink-faint" : item.ai_quality_score >= 80 ? "text-success" : item.ai_quality_score >= 60 ? "text-warning" : "text-danger"}>{item.ai_quality_score ?? "—"}</span></td>}
                 {visibleColumns.has("last_checked") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">{formatRelative(item.last_checked)}</td>}
                 {visibleColumns.has("next_check") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">{formatRelative(item.next_check_at)}</td>}
                 <td className="sticky-action-column sticky right-0 z-10 whitespace-nowrap bg-surface px-3 py-2 text-right group-hover:bg-surface-muted">

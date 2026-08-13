@@ -482,6 +482,14 @@ func TestNotificationHistory(t *testing.T) {
 	if err != nil || len(records) != 1 {
 		t.Fatalf("通知历史数量不对: %d %v", len(records), err)
 	}
+	updated, err := repo.MarkRead(ctx, []int64{records[0].ID}, true)
+	if err != nil || updated != 1 {
+		t.Fatalf("标记通知已读失败: %d %v", updated, err)
+	}
+	records, err = repo.ListRecent(ctx, 10)
+	if err != nil || records[0].ReadAt == nil {
+		t.Fatalf("通知已读状态未持久化: %+v %v", records, err)
+	}
 }
 
 func TestNotificationDigestConfigDefaultsAndPersistsLastSentAt(t *testing.T) {

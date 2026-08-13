@@ -25,7 +25,7 @@ import {
 } from "../components/ui";
 import { formatDateTime } from "../lib/format";
 
-type NotificationTab = "channels" | "rules" | "templates";
+type NotificationTab = "inbox" | "channels" | "rules" | "templates";
 
 interface AsyncResource<T> {
   data: T | null;
@@ -56,7 +56,8 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
     onUnauthorized,
   );
   const digest = useAsync<NotificationDigest>(() => api.notifications.digest.get(), [], onUnauthorized);
-  const [tab, setTab] = useState<NotificationTab>("channels");
+  const preferences = useAsync<{ muted_types: string[] }>(() => api.notifications.preferences.get(), [], onUnauthorized);
+  const [tab, setTab] = useState<NotificationTab>("inbox");
 
   return (
     <div className="space-y-4">
@@ -86,7 +87,8 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
 
       <div className="flex gap-1 overflow-x-auto border-b border-line" role="tablist" aria-label="通知设置分类">
         {([
-          ["channels", "渠道与历史"],
+          ["inbox", "消息中心"],
+          ["channels", "推送渠道"],
           ["rules", "规则与摘要"],
           ["templates", "模板"],
         ] as Array<[NotificationTab, string]>).map(([value, label]) => (
@@ -114,6 +116,14 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
         </div>
       )}
 
+      {tab === "inbox" && (
+        <div id="notification-panel-inbox" className="space-y-4" role="tabpanel">
+          <NotificationPreferences resource={preferences} />
+          {history.error && <ErrorNotice message={history.error} onRetry={history.reload} />}
+          <NotificationInbox resource={history} />
+        </div>
+      )}
+
       {tab === "channels" && (
         <div id="notification-panel-channels" className="space-y-4" role="tabpanel">
           {settings.data && (
@@ -126,43 +136,6 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
             </div>
           )}
 
-          {history.error && <ErrorNotice message={history.error} onRetry={history.reload} />}
-          <Card title="通知历史" bodyClassName="p-0">
-        {history.loading && !history.data ? (
-          <div className="flex items-center gap-2 p-4 text-ink-muted">
-            <Spinner /> 加载中…
-          </div>
-        ) : !history.data?.notifications || history.data.notifications.length === 0 ? (
-          <EmptyState title="还没有发送过通知" />
-        ) : (
-          <div className="table-scroll">
-            <table className="w-full min-w-[520px] text-left">
-              <thead className="bg-surface-muted text-[11px] uppercase tracking-wide text-ink-muted">
-                <tr>
-                  <th className="px-4 py-2 font-medium">时间</th>
-                  <th className="px-4 py-2 font-medium">域名</th>
-                  <th className="px-4 py-2 font-medium">状态变化</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line text-[13px]">
-                {history.data.notifications.map((record) => (
-                  <tr key={record.id}>
-                    <td className="tabular whitespace-nowrap px-4 py-2 text-ink-muted">
-                      {formatDateTime(record.sent_at)}
-                    </td>
-                    <td className="mono px-4 py-2">{record.domain}</td>
-                    <td className="flex items-center gap-2 px-4 py-2">
-                      {record.old_status && <StatusBadge status={record.old_status as DomainStatus} />}
-                      <span className="text-ink-faint">→</span>
-                      <StatusBadge status={record.status as DomainStatus} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-          </Card>
         </div>
       )}
       {tab === "rules" && (
@@ -178,6 +151,40 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
       )}
     </div>
   );
+}
+
+const NOTIFICATION_TYPES = [
+  ["drop", "掉落", "可注册、宽限期、赎回期和待删除变化"],
+  ["expiry", "到期", "60 / 30 / 7 / 1 天分级提醒"],
+  ["query_error", "查询异常", "查询源超时、离线或结论冲突"],
+  ["ai", "AI 完成", "估价任务成功或失败"],
+] as const;
+
+function NotificationPreferences({ resource }: { resource: AsyncResource<{ muted_types: string[] }> }) {
+  const toast = useToast();
+  const muted = new Set(resource.data?.muted_types ?? []);
+  async function toggle(type: string) {
+    const next = new Set(muted);
+    if (next.has(type)) next.delete(type); else next.add(type);
+    try {
+      await api.notifications.preferences.update(Array.from(next));
+      toast(next.has(type) ? "该类型已静音" : "该类型已恢复", "success");
+      resource.reload();
+    } catch (err) { toast(err instanceof Error ? err.message : "保存静音设置失败", "error"); }
+  }
+  return <Card title="通知分类与静音"><p className="mb-3 text-[12px] text-ink-muted">站内消息保留完整记录；静音只影响后续推送渠道。</p><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{NOTIFICATION_TYPES.map(([type, label, hint]) => <button key={type} type="button" className={cx("min-h-24 rounded-card border p-3 text-left", muted.has(type) ? "border-neutral/20 bg-neutral/12" : "border-accent/20 bg-accent-soft/25")} onClick={() => void toggle(type)}><span className="flex items-center justify-between gap-2 text-[13px] font-medium">{label}<Pill>{muted.has(type) ? "已静音" : "推送中"}</Pill></span><span className="mt-2 block text-[11px] text-ink-muted">{hint}</span></button>)}</div></Card>;
+}
+
+function NotificationInbox({ resource }: { resource: AsyncResource<{ notifications: NotificationRecord[] | null }> }) {
+  const toast = useToast();
+  const records = resource.data?.notifications ?? [];
+  const unread = records.filter((record) => !record.read_at);
+  async function mark(ids: number[], read: boolean) {
+    if (ids.length === 0) return;
+    try { await api.notifications.markRead(ids, read); toast(read ? "已标记为已读" : "已标记为未读", "success"); resource.reload(); }
+    catch (err) { toast(err instanceof Error ? err.message : "更新失败", "error"); }
+  }
+  return <Card title="站内消息" action={<div className="flex items-center gap-2"><Pill>{unread.length} 未读</Pill>{unread.length > 0 && <button type="button" className="btn h-8 px-2 text-[12px]" onClick={() => void mark(unread.map((item) => item.id), true)}>全部已读</button>}</div>} bodyClassName="p-0">{resource.loading && !resource.data ? <div className="flex items-center gap-2 p-4 text-ink-muted"><Spinner /> 加载中…</div> : records.length === 0 ? <EmptyState title="还没有站内通知" hint="这里会显示掉落、到期、查询异常与 AI 任务通知；可在上方配置静音，在推送渠道页配置 Webhook、Telegram 和邮件。" /> : <ul className="divide-y divide-line">{records.map((record) => <li key={record.id} className={cx("flex flex-wrap items-center gap-3 px-4 py-3", !record.read_at && "bg-accent-soft/25")}><span className={cx("h-2 w-2 rounded-full", record.read_at ? "bg-neutral/30" : "bg-accent")} /><span className="mono min-w-0 flex-1 truncate">{record.domain}</span><span className="flex items-center gap-2">{record.old_status && <StatusBadge status={record.old_status as DomainStatus} />}<span className="text-ink-faint">→</span><StatusBadge status={record.status as DomainStatus} /></span><span className="tabular text-[11px] text-ink-muted">{formatDateTime(record.sent_at)}</span><button type="button" className="btn h-8 px-2 text-[11px]" onClick={() => void mark([record.id], !record.read_at)}>{record.read_at ? "设为未读" : "标为已读"}</button></li>)}</ul>}</Card>;
 }
 
 // ---------- 通用零件 ----------

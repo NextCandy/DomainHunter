@@ -530,6 +530,15 @@ var migrations = []Migration{
 			`UPDATE ai_provider_settings SET daily_limit=0`,
 		},
 	},
+	{
+		Version: "018",
+		Name:    "notification_inbox_preferences",
+		Stmts: []string{
+			`ALTER TABLE notification_history ADD COLUMN read_at DATETIME`,
+			`CREATE INDEX IF NOT EXISTS idx_notification_history_read ON notification_history(read_at, sent_at DESC)`,
+			`INSERT INTO app_settings(key,value) SELECT 'notification_muted_types','' WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE key='notification_muted_types')`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录

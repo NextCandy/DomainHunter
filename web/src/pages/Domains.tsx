@@ -31,6 +31,7 @@ const ALL_COLUMNS: Array<{ value: DomainColumn; label: string }> = [
   { value: "registrar", label: "注册商" },
   { value: "expiry", label: "到期时间" },
   { value: "provider", label: "查询来源" },
+  { value: "ai_score", label: "AI 评分" },
   { value: "last_checked", label: "最后查询" },
   { value: "next_check", label: "下次查询" },
 ];
@@ -76,6 +77,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     },
   );
   const restoredView = useRef(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [keyboardIndex, setKeyboardIndex] = useState(-1);
 
   const advancedFilter = useMemo<FilterNode>(() => {
     if (!advancedRaw) return { version: 1, logic: "and", conditions: [] };
@@ -125,12 +128,19 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   );
 
   const domains = useMemo(() => {
-    const items = data?.domains ?? [];
+    let items = data?.domains ?? [];
+    if (sort === "ai_score") {
+      items = [...items].sort((a, b) => {
+        const left = a.ai_quality_score ?? -1;
+        const right = b.ai_quality_score ?? -1;
+        return order === "desc" ? right - left : left - right;
+      });
+    }
     if (folderSelection === "all") return items;
     return items.filter((item) =>
       folderSelection === "root" ? item.folder_id == null : item.folder_id === folderSelection,
     );
-  }, [data, folderSelection]);
+  }, [data, folderSelection, order, sort]);
 
   // 筛选项来自全量统计，翻页不会让下拉框内容跟着变
   const facets = useAsync<Facets>(() => api.get<Facets>("/api/v2/facets"), [], onUnauthorized);
@@ -141,6 +151,32 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     reload();
     reloadFacets();
   }, [reload, reloadFacets]);
+
+  useEffect(() => {
+    if (params.get("focus") === "search") {
+      searchRef.current?.focus();
+      const next = new URLSearchParams(params);
+      next.delete("focus");
+      setParams(next, { replace: true });
+    }
+  }, [params, setParams]);
+
+  useEffect(() => {
+    const onRefresh = () => refresh();
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+      if (event.key === "j" || event.key === "k") {
+        event.preventDefault();
+        setKeyboardIndex((current) => event.key === "j" ? Math.min(domains.length - 1, current + 1) : Math.max(0, current - 1));
+      } else if (event.key === "Enter" && keyboardIndex >= 0 && domains[keyboardIndex]) {
+        setOpenDomain(domains[keyboardIndex].name);
+      }
+    };
+    window.addEventListener("domainhunter:refresh", onRefresh);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("domainhunter:refresh", onRefresh); window.removeEventListener("keydown", onKey); };
+  }, [domains, keyboardIndex, refresh]);
 
   const updateParams = useCallback(
     (next: Record<string, string>) => {
@@ -323,6 +359,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           }}
         >
           <input
+            ref={searchRef}
             className="input"
             placeholder="搜索域名…"
             value={searchInput}
@@ -476,6 +513,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           visibleColumns={visibleColumns}
           sort={sort as DomainSort}
           order={order === "desc" ? "desc" : "asc"}
+          keyboardIndex={keyboardIndex}
           onSort={changeSort}
           onToggle={(name) =>
             setSelected((current) => {

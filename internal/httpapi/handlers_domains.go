@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +44,50 @@ func (s *Server) handleDomains(w http.ResponseWriter, r *http.Request) {
 
 // handleDomainsV2 新版域名列表，支持更多筛选与排序
 func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("sort") == "ai_score" && r.URL.Query().Get("filter") == "" && r.URL.Query().Get("view_id") == "" {
+		filter := parseListFilter(r)
+		filter.Page, filter.Limit, filter.Sort = 1, 500, ""
+		result, err := s.deps.Domains.List(r.Context(), filter)
+		if err != nil {
+			s.writeError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
+		page := s.newDomainListPage(result.Domains, result.Total, result.TotalFiltered, 1, 500, 1, false, false, result.DataStatus)
+		desc := strings.EqualFold(r.URL.Query().Get("order"), "desc")
+		sort.SliceStable(page.Domains, func(i, j int) bool {
+			left, right := -1, -1
+			if page.Domains[i].AIQualityScore != nil {
+				left = *page.Domains[i].AIQualityScore
+			}
+			if page.Domains[j].AIQualityScore != nil {
+				right = *page.Domains[j].AIQualityScore
+			}
+			if desc {
+				return left > right
+			}
+			return left < right
+		})
+		requestedPage, requestedLimit := 1, 20
+		if value, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && value > 0 {
+			requestedPage = value
+		}
+		if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 && value <= 500 {
+			requestedLimit = value
+		}
+		start := (requestedPage - 1) * requestedLimit
+		end := start + requestedLimit
+		if start > len(page.Domains) {
+			start = len(page.Domains)
+		}
+		if end > len(page.Domains) {
+			end = len(page.Domains)
+		}
+		page.Domains, page.Page, page.Limit = page.Domains[start:end], requestedPage, requestedLimit
+		page.TotalPages = (page.TotalFiltered + requestedLimit - 1) / requestedLimit
+		page.HasPrev, page.HasNext = requestedPage > 1, end < page.TotalFiltered
+		s.writeJSON(w, r, http.StatusOK, page)
+		return
+	}
 	if s.deps.P1 != nil && (r.URL.Query().Get("filter") != "" || r.URL.Query().Get("view_id") != "") {
 		node, err := s.advancedFilterFromRequest(r)
 		if err != nil {
@@ -60,7 +106,7 @@ func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.writeJSON(w, r, http.StatusOK, newDomainListPage(result.Domains, result.Total, result.TotalFiltered, result.Page, result.Limit, result.TotalPages, result.HasNext, result.HasPrev, result.DataStatus))
+		s.writeJSON(w, r, http.StatusOK, s.newDomainListPage(result.Domains, result.Total, result.TotalFiltered, result.Page, result.Limit, result.TotalPages, result.HasNext, result.HasPrev, result.DataStatus))
 		return
 	}
 	result, err := s.deps.Domains.List(r.Context(), parseListFilter(r))
@@ -68,33 +114,34 @@ func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.writeJSON(w, r, http.StatusOK, newDomainListPage(result.Domains, result.Total, result.TotalFiltered, result.Page, result.Limit, result.TotalPages, result.HasNext, result.HasPrev, result.DataStatus))
+	s.writeJSON(w, r, http.StatusOK, s.newDomainListPage(result.Domains, result.Total, result.TotalFiltered, result.Page, result.Limit, result.TotalPages, result.HasNext, result.HasPrev, result.DataStatus))
 }
 
 // domainListItem 是 v2 列表的最小 DTO：列表只服务于筛选和扫读，不扩散
 // WHOIS/RDAP 原文、联系人、备注或完整名称服务器。详情和专门 raw endpoint
 // 继续使用完整的 domain.Info。
 type domainListItem struct {
-	Name         string              `json:"name"`
-	Status       domain.Status       `json:"status"`
-	Registrar    string              `json:"registrar"`
-	CreatedDate  *time.Time          `json:"created_date"`
-	ExpiryDate   *time.Time          `json:"expiry_date"`
-	UpdatedDate  *time.Time          `json:"updated_date"`
-	LastChecked  time.Time           `json:"last_checked"`
-	QueryMethod  string              `json:"query_method"`
-	ErrorMessage string              `json:"error_message"`
-	AddedAt      *time.Time          `json:"added_at"`
-	Confidence   domain.Confidence   `json:"confidence,omitempty"`
-	EPPStatuses  []string            `json:"epp_statuses,omitempty"`
-	NextCheckAt  *time.Time          `json:"next_check_at,omitempty"`
-	Favorite     bool                `json:"favorite,omitempty"`
-	Tags         []string            `json:"tags,omitempty"`
-	Priority     int                 `json:"priority,omitempty"`
-	FolderID     *int64              `json:"folder_id,omitempty"`
-	FolderName   string              `json:"folder,omitempty"`
-	Cached       bool                `json:"cached,omitempty"`
-	Review       *domain.ReviewState `json:"review,omitempty"`
+	Name           string              `json:"name"`
+	Status         domain.Status       `json:"status"`
+	Registrar      string              `json:"registrar"`
+	CreatedDate    *time.Time          `json:"created_date"`
+	ExpiryDate     *time.Time          `json:"expiry_date"`
+	UpdatedDate    *time.Time          `json:"updated_date"`
+	LastChecked    time.Time           `json:"last_checked"`
+	QueryMethod    string              `json:"query_method"`
+	ErrorMessage   string              `json:"error_message"`
+	AddedAt        *time.Time          `json:"added_at"`
+	Confidence     domain.Confidence   `json:"confidence,omitempty"`
+	EPPStatuses    []string            `json:"epp_statuses,omitempty"`
+	NextCheckAt    *time.Time          `json:"next_check_at,omitempty"`
+	Favorite       bool                `json:"favorite,omitempty"`
+	Tags           []string            `json:"tags,omitempty"`
+	Priority       int                 `json:"priority,omitempty"`
+	FolderID       *int64              `json:"folder_id,omitempty"`
+	FolderName     string              `json:"folder,omitempty"`
+	Cached         bool                `json:"cached,omitempty"`
+	Review         *domain.ReviewState `json:"review,omitempty"`
+	AIQualityScore *int                `json:"ai_quality_score,omitempty"`
 }
 
 type domainListPage struct {
@@ -109,14 +156,33 @@ type domainListPage struct {
 	DataStatus    string            `json:"data_status"`
 }
 
-func newDomainListPage(domains []*domain.Info, total, totalFiltered, page, limit, totalPages int, hasNext, hasPrev bool, dataStatus string) domainListPage {
+func (s *Server) newDomainListPage(domains []*domain.Info, total, totalFiltered, page, limit, totalPages int, hasNext, hasPrev bool, dataStatus string) domainListPage {
 	items := make([]*domainListItem, 0, len(domains))
+	qualityScores := map[string]int{}
+	if s.deps.DB != nil {
+		rows, err := s.deps.DB.QueryContext(context.Background(), `SELECT lower(domain), quality_score FROM ai_domain_valuations_v2 ORDER BY created_at ASC`)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var name string
+				var score int
+				if rows.Scan(&name, &score) == nil {
+					qualityScores[name] = score
+				}
+			}
+		}
+	}
 	for _, info := range domains {
 		if info == nil {
 			continue
 		}
 		copyInfo := *info
 		copyInfo.Review = domain.BuildReviewState(&copyInfo, time.Now())
+		var quality *int
+		if value, ok := qualityScores[strings.ToLower(copyInfo.Name)]; ok {
+			score := value
+			quality = &score
+		}
 		items = append(items, &domainListItem{
 			Name: copyInfo.Name, Status: copyInfo.Status, Registrar: copyInfo.Registrar,
 			CreatedDate: copyInfo.CreatedDate, ExpiryDate: copyInfo.ExpiryDate, UpdatedDate: copyInfo.UpdatedDate,
@@ -124,7 +190,7 @@ func newDomainListPage(domains []*domain.Info, total, totalFiltered, page, limit
 			AddedAt: copyInfo.AddedAt, Confidence: copyInfo.Confidence, EPPStatuses: copyInfo.EPPStatuses,
 			NextCheckAt: copyInfo.NextCheckAt, Favorite: copyInfo.Favorite, Tags: copyInfo.Tags,
 			Priority: copyInfo.Priority, FolderID: copyInfo.FolderID, FolderName: copyInfo.FolderName,
-			Cached: copyInfo.Cached, Review: copyInfo.Review,
+			Cached: copyInfo.Cached, Review: copyInfo.Review, AIQualityScore: quality,
 		})
 	}
 	return domainListPage{Domains: items, Total: total, TotalFiltered: totalFiltered, Page: page, Limit: limit, TotalPages: totalPages, HasNext: hasNext, HasPrev: hasPrev, DataStatus: dataStatus}

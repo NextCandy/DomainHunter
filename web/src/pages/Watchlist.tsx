@@ -22,6 +22,7 @@ import {
   formatDate,
   formatRelative,
   providerLabel,
+  predictReleaseWindow,
 } from "../lib/format";
 
 /**
@@ -346,6 +347,7 @@ function Row({
       </td>
       <td className="whitespace-nowrap px-3 py-2">
         <DaysCell item={item} />
+        {predictReleaseWindow(item.name, item.expiry_date) && <span className="mt-0.5 block text-[10px] text-ink-faint" title="按 TLD 通用删除节奏推算，不是注册局承诺">{predictReleaseWindow(item.name, item.expiry_date)?.label}</span>}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-ink-muted">
         {providerLabel(item.query_method)}
@@ -412,6 +414,7 @@ function MobileCard({
           <dd className="tabular text-ink-muted">{formatRelative(item.last_checked)}</dd>
         </div>
       </dl>
+      {predictReleaseWindow(item.name, item.expiry_date) && <p className="mt-2 rounded-md bg-info/8 px-2 py-1.5 text-[11px] text-info" title="按 TLD 通用删除节奏推算，不是注册局承诺">释放预测：{predictReleaseWindow(item.name, item.expiry_date)?.label}</p>}
       <div className="mt-3 grid grid-cols-3 gap-2">
         <button type="button" className="btn min-h-11 text-[12px]" onClick={onRemind}>设提醒</button>
         <button type="button" className="btn min-h-11 text-[12px]" onClick={onHistory}>状态时间线</button>

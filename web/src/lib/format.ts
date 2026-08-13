@@ -142,3 +142,29 @@ export function tldOf(name: string): string {
   const index = name.indexOf(".");
   return index === -1 ? "" : name.slice(index + 1);
 }
+
+export interface ReleaseWindow {
+  label: string;
+  earliest: Date;
+  latest: Date;
+  daysRemaining: number;
+}
+
+/** 基于公开生命周期节奏的研究性时间窗，不作为注册局承诺。 */
+export function predictReleaseWindow(name: string, expiry?: string | null): ReleaseWindow | null {
+  if (!expiry) return null;
+  const start = new Date(expiry);
+  if (Number.isNaN(start.getTime())) return null;
+  const tld = tldOf(name);
+  const center = tld === "cn" ? 65 : tld === "org" ? 77 : 75;
+  const earliest = new Date(start);
+  const latest = new Date(start);
+  earliest.setDate(earliest.getDate() + center - 3);
+  latest.setDate(latest.getDate() + center + 3);
+  return {
+    label: `预计 ${formatDate(earliest.toISOString())} – ${formatDate(latest.toISOString())}`,
+    earliest,
+    latest,
+    daysRemaining: Math.ceil((earliest.getTime() - Date.now()) / 86_400_000),
+  };
+}

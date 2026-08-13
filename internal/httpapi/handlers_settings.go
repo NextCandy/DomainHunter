@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
 	"DomainHunter/internal/config"
 	"DomainHunter/internal/logger"
+	"DomainHunter/internal/storage/sqlite"
 )
 
 // handleGetSettings 旧版设置读取。
@@ -380,4 +382,61 @@ func (s *Server) handleNotificationHistory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.writeJSON(w, r, http.StatusOK, map[string]any{"notifications": records})
+}
+
+func (s *Server) handleNotificationRead(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs  []int64 `json:"ids"`
+		Read bool    `json:"read"`
+	}
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 || len(req.IDs) > 500 {
+		s.writeError(w, r, http.StatusBadRequest, "ids 必须包含 1-500 条通知")
+		return
+	}
+	updated, err := s.deps.Notifications.MarkRead(r.Context(), req.IDs, req.Read)
+	if err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]any{"status": "success", "updated": updated})
+}
+
+func (s *Server) handleNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	const key = "notification_muted_types"
+	if r.Method == http.MethodGet {
+		raw, _, err := sqlite.NewSettingsRepo(s.deps.DB).Get(r.Context(), key)
+		if err != nil {
+			s.writeError(w, r, http.StatusInternalServerError, err.Error())
+			return
+		}
+		var muted []string
+		_ = json.Unmarshal([]byte(raw), &muted)
+		s.writeJSON(w, r, http.StatusOK, map[string]any{"muted_types": muted})
+		return
+	}
+	var req struct {
+		MutedTypes []string `json:"muted_types"`
+	}
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+	allowed := map[string]bool{"drop": true, "expiry": true, "query_error": true, "ai": true}
+	clean := make([]string, 0, len(req.MutedTypes))
+	seen := map[string]bool{}
+	for _, item := range req.MutedTypes {
+		item = strings.TrimSpace(item)
+		if allowed[item] && !seen[item] {
+			clean = append(clean, item)
+			seen[item] = true
+		}
+	}
+	encoded, _ := json.Marshal(clean)
+	if err := sqlite.NewSettingsRepo(s.deps.DB).Upsert(r.Context(), map[string]string{key: string(encoded)}); err != nil {
+		s.writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]any{"status": "success", "muted_types": clean})
 }
