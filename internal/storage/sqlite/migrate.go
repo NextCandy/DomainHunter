@@ -519,6 +519,17 @@ var migrations = []Migration{
 				WHERE base_url LIKE 'https://opencode.ai/%' AND model='deepseek-v4-flash-free'`,
 		},
 	},
+	{
+		Version: "017",
+		Name:    "unlimited_ai_valuation",
+		Stmts: []string{
+			// Keep the columns for SQLite/schema compatibility, but zero means
+			// unlimited and all application paths now ignore daily caps.
+			`UPDATE ai_profiles SET daily_limit=0`,
+			`UPDATE ai_provider_profiles SET daily_limit=0`,
+			`UPDATE ai_provider_settings SET daily_limit=0`,
+		},
+	},
 }
 
 // AppliedMigration 已应用的迁移记录

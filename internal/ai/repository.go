@@ -43,6 +43,5 @@ type Store interface {
 	CompleteJob(ctx context.Context, jobID string, valuation Valuation, now time.Time) error
 	FailJob(ctx context.Context, jobID, code, safeMessage string, retryAfter *time.Time, now time.Time) error
 	RecoverExpiredLeases(ctx context.Context, now time.Time) (int64, error)
-	CountStartedToday(ctx context.Context, profileID string, dayStart, dayEnd time.Time) (int, error)
 	Audit(ctx context.Context, eventType, domain, profileID, jobID, actor string, details map[string]any) error
 }

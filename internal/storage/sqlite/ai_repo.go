@@ -125,6 +125,9 @@ func (r *AIRepo) GetDefaultProfile(ctx context.Context) (*ai.ProfileRecord, erro
 }
 
 func (r *AIRepo) CreateProfile(ctx context.Context, profile ai.ProfileRecord) (*ai.Profile, error) {
+	// Daily valuation limits are disabled; keep the legacy column at zero for
+	// callers that construct storage records directly.
+	profile.DailyLimit = 0
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -156,6 +159,7 @@ func (r *AIRepo) CreateProfile(ctx context.Context, profile ai.ProfileRecord) (*
 }
 
 func (r *AIRepo) UpdateProfile(ctx context.Context, profile ai.ProfileRecord, updateSecret bool) (*ai.Profile, error) {
+	profile.DailyLimit = 0
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -399,11 +403,6 @@ func (r *AIRepo) RecoverExpiredLeases(ctx context.Context, now time.Time) (int64
 		return 0, err
 	}
 	return result.RowsAffected()
-}
-func (r *AIRepo) CountStartedToday(ctx context.Context, profileID string, dayStart, dayEnd time.Time) (int, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM ai_valuation_jobs WHERE profile_id=? AND started_at>=? AND started_at<?`, profileID, dayStart, dayEnd).Scan(&count)
-	return count, err
 }
 func (r *AIRepo) Audit(ctx context.Context, eventType, domain, profileID, jobID, actor string, details map[string]any) error {
 	raw, _ := json.Marshal(details)

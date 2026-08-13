@@ -1,10 +1,18 @@
 import type { DomainStatus } from "../../../lib/api";
 
-export type AIProfileStatus = "ready" | "not_configured" | "degraded" | "disabled";
+export type AIProfileStatus =
+  "ready" | "not_configured" | "degraded" | "disabled";
 export type AIProvider = "deepseek" | "openai_compatible";
 export type ThinkingType = "disabled" | "enabled";
 export type ReasoningEffort = "low" | "high" | "max";
-export type ValuationJobState = "idle" | "queued" | "running" | "succeeded" | "failed" | "cancelled" | "deferred";
+export type ValuationJobState =
+  | "idle"
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "deferred";
 
 export interface AIProfile {
   id: string;
@@ -23,7 +31,6 @@ export interface AIProfile {
   timeout_seconds: number;
   max_tokens: number;
   concurrency: number;
-  daily_limit: number;
   cache_ttl_hours: number;
   last_tested_at?: string;
   last_test_latency_ms?: number;
@@ -45,7 +52,6 @@ export interface AIProfileInput {
   timeout_seconds: number;
   max_tokens: number;
   concurrency: number;
-  daily_limit: number;
   cache_ttl_hours: number;
 }
 
@@ -64,7 +70,11 @@ export interface DomainValuation {
   risk_level: "low" | "medium" | "high";
   confidence: "low" | "medium" | "high";
   indicative_value_usd?: { low: number; high: number; currency: string };
-  price_evaluation_cny?: { low: number; high: number; currency: "CNY" | string };
+  price_evaluation_cny?: {
+    low: number;
+    high: number;
+    currency: "CNY" | string;
+  };
   summary: string;
   core_analysis?: string;
   strengths: string[];
@@ -75,12 +85,6 @@ export interface DomainValuation {
   disclaimer: string;
   created_at: string;
   expires_at?: string;
-}
-
-export interface ValuationQuota {
-  used_today: number;
-  daily_limit: number;
-  remaining_today: number;
 }
 
 export interface ValuationJob {
@@ -97,7 +101,6 @@ export interface ValuationJob {
   error_code?: string;
   error_message?: string;
   cached?: boolean;
-  quota?: ValuationQuota;
 }
 
 export interface EnqueueValuationInput {
@@ -132,13 +135,19 @@ export const VALUATION_STATE_LABELS: Record<ValuationJobState, string> = {
   deferred: "待重试",
 };
 
-export const VALUATION_RISK_LABELS: Record<DomainValuation["risk_level"], string> = {
+export const VALUATION_RISK_LABELS: Record<
+  DomainValuation["risk_level"],
+  string
+> = {
   low: "低",
   medium: "中",
   high: "高",
 };
 
-export const VALUATION_CONFIDENCE_LABELS: Record<DomainValuation["confidence"], string> = {
+export const VALUATION_CONFIDENCE_LABELS: Record<
+  DomainValuation["confidence"],
+  string
+> = {
   low: "低",
   medium: "中",
   high: "高",
@@ -148,15 +157,25 @@ export function isTerminalJobState(state: ValuationJobState): boolean {
   return state === "succeeded" || state === "failed" || state === "cancelled";
 }
 
-export function formatUSD(value?: DomainValuation["indicative_value_usd"]): string {
+export function formatUSD(
+  value?: DomainValuation["indicative_value_usd"],
+): string {
   if (!value) return "研究区间不可用";
-  const formatter = new Intl.NumberFormat("en-US", { style: "currency", currency: value.currency || "USD", maximumFractionDigits: 0 });
+  const formatter = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: value.currency || "USD",
+    maximumFractionDigits: 0,
+  });
   return `${formatter.format(value.low)} – ${formatter.format(value.high)}`;
 }
 
-export function formatCNY(value?: DomainValuation["price_evaluation_cny"]): string {
+export function formatCNY(
+  value?: DomainValuation["price_evaluation_cny"],
+): string {
   if (!value) return "人民币价格区间待刷新";
-  const formatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
+  const formatter = new Intl.NumberFormat("zh-CN", {
+    maximumFractionDigits: 0,
+  });
   return `${formatter.format(value.low)}–${formatter.format(value.high)} 元`;
 }
 

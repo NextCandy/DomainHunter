@@ -165,7 +165,7 @@ LIMIT ?
 | `notification_history` | 通知去重 |
 | `saved_views` | 版本化高级筛选条件与共享视图 |
 | `ai_provider_settings` | DeepSeek 配置与加密 Key 密文（不存明文） |
-| `ai_jobs` | 可租约恢复、重试、限额和去重的持久化 AI Job |
+| `ai_jobs` | 可租约恢复、重试、并发和去重的持久化 AI Job；不设置每日估价额度 |
 | `ai_domain_valuations` | 严格 Schema 校验后的研究性估价与 TTL |
 | `automation_rules` | 触发器、条件、安全动作与防护栏 |
 | `automation_runs` | Dry-run/执行审计与 `(rule,event,domain)` 幂等 |
@@ -186,7 +186,7 @@ URL 条件树 / 保存视图 ──→ Advanced Filter ──→ 域名列表与
                                                │
                                                ├─ 安全批量写入（单事务）
                                                └─ AI Job Repository
-                                                     │ 租约 / 重试 / 限额
+                                                     │ 租约 / 重试 / 并发
                                                      ▼
                                             DeepSeek Provider
                                                      │ 严格 JSON Schema

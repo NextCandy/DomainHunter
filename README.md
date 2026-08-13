@@ -47,7 +47,7 @@ DomainHunter 是一个面向长期运行的 Go 域名监控器。它把多个查
 | 查询历史 | 全局状态变化、单域名时间线、每个查询源的历史尝试 |
 | 查询源 | Provider 健康度、IANA RDAP bootstrap、查询策略和限速 |
 | 通知中心 | 邮件、Telegram、Bark、飞书机器人、自定义 Webhook；每个渠道可单独测试 |
-| AI 与自动化 | DeepSeek 档案、模型、额度、缓存、AI Job、Dry-run 自动化规则 |
+| AI 与自动化 | DeepSeek 档案、模型、无限估价队列、缓存、AI Job、Dry-run 自动化规则 |
 | 系统设置 | 监控参数、历史保留、账号、API Token、数据库备份和维护 |
 
 域名详情以右侧抽屉呈现，包含：概览、查询证据、状态时间线、原始报文和研究性 AI 鉴定报告。
@@ -145,6 +145,7 @@ API Key 只通过 `DOMAINHUNTER_AI_API_KEY` 或管理端安全配置注入，不
 ```
 
 AI 是研究和排序工具，不是注册状态判定器、成交保证或投资建议。
+应用不设置每日 AI 估价额度；并发、超时、缓存和上游 Provider 限流仍然生效。
 
 ## Docker 与树莓派部署
 

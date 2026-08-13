@@ -591,22 +591,13 @@ func (s *Service) PreviewBulk(ctx context.Context, action BulkAction) (*BulkPrev
 	if err != nil {
 		return nil, err
 	}
-	preview := &BulkPreview{ActionType: action.Type, Matched: len(items), Samples: make([]string, 0, 10), TaskCount: len(items), WithinLimit: true}
+	preview := &BulkPreview{ActionType: action.Type, Matched: len(items), Samples: make([]string, 0, 10), TaskCount: len(items)}
 	for i, item := range items {
 		if i < 10 {
 			preview.Samples = append(preview.Samples, item.Info.Name)
 		}
 	}
 	if action.Type == "ai_valuation" {
-		settings, err := s.ai.PublicSettings(ctx)
-		if err != nil {
-			return nil, err
-		}
-		usage, err := s.ai.Usage(ctx)
-		if err != nil {
-			return nil, err
-		}
-		preview.DailyLimit, preview.DailyUsed = usage.DailyLimit, usage.Used
 		preview.CacheHits = 0
 		for _, item := range items {
 			if item.AI != nil && item.AI.ExpiresAt.After(time.Now()) {
@@ -614,10 +605,6 @@ func (s *Service) PreviewBulk(ctx context.Context, action BulkAction) (*BulkPrev
 			}
 		}
 		preview.TaskCount = len(items) - preview.CacheHits
-		preview.WithinLimit = preview.TaskCount <= max(0, settings.DailyLimit-usage.Used)
-		if !preview.WithinLimit {
-			preview.Warning = "超过今日 AI 限额，超出部分将保持待处理"
-		}
 	}
 	return preview, nil
 }
@@ -649,13 +636,6 @@ func validateBulkAction(action BulkAction) error {
 		return fmt.Errorf("不支持的批量动作: %s", action.Type)
 	}
 	return nil
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 type contextExecer interface {

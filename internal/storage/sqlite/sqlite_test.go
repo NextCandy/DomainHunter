@@ -58,6 +58,23 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestUnlimitedAIMigrationClearsLegacyDailyLimits(t *testing.T) {
+	db := newTestDB(t)
+	var strictLimit, providerLimit, settingsLimit int
+	if err := db.QueryRow(`SELECT COALESCE(MAX(daily_limit),0) FROM ai_profiles WHERE is_default=1`).Scan(&strictLimit); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT daily_limit FROM ai_provider_profiles WHERE is_default=1`).Scan(&providerLimit); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT daily_limit FROM ai_provider_settings WHERE id=1`).Scan(&settingsLimit); err != nil {
+		t.Fatal(err)
+	}
+	if strictLimit != 0 || providerLimit != 0 || settingsLimit != 0 {
+		t.Fatalf("legacy AI daily limits were not cleared: strict=%d provider=%d settings=%d", strictLimit, providerLimit, settingsLimit)
+	}
+}
+
 func TestResolveFileDefaultsToDomainHunterDatabase(t *testing.T) {
 	dir := t.TempDir()
 	if got := ResolveFile(dir); got != DefaultFile {
