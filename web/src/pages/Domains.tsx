@@ -392,9 +392,11 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           onUnauthorized={onUnauthorized}
         />
         <div className="min-w-0 space-y-4">
-          <div className="card grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-6">
+          {/* 四列自适应：搜索略宽，三个筛选各占一列。排序控件另起一行，
+              否则四个按钮挤在一个等分格子里会溢出到卡片外。 */}
+          <div className="card grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
         <form
-          className="sm:col-span-2 lg:col-span-2"
+          className="min-w-0 sm:col-span-2 xl:col-span-1"
           onSubmit={(event) => {
             event.preventDefault();
             updateParams({ search: searchInput.trim() });
@@ -440,6 +442,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         <select
           className="input"
           aria-label="按注册商筛选"
+          // 注册商名字普遍比列宽长，原生 select 只会把尾部裁掉，用 title 补一个完整值。
+          title={registrar || `全部注册商（${registrarOptions.length}）`}
           value={registrar}
           onChange={(event) => updateParams({ registrar: event.target.value })}
         >
@@ -451,9 +455,9 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           ))}
         </select>
 
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-4">
           <select
-            className="input"
+            className="input w-auto min-w-[9.5rem] flex-none"
             aria-label="排序字段"
             value={sort}
             onChange={(event) => updateParams({ sort: event.target.value })}
@@ -491,16 +495,18 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           >
             失败/未知
           </button>
+          <span className="ml-auto hidden text-[11px] text-ink-faint sm:block">高级条件支持状态、TLD、注册商、标签和 AI 质量分。</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-6">
-          {filterChips.map((chip) => (
-            <button key={chip.key} type="button" className="inline-flex min-h-8 items-center gap-2 rounded-tag border border-accent/20 bg-accent-soft/45 px-3 text-[11px] text-ink" onClick={() => updateParams({ [chip.key]: "" })} title={`移除${chip.label}`}>
-              {chip.label}<span aria-hidden="true">×</span>
-            </button>
-          ))}
-          {filterChips.length > 0 && <button type="button" className="min-h-8 px-2 text-[11px] text-accent hover:underline" onClick={() => setParams(new URLSearchParams(), { replace: true })}>清空全部</button>}
-          <span className="self-center text-[11px] text-ink-faint">高级条件支持状态、TLD、注册商、标签和 AI 质量分。</span>
-        </div>
+        {filterChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-4">
+            {filterChips.map((chip) => (
+              <button key={chip.key} type="button" className="inline-flex min-h-8 items-center gap-2 rounded-tag border border-accent/20 bg-accent-soft/45 px-3 text-[11px] text-ink" onClick={() => updateParams({ [chip.key]: "" })} title={`移除${chip.label}`}>
+                {chip.label}<span aria-hidden="true">×</span>
+              </button>
+            ))}
+            <button type="button" className="min-h-8 px-2 text-[11px] text-accent hover:underline" onClick={() => setParams(new URLSearchParams(), { replace: true })}>清空全部</button>
+          </div>
+        )}
       </div>
 
       <div className="relative flex justify-end">

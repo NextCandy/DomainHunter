@@ -356,9 +356,11 @@
   .column-resize-handle {
     position: absolute;
     inset-block: 0;
-    right: -4px;
+    right: 0;
     z-index: 2;
     width: 8px;
+    /* 把手完全落在列内。以前用 right: -4px 跨到列边界上，会把每个 th 的
+       scrollWidth 撑大 4px，累积成表格一直可横向滚动 6px 的假象。 */
     cursor: col-resize;
     touch-action: none;
   }

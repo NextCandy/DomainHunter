@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DomainInfo } from "../lib/api";
 import {
   DomainName,
@@ -34,8 +34,19 @@ export const DOMAIN_TABLE_DEFAULT_WIDTHS: Record<TableColumnKey, number> = {
   ai_score: 90,
   last_checked: 110,
   next_check: 120,
-  actions: 96,
+  // 三个 32px 图标按钮 + 列内左右 padding，低于 108 会把最右边的删除按钮挤出列外。
+  actions: 112,
 };
+
+const OPTIONAL_COLUMNS: DomainColumn[] = [
+  "status",
+  "registrar",
+  "expiry",
+  "provider",
+  "ai_score",
+  "last_checked",
+  "next_check",
+];
 
 const DOMAIN_TABLE_WIDTHS_KEY = "dh-domains-column-widths-v1";
 
@@ -114,6 +125,15 @@ function DesktopTable({
   const lastVisible = virtualized ? Math.min(domains.length, firstVisible + visibleCount) : domains.length;
   const visibleDomains = virtualized ? domains.slice(firstVisible, lastVisible) : domains;
   const columnCount = 3 + visibleColumns.size;
+  // 表格最小宽度必须跟着实际可见列走。写死一个总宽会在隐藏列后仍强制撑出
+  // 横向滚动，也会在列宽被拖动后与 colgroup 对不上。
+  const minTableWidth = useMemo(() => {
+    let total = columnWidths.select + columnWidths.domain + columnWidths.actions;
+    for (const column of OPTIONAL_COLUMNS) {
+      if (visibleColumns.has(column)) total += columnWidths[column];
+    }
+    return total;
+  }, [columnWidths, visibleColumns]);
 
   const syncScroll = useCallback((source: HTMLDivElement, target: HTMLDivElement | null) => {
     if (target && Math.abs(target.scrollLeft - source.scrollLeft) > 1) target.scrollLeft = source.scrollLeft;
@@ -144,7 +164,7 @@ function DesktopTable({
     const onPointerMove = (event: PointerEvent) => {
       const resize = resizeRef.current;
       if (!resize) return;
-      const nextWidth = Math.max(64, Math.round(resize.startWidth + event.clientX - resize.startX));
+      const nextWidth = Math.max(columnMinWidth(resize.column), Math.round(resize.startWidth + event.clientX - resize.startX));
       setColumnWidths((current) => ({ ...current, [resize.column]: nextWidth }));
     };
     const onPointerUp = () => {
@@ -237,7 +257,7 @@ function DesktopTable({
         className={cx("table-scroll card", virtualized && "virtual-table-viewport")}
         onScroll={handleBottomScroll}
       >
-        <table ref={table} className="data-table-refined w-full min-w-[1126px] table-fixed text-left">
+        <table ref={table} className="data-table-refined w-full table-fixed text-left" style={{ minWidth: minTableWidth }}>
           <colgroup>
             <col style={{ width: columnWidths.select }} />
             <col style={{ width: columnWidths.domain }} />
@@ -369,11 +389,19 @@ function Row({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0"><dt className="text-ink-faint">{label}</dt><dd className="tabular mt-0.5 truncate text-ink-muted" title={value}>{value}</dd></div>;
 }
 
+function columnMinWidth(column: TableColumnKey): number {
+  // 操作列装着三个固定尺寸的图标按钮，比通用下限更窄就会溢出。
+  return column === "actions" ? DOMAIN_TABLE_DEFAULT_WIDTHS.actions : 64;
+}
+
 function readColumnWidths(): Record<TableColumnKey, number> {
   try {
     const parsed = JSON.parse(localStorage.getItem(DOMAIN_TABLE_WIDTHS_KEY) ?? "null") as Partial<Record<TableColumnKey, number>> | null;
     if (parsed) {
-      return Object.fromEntries(Object.entries(DOMAIN_TABLE_DEFAULT_WIDTHS).map(([key, value]) => [key, typeof parsed[key as TableColumnKey] === "number" ? Math.max(64, parsed[key as TableColumnKey] as number) : value])) as Record<TableColumnKey, number>;
+      return Object.fromEntries(Object.entries(DOMAIN_TABLE_DEFAULT_WIDTHS).map(([key, value]) => {
+        const stored = parsed[key as TableColumnKey];
+        return [key, typeof stored === "number" ? Math.max(columnMinWidth(key as TableColumnKey), stored) : value];
+      })) as Record<TableColumnKey, number>;
     }
   } catch { /* localStorage is optional */ }
   return { ...DOMAIN_TABLE_DEFAULT_WIDTHS };
