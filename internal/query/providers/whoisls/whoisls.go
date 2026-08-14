@@ -39,19 +39,19 @@ type Provider struct {
 }
 
 // New 从环境变量创建 Provider。
-// DOMAINHUNTER_WHOIS_LS_URL 默认为空；旧的 PUFF_WHOIS_LS_* 变量同样被接受。
+// DOMAINHUNTER_WHOIS_LS_URL 默认为空。
 func New(timeout time.Duration) *Provider {
 	if timeout <= 0 {
 		timeout = 20 * time.Second
 	}
-	if configured := envcfg.First("DOMAINHUNTER_WHOIS_LS_TIMEOUT", "PUFF_WHOIS_LS_TIMEOUT"); configured != "" {
+	if configured := envcfg.Value("DOMAINHUNTER_WHOIS_LS_TIMEOUT"); configured != "" {
 		if parsed, ok := envcfg.ParseDuration(configured); ok {
 			timeout = parsed
 		}
 	}
 	return &Provider{
-		baseURL: strings.TrimSpace(envcfg.First("DOMAINHUNTER_WHOIS_LS_URL", "PUFF_WHOIS_LS_URL")),
-		tlds:    envcfg.ParseTLDs(envcfg.First("DOMAINHUNTER_WHOIS_LS_TLDS", "PUFF_WHOIS_LS_TLDS"), "im"),
+		baseURL: envcfg.Value("DOMAINHUNTER_WHOIS_LS_URL"),
+		tlds:    envcfg.ParseTLDs(envcfg.Value("DOMAINHUNTER_WHOIS_LS_TLDS"), "im"),
 		timeout: timeout,
 	}
 }
@@ -129,7 +129,7 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 		result.Status = domain.StatusRegistered
 		result.Note = "响应中存在注册信息，可注册判定已纠正为已注册"
 	}
-	return result
+	return query.NormalizeIMLifecycle(result)
 }
 
 func (p *Provider) fetch(ctx context.Context, name string) (string, error) {

@@ -28,29 +28,19 @@ export const STATUS_ORDER: DomainStatus[] = [
   "skipped",
 ];
 
-/** Monad 状态色板：彩色只承担状态语义，基础 UI 保持暖灰与蓝色克制。 */
+/** 状态颜色只引用语义令牌；浅色/深色主题由 CSS 统一校准。 */
 export const STATUS_CLASSES: Record<DomainStatus, string> = {
-  available:
-    "bg-[#e2f4e9] text-[#1e6a47] border-[#b8ddc6] dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/25",
-  registered:
-    "bg-transparent text-ink-muted border-line dark:bg-zinc-500/10 dark:text-zinc-300 dark:border-zinc-500/25",
-  grace:
-    "bg-[#fff4da] text-[#8b5a12] border-[#ead39b] dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/25",
-  redemption:
-    "bg-[#fff0e8] text-[#a44b32] border-[#f0c1ae] dark:bg-orange-500/10 dark:text-orange-300 dark:border-orange-500/25",
-  pending_delete:
-    "bg-[#fff0e8] text-[#a44b32] border-[#f0c1ae] dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/25",
-  expired:
-    "bg-[#fff0e8] text-[#a44b32] border-[#f0c1ae] dark:bg-orange-500/10 dark:text-orange-300 dark:border-orange-500/25",
-  transfer_locked:
-    "bg-[#e8eefc] text-[#3156a7] border-[#bac9ef] dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/25",
-  hold: "bg-[#e8eefc] text-[#3156a7] border-[#bac9ef] dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/25",
-  unknown:
-    "bg-[#eeeae7] text-ink-muted border-line dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/25",
-  error:
-    "bg-[#fff0e8] text-danger border-[#f0c1ae] dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/25",
-  skipped:
-    "bg-[#eeeae7] text-ink-muted border-line dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/25",
+  available: "bg-success/12 text-success border-success/20",
+  registered: "bg-neutral/12 text-neutral border-neutral/20",
+  grace: "bg-warning/12 text-warning border-warning/20",
+  redemption: "bg-info/12 text-info border-info/20",
+  pending_delete: "bg-danger/12 text-danger border-danger/20",
+  expired: "bg-danger/12 text-danger border-danger/20",
+  transfer_locked: "bg-info/12 text-info border-info/20",
+  hold: "bg-info/12 text-info border-info/20",
+  unknown: "bg-neutral/12 text-neutral border-neutral/20",
+  error: "bg-danger/12 text-danger border-danger/20",
+  skipped: "bg-neutral/12 text-neutral border-neutral/20",
 };
 
 export function hasTransferLock(statuses?: string[] | null): boolean {
@@ -151,4 +141,30 @@ export function formatLatency(ms?: number): string {
 export function tldOf(name: string): string {
   const index = name.indexOf(".");
   return index === -1 ? "" : name.slice(index + 1);
+}
+
+export interface ReleaseWindow {
+  label: string;
+  earliest: Date;
+  latest: Date;
+  daysRemaining: number;
+}
+
+/** 基于公开生命周期阶段的研究性时间窗，不作为注册局承诺。 */
+export function predictReleaseWindow(name: string, expiry?: string | null): ReleaseWindow | null {
+  if (!expiry) return null;
+  const start = new Date(expiry);
+  if (Number.isNaN(start.getTime())) return null;
+  const tld = tldOf(name);
+  const center = tld === "cn" ? 65 : tld === "org" ? 77 : 75;
+  const earliest = new Date(start);
+  const latest = new Date(start);
+  earliest.setDate(earliest.getDate() + center - 3);
+  latest.setDate(latest.getDate() + center + 3);
+  return {
+    label: `预计 ${formatDate(earliest.toISOString())} — ${formatDate(latest.toISOString())}`,
+    earliest,
+    latest,
+    daysRemaining: Math.ceil((earliest.getTime() - Date.now()) / 86_400_000),
+  };
 }

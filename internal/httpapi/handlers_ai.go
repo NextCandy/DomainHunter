@@ -155,6 +155,38 @@ func (s *Server) handleDomainValuationEnqueue(w http.ResponseWriter, r *http.Req
 	s.writeJSON(w, r, http.StatusAccepted, job)
 }
 
+func (s *Server) handleDomainValuationBatchEnqueue(w http.ResponseWriter, r *http.Request) {
+	service := s.aiService(w, r)
+	if service == nil {
+		return
+	}
+	var input struct {
+		Domains      []string       `json:"domains"`
+		ProfileID    string         `json:"profile_id,omitempty"`
+		Priority     ai.JobPriority `json:"priority,omitempty"`
+		ForceRefresh bool           `json:"force_refresh,omitempty"`
+	}
+	if !s.decodeJSON(w, r, &input) {
+		return
+	}
+	if len(input.Domains) == 0 {
+		s.writeError(w, r, http.StatusBadRequest, "至少选择一个域名")
+		return
+	}
+	if len(input.Domains) > 2000 {
+		s.writeError(w, r, http.StatusBadRequest, "批量估价一次最多2000个域名")
+		return
+	}
+	result, err := service.EnqueueBatch(r.Context(), input.Domains, ai.EnqueueInput{
+		ProfileID: input.ProfileID, Priority: input.Priority, ForceRefresh: input.ForceRefresh,
+	}, "authenticated")
+	if err != nil {
+		s.writeAIError(w, r, err)
+		return
+	}
+	s.writeJSON(w, r, http.StatusAccepted, result)
+}
+
 func (s *Server) handleAIJobGet(w http.ResponseWriter, r *http.Request) {
 	service := s.aiService(w, r)
 	if service == nil {
@@ -212,8 +244,6 @@ func (s *Server) writeAIError(w http.ResponseWriter, r *http.Request, err error)
 		s.writeError(w, r, http.StatusConflict, "任务不在待重试状态，请刷新后查看最新结果")
 	case errors.Is(err, ai.ErrIneligible):
 		s.writeError(w, r, http.StatusUnprocessableEntity, "当前域名状态或证据不足，暂不能加入 AI 估价")
-	case errors.Is(err, ai.ErrQuotaExceeded):
-		s.writeError(w, r, http.StatusTooManyRequests, "今日估价额度已用完，请稍后重试或调整额度")
 	case errors.Is(err, ai.ErrProviderAuth):
 		s.writeError(w, r, http.StatusUnprocessableEntity, "默认 AI 的 API Key 无效或已过期，请在 AI 与自动化中更新 Key")
 	case errors.Is(err, ai.ErrProviderConfig):

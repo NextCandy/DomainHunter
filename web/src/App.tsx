@@ -36,6 +36,44 @@ export default function App() {
     void loadSession();
   }, [loadSession]);
 
+  useEffect(() => {
+    if (!session?.authenticated) return;
+    const editable = (target: EventTarget | null) => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+    let sequence = "";
+    let sequenceTimer: number | null = null;
+    const onKey = (event: KeyboardEvent) => {
+      if (editable(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === "/") { event.preventDefault(); navigate("/domains?focus=search"); }
+      else if (event.key === "r") {
+        event.preventDefault();
+        // Pages with a local refresh handler can update in place. The reload
+        // fallback keeps the shortcut useful on every route, including pages
+        // whose data is composed from several independent resources.
+        window.dispatchEvent(new CustomEvent("domainhunter:refresh"));
+        window.setTimeout(() => window.location.reload(), 0);
+      }
+      else if (event.key === "n") { event.preventDefault(); navigate("/domains?focus=search&new=1"); }
+      else if (event.key === "x") { event.preventDefault(); window.dispatchEvent(new CustomEvent("domainhunter:clear-selection")); }
+      else if (event.key.toLowerCase() === "g") {
+        event.preventDefault();
+        sequence = "g";
+        if (sequenceTimer !== null) window.clearTimeout(sequenceTimer);
+        sequenceTimer = window.setTimeout(() => { sequence = ""; }, 900);
+      } else if (sequence === "g") {
+        event.preventDefault();
+        const routes: Record<string, string> = { o: "/", d: "/domains", w: "/watchlist", h: "/history", p: "/providers", s: "/settings" };
+        if (routes[event.key.toLowerCase()]) navigate(routes[event.key.toLowerCase()]);
+        sequence = "";
+      }
+      else if (event.key === "?") { event.preventDefault(); window.dispatchEvent(new CustomEvent("domainhunter:shortcuts")); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (sequenceTimer !== null) window.clearTimeout(sequenceTimer);
+    };
+  }, [navigate, session?.authenticated]);
+
   const handleUnauthorized = useCallback(() => {
     setSession({ authenticated: false, auth_required: true });
   }, []);

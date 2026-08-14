@@ -398,6 +398,14 @@ func (s *QueryService) maybeNotify(ctx context.Context, record *domain.Domain, p
 	if suppressLegacyTransferNotification(previous, current) {
 		return
 	}
+	// .im 官方公开 WHOIS 经常只有到期日，没有注册日期或明确阶段字段。
+	// 这类不完整证据在历史数据里可能仍留下 grace/registered 交替，不能
+	// 把它当成真实生命周期变化反复提醒。
+	if suppressUncertainIMLifecycleNotification(record.Name, previous, current, outcome) {
+		s.log.Debug(logger.Fields{"domain": record.Name, "previous": previous, "current": current},
+			".im 生命周期证据不完整，抑制阶段变化提醒")
+		return
+	}
 	if !domain.ShouldNotify(current) {
 		return
 	}
@@ -439,6 +447,41 @@ func (s *QueryService) maybeNotify(ctx context.Context, record *domain.Domain, p
 
 func suppressLegacyTransferNotification(previous, current domain.Status) bool {
 	return previous == domain.StatusTransferLocked && current == domain.StatusRegistered
+}
+
+func suppressUncertainIMLifecycleNotification(name string, previous, current domain.Status, outcome query.Outcome) bool {
+	if !strings.HasSuffix(domain.Normalize(name), ".im") || previous == current {
+		return false
+	}
+	if previous == domain.StatusAvailable && domain.IsRegisteredLike(current) && hasIMProviderConflict(outcome) {
+		return true
+	}
+	if !domain.IsRegisteredLike(previous) || !domain.IsRegisteredLike(current) {
+		return false
+	}
+	if outcome.Info != nil && outcome.Info.CreatedDate != nil {
+		return false
+	}
+	for _, result := range outcome.Results {
+		if result.CreatedAt != nil || result.LifecycleEvidence {
+			return false
+		}
+	}
+	return true
+}
+
+func hasIMProviderConflict(outcome query.Outcome) bool {
+	hasAvailable := false
+	hasRegistered := false
+	for _, result := range outcome.Results {
+		switch {
+		case result.Status == domain.StatusAvailable:
+			hasAvailable = true
+		case domain.IsRegisteredLike(result.Status):
+			hasRegistered = true
+		}
+	}
+	return hasAvailable && hasRegistered
 }
 
 func toCST(t *time.Time) *time.Time {

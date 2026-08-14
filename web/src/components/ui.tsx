@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useId,
 } from "react";
 import type { ReactNode } from "react";
 import type { DomainStatus } from "../lib/api";
@@ -202,11 +203,11 @@ export function DomainName({
   const content = (
     <>
       {favorite && (
-        <span className="mr-1 text-amber-500" aria-hidden="true">
+        <span className="mr-1 text-accent" aria-hidden="true">
           ★
         </span>
       )}
-      <span className="break-all">{name}</span>
+      <span className="block min-w-0 truncate whitespace-nowrap">{name}</span>
     </>
   );
 
@@ -214,16 +215,27 @@ export function DomainName({
     return (
       <button
         type="button"
-        className={cx("mono min-w-0 text-left text-ink hover:text-accent hover:underline", className)}
+        className={cx("mono block min-w-0 max-w-full truncate whitespace-nowrap text-left text-ink hover:text-accent hover:underline", className)}
         onClick={onClick}
-        title={`打开 ${name} 详情`}
+        title={name}
       >
         {content}
       </button>
     );
   }
 
-  return <span className={cx("mono min-w-0", className)}>{content}</span>;
+  return <span className={cx("mono block min-w-0 max-w-full truncate whitespace-nowrap", className)} title={name}>{content}</span>;
+}
+
+export function ReviewIndicator({ explanation }: { explanation?: string }) {
+  return (
+    <span
+      className="review-dot"
+      role="img"
+      aria-label="需复核"
+      title={explanation || "查询事实或证据需要复核"}
+    />
+  );
 }
 
 export function Spinner({ className }: { className?: string }) {
@@ -243,22 +255,44 @@ export function Skeleton({ className }: { className?: string }) {
   return <span className={cx("skeleton block rounded", className)} aria-hidden="true" />;
 }
 
+/**
+ * A compact, keyboard-friendly hint marker for settings and advanced forms.
+ * The native title keeps this dependency-free while the aria-label makes the
+ * extra context available to screen-reader users.
+ */
+export function InfoTip({ content }: { content: string }) {
+  const id = useId();
+  return (
+    <span
+      id={id}
+      className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-line text-[10px] font-semibold text-ink-faint"
+      title={content}
+      aria-label={content}
+      role="img"
+    >
+      i
+    </span>
+  );
+}
+
 export function EmptyState({
   title,
   hint,
   action,
+  icon,
 }: {
   title: string;
   hint?: string;
   action?: ReactNode;
+  icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
+    <div className="empty-state flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
       <span
-        className="mb-2 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-transparent font-display text-[18px] text-ink-faint"
+        className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border border-line bg-surface-muted font-display text-[18px] text-ink-faint"
         aria-hidden="true"
       >
-        ∅
+        {icon ?? <EmptyStateIcon />}
       </span>
       <p className="text-[13px] text-ink-muted">{title}</p>
       {hint && <p className="text-[12px] text-ink-faint">{hint}</p>}
@@ -268,15 +302,29 @@ export function EmptyState({
 }
 
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const toast = useToast();
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-danger/35 bg-blush px-4 py-3 text-[12px] text-danger dark:border-danger/30 dark:bg-danger/10 dark:text-red-200">
-      <span>{message}</span>
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-danger/30 bg-danger/8 px-4 py-3 text-[12px] text-ink"
+      role="alert"
+      aria-live="assertive"
+    >
+      <span className="min-w-0 flex-1">{message}</span>
       {onRetry && (
-        <button type="button" className="btn btn-ghost h-7 px-2 text-[12px]" onClick={onRetry}>
+        <button type="button" className="btn btn-ghost h-8 px-3 text-[12px]" onClick={() => { toast("正在重试…", "info"); onRetry(); }}>
           重试
         </button>
       )}
     </div>
+  );
+}
+
+function EmptyStateIcon() {
+  return (
+    <svg aria-hidden="true" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.5 12h7M12 8.5v7" />
+    </svg>
   );
 }
 
@@ -327,7 +375,7 @@ export function Drawer({
     <div className="fixed inset-0 z-50">
       <div
         className={cx(
-          "absolute inset-0 bg-black/40 transition-opacity duration-200 motion-reduce:transition-none",
+          "absolute inset-0 bg-overlay/40 transition-opacity duration-200 motion-reduce:transition-none",
           visible ? "opacity-100" : "opacity-0",
         )}
         onClick={onClose}
@@ -336,8 +384,8 @@ export function Drawer({
       />
       <aside
         className={cx(
-          "absolute inset-x-0 bottom-0 flex max-h-[92vh] w-full flex-col rounded-t-card border border-line bg-surface-raised transition-transform duration-200 ease-out motion-reduce:transition-none",
-          "lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:max-h-none lg:max-w-[620px] lg:rounded-none",
+          "absolute inset-x-0 bottom-0 flex h-[100dvh] max-h-[100dvh] w-full flex-col rounded-none border border-line bg-surface-raised transition-transform duration-200 ease-out motion-reduce:transition-none",
+          "lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:max-h-none lg:w-[min(560px,92vw)] lg:rounded-none",
           visible ? "translate-y-0 lg:translate-x-0" : "translate-y-full lg:translate-y-0 lg:translate-x-full",
         )}
         role="dialog"
@@ -368,7 +416,7 @@ export function Drawer({
             </svg>
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto overscroll-contain p-6">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">{children}</div>
       </aside>
     </div>
   );
@@ -394,7 +442,7 @@ export function ConfirmDialog({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel} role="presentation" />
+      <div className="absolute inset-0 bg-overlay/40" onClick={onCancel} role="presentation" />
       <div className="card relative w-full max-w-sm p-6" role="dialog" aria-modal="true">
         <h3 className="font-display text-[24px] font-normal tracking-[-0.02em] text-ink">{title}</h3>
         {description && <p className="mt-1.5 text-[13px] text-ink-muted">{description}</p>}
@@ -417,8 +465,9 @@ export function ConfirmDialog({
 
 // ---------- 轻量 Toast ----------
 
-type Toast = { id: number; message: string; tone: "info" | "error" | "success"; leaving?: boolean };
-type ToastContextValue = (message: string, tone?: Toast["tone"]) => void;
+type ToastAction = { label: string; onClick: () => void };
+type Toast = { id: number; message: string; tone: "info" | "error" | "success"; action?: ToastAction; leaving?: boolean };
+type ToastContextValue = (message: string, tone?: Toast["tone"], action?: ToastAction) => void;
 
 const ToastContext = createContext<ToastContextValue>(() => {});
 
@@ -434,9 +483,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((current) => current.filter((item) => item.id !== id));
   }, []);
 
-  const push = useCallback<ToastContextValue>((message, tone = "info") => {
+  const push = useCallback<ToastContextValue>((message, tone = "info", action) => {
     const id = nextId.current++;
-    setToasts((current) => [...current, { id, message, tone }]);
+    setToasts((current) => [...current, { id, message, tone, action }]);
     window.setTimeout(() => {
       setToasts((current) =>
         current.map((item) => (item.id === id ? { ...item, leaving: true } : item)),
@@ -459,16 +508,28 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={cx(
               "toast pointer-events-auto flex items-start gap-2 rounded-card border px-3 py-2 text-[13px]",
               toast.leaving ? "toast-leave" : "toast-enter",
-              toast.tone === "error"
-                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200"
+              toast.tone === "info"
+                ? "border-accent/30 bg-accent-soft text-ink"
                 : toast.tone === "success"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200"
-                  : "border-line bg-surface-raised text-ink",
+                  ? "border-success/30 bg-success/8 text-ink"
+                  : "border-danger/30 bg-danger/8 text-ink",
             )}
-            role="status"
-            aria-live="polite"
+            role={toast.tone === "error" ? "alert" : "status"}
+            aria-live={toast.tone === "error" ? "assertive" : "polite"}
           >
             <span className="min-w-0 flex-1">{toast.message}</span>
+            {toast.action && (
+              <button
+                type="button"
+                className="btn btn-ghost h-7 shrink-0 px-2 text-[11px]"
+                onClick={() => {
+                  toast.action?.onClick();
+                  dismiss(toast.id);
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-ghost -mr-1 -mt-1 h-6 w-6 shrink-0 px-0"
@@ -501,7 +562,7 @@ export interface SparklineSeries {
   color: string;
 }
 
-export function Sparkline({ series, className }: { series: SparklineSeries[]; className?: string }) {
+export function Sparkline({ series, labels, className }: { series: SparklineSeries[]; labels?: string[]; className?: string }) {
   const width = 320;
   const height = 92;
   const padding = 8;
@@ -526,7 +587,10 @@ export function Sparkline({ series, className }: { series: SparklineSeries[]; cl
         aria-label="最近七天趋势图"
         preserveAspectRatio="none"
       >
-        <path d={`M ${padding} ${height - padding} H ${width - padding}`} stroke="rgb(var(--line))" />
+        {[0, 0.5, 1].map((ratio) => {
+          const y = padding + ratio * (height - padding * 2);
+          return <path key={ratio} d={`M ${padding} ${y} H ${width - padding}`} stroke="rgb(var(--line))" strokeDasharray="2 4" />;
+        })}
         {series.map((item) => (
           <path
             key={item.label}
@@ -538,7 +602,23 @@ export function Sparkline({ series, className }: { series: SparklineSeries[]; cl
             strokeLinejoin="round"
           />
         ))}
+        {Array.from({ length: count }, (_, index) => {
+          const x = padding + (index / Math.max(1, count - 1)) * (width - padding * 2);
+          return (
+            <g key={index}>
+              <line x1={x} y1={padding} x2={x} y2={height - padding} stroke="transparent" strokeWidth="20">
+                <title>{`${labels?.[index] ?? `第 ${index + 1} 天`} · ${series.map((item) => `${item.label} ${item.values[index] ?? 0}`).join(" · ")}`}</title>
+              </line>
+              {series.map((item) => {
+                const value = item.values[index] ?? 0;
+                const y = height - padding - (value / max) * (height - padding * 2);
+                return <circle key={item.label} cx={x} cy={y} r="2.5" fill={item.color}><title>{`${labels?.[index] ?? ""} · ${item.label} ${value}`}</title></circle>;
+              })}
+            </g>
+          );
+        })}
       </svg>
+      <div className="mt-1 flex justify-between text-[10px] text-ink-faint"><span>{max}</span><span>Y 轴：次数</span><span>0</span></div>
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
         {series.map((item) => (
           <span key={item.label} className="inline-flex items-center gap-1">

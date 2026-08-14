@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import type { Attempt, Observation } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
-import { Card, EmptyState, ErrorNotice, Pill, Spinner, StatusBadge } from "../components/ui";
+import { Card, EmptyState, ErrorNotice, Pill, Skeleton, Spinner, StatusBadge } from "../components/ui";
 import { CONFIDENCE_LABELS, formatDateTime, formatLatency, providerLabel } from "../lib/format";
 
 export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) {
-  const [domain, setDomain] = useState("");
-  const [input, setInput] = useState("");
+  const [params, setParams] = useSearchParams();
+  const domain = (params.get("domain") ?? "").trim().toLowerCase();
+  const [input, setInput] = useState(domain);
+
+  useEffect(() => setInput(domain), [domain]);
 
   const { data, error, loading, reload } = useAsync<{ observations: Observation[] | null }>(
     () => api.get<{ observations: Observation[] | null }>("/api/v2/observations?limit=200"),
@@ -37,7 +41,10 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             className="flex gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              setDomain(input.trim().toLowerCase());
+              const next = new URLSearchParams(params);
+              const name = input.trim().toLowerCase();
+              if (name) next.set("domain", name); else next.delete("domain");
+              setParams(next, { replace: true });
             }}
           >
             <input
@@ -66,9 +73,9 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             <ErrorNotice message={error} onRetry={reload} />
           </div>
         )}
-        {loading && !data ? (
-          <div className="flex items-center gap-2 p-4 text-ink-muted">
-            <Spinner /> 加载中…
+      {loading && !data ? (
+          <div className="space-y-2 p-4" aria-label="查询历史加载中">
+            {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-9 w-full" />)}
           </div>
         ) : !data?.observations || data.observations.length === 0 ? (
           <EmptyState title="暂无状态变化记录" hint="域名状态发生变化后会自动记录在这里" />
@@ -77,7 +84,9 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             observations={data.observations}
             onPick={(name) => {
               setInput(name);
-              setDomain(name);
+              const next = new URLSearchParams(params);
+              next.set("domain", name);
+              setParams(next, { replace: true });
             }}
           />
         )}
@@ -240,7 +249,7 @@ function DomainHistory({
                         <StatusBadge status={attempt.status} />
                       ) : (
                         <span
-                          className="text-[12px] text-red-600 dark:text-red-400"
+                          className="text-[12px] text-ink-muted"
                           title={attempt.error_message}
                         >
                           {attempt.error_message || "失败"}

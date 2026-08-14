@@ -1,9 +1,10 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { api } from "../lib/api";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { api, downloadBlob } from "../lib/api";
 import type { DomainListResult, Facets, FilterNode } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { DomainTable } from "../components/DomainTable";
+import type { DomainColumn, DomainSort } from "../components/DomainTable";
 import { DomainDrawer } from "../components/DomainDrawer";
 import { FolderTree } from "../components/FolderTree";
 import type { FolderSelection } from "../components/FolderTree";
@@ -11,7 +12,7 @@ import { ImportExportDialog } from "../components/ImportExportDialog";
 import { AdvancedFilterDrawer } from "../components/AdvancedFilterDrawer";
 import { SavedViewMenu } from "../components/SavedViewMenu";
 import { BulkActionPreviewDialog } from "../components/BulkActionPreviewDialog";
-import { ConfirmDialog, EmptyState, ErrorNotice, Spinner, cx, useToast } from "../components/ui";
+import { ConfirmDialog, EmptyState, ErrorNotice, Skeleton, Spinner, cx, useDensity, useToast } from "../components/ui";
 import { STATUS_LABELS, STATUS_ORDER } from "../lib/format";
 
 const SORT_OPTIONS = [
@@ -21,12 +22,24 @@ const SORT_OPTIONS = [
   { value: "expiry", label: "到期时间" },
   { value: "last_checked", label: "最后查询" },
   { value: "next_check", label: "下次查询" },
+  { value: "ai_score", label: "AI 评分" },
 ];
 
-const PAGE_SIZES = [10, 20, 50, 100];
+const PAGE_SIZES = [20, 50, 100, 1000];
+const VIEW_STORAGE_KEY = "dh-domains-view-v1";
+const ALL_COLUMNS: Array<{ value: DomainColumn; label: string }> = [
+  { value: "status", label: "状态" },
+  { value: "registrar", label: "注册商" },
+  { value: "expiry", label: "到期时间" },
+  { value: "provider", label: "查询来源" },
+  { value: "ai_score", label: "AI 评分" },
+  { value: "last_checked", label: "最后查询" },
+  { value: "next_check", label: "下次查询" },
+];
 
 export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const toast = useToast();
 
   const search = params.get("search") ?? "";
@@ -39,6 +52,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const order = params.get("order") ?? "asc";
   const favoriteOnly = params.get("favorite") === "true";
   const advancedRaw = params.get("filter") ?? "";
+  const columnsParam = params.get("columns") ?? "";
   const page = Number(params.get("page") ?? "1") || 1;
   const limit = Number(params.get("limit") ?? "20") || 20;
 
@@ -53,6 +67,23 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [retrying, setRetrying] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showBulkAction, setShowBulkAction] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const { density, setDensity } = useDensity();
+  const [visibleColumns, setVisibleColumns] = useState<Set<DomainColumn>>(
+    () => {
+      const fromURL = columnsParam.split(",").filter((item): item is DomainColumn => ALL_COLUMNS.some((column) => column.value === item));
+      if (fromURL.length > 0) return new Set(fromURL);
+      try {
+        const stored = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) ?? "{}") as { columns?: DomainColumn[] };
+        if (Array.isArray(stored.columns)) return new Set(stored.columns);
+      } catch { /* 使用默认列 */ }
+      return new Set(ALL_COLUMNS.map((item) => item.value));
+    },
+  );
+  const restoredView = useRef(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [keyboardIndex, setKeyboardIndex] = useState(-1);
 
   const advancedFilter = useMemo<FilterNode>(() => {
     if (!advancedRaw) return { version: 1, logic: "and", conditions: [] };
@@ -60,6 +91,44 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   }, [advancedRaw]);
 
   useEffect(() => setSearchInput(search), [search]);
+
+  useEffect(() => {
+    const requested = params.get("density");
+    if (requested === "comfortable" || requested === "compact" || requested === "dense") {
+      if (requested !== density) setDensity(requested);
+    }
+  }, [density, params, setDensity]);
+
+  useEffect(() => {
+    const encoded = Array.from(visibleColumns).join(",");
+    if (encoded === columnsParam) return;
+    const next = new URLSearchParams(params);
+    if (encoded) next.set("columns", encoded); else next.delete("columns");
+    setParams(next, { replace: true });
+  }, [columnsParam, params, setParams, visibleColumns]);
+
+  useEffect(() => {
+    if (!columnsParam) return;
+    const requested = new Set(columnsParam.split(",").filter((item): item is DomainColumn => ALL_COLUMNS.some((column) => column.value === item)));
+    if (requested.size === 0 || requested.size !== visibleColumns.size || Array.from(requested).some((item) => !visibleColumns.has(item))) {
+      setVisibleColumns(requested.size > 0 ? requested : new Set(ALL_COLUMNS.map((item) => item.value)));
+    }
+  }, [columnsParam, visibleColumns]);
+
+  useEffect(() => {
+    if (restoredView.current) return;
+    restoredView.current = true;
+    try {
+      const stored = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) ?? "{}") as { query?: string };
+      if (!params.toString() && stored.query) setParams(new URLSearchParams(stored.query), { replace: true });
+    } catch { /* 保持默认视图 */ }
+  }, [params, setParams]); // 首次进入时才恢复；用户主动清空筛选后不能被旧状态覆盖。
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({ query: params.toString(), columns: Array.from(visibleColumns) }));
+    } catch { /* localStorage 不可用时 URL 仍是事实来源 */ }
+  }, [params, visibleColumns]);
 
   const query = useMemo(() => {
     const q = new URLSearchParams();
@@ -76,7 +145,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     if (favoriteOnly) q.set("favorite", "true");
     if (advancedRaw) q.set("filter", advancedRaw);
     q.set("page", String(page));
-    q.set("limit", String(folderSelection === "all" ? limit : 500));
+    q.set("limit", String(folderSelection === "all" ? limit : 2000));
     return q.toString();
   }, [search, status, statuses, tld, registrar, provider, sort, order, page, limit, favoriteOnly, advancedRaw, folderSelection]);
 
@@ -87,12 +156,19 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   );
 
   const domains = useMemo(() => {
-    const items = data?.domains ?? [];
+    let items = data?.domains ?? [];
+    if (sort === "ai_score") {
+      items = [...items].sort((a, b) => {
+        const left = a.ai_quality_score ?? -1;
+        const right = b.ai_quality_score ?? -1;
+        return order === "desc" ? right - left : left - right;
+      });
+    }
     if (folderSelection === "all") return items;
     return items.filter((item) =>
       folderSelection === "root" ? item.folder_id == null : item.folder_id === folderSelection,
     );
-  }, [data, folderSelection]);
+  }, [data, folderSelection, order, sort]);
 
   // 筛选项来自全量统计，翻页不会让下拉框内容跟着变
   const facets = useAsync<Facets>(() => api.get<Facets>("/api/v2/facets"), [], onUnauthorized);
@@ -103,6 +179,46 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     reload();
     reloadFacets();
   }, [reload, reloadFacets]);
+
+  useEffect(() => {
+    if (params.get("focus") === "search") {
+      searchRef.current?.focus();
+      const next = new URLSearchParams(params);
+      next.delete("focus");
+      setParams(next, { replace: true });
+    }
+  }, [params, setParams]);
+
+  useEffect(() => {
+    if (params.get("new") !== "1") return;
+    setShowAdd(true);
+    const next = new URLSearchParams(params);
+    next.delete("new");
+    setParams(next, { replace: true });
+  }, [params, setParams]);
+
+  useEffect(() => {
+    const clearSelection = () => setSelected(new Set());
+    window.addEventListener("domainhunter:clear-selection", clearSelection);
+    return () => window.removeEventListener("domainhunter:clear-selection", clearSelection);
+  }, []);
+
+  useEffect(() => {
+    const onRefresh = () => refresh();
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+      if (event.key === "j" || event.key === "k") {
+        event.preventDefault();
+        setKeyboardIndex((current) => event.key === "j" ? Math.min(domains.length - 1, current + 1) : Math.max(0, current - 1));
+      } else if (event.key === "Enter" && keyboardIndex >= 0 && domains[keyboardIndex]) {
+        setOpenDomain(domains[keyboardIndex].name);
+      }
+    };
+    window.addEventListener("domainhunter:refresh", onRefresh);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("domainhunter:refresh", onRefresh); window.removeEventListener("keydown", onKey); };
+  }, [domains, keyboardIndex, refresh]);
 
   const updateParams = useCallback(
     (next: Record<string, string>) => {
@@ -126,6 +242,21 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   }, [facets.data]);
   const failedCount = (statusCounts.get("error") ?? 0) + (statusCounts.get("unknown") ?? 0);
   const failedOnly = statuses === "error,unknown";
+  const filterChips = [
+    search ? { key: "search", label: `搜索：${search}` } : null,
+    status ? { key: "status", label: `状态：${STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status}` } : null,
+    tld ? { key: "tld", label: `后缀：.${tld.replace(/^\./, "")}` } : null,
+    registrar ? { key: "registrar", label: `注册商：${registrar}` } : null,
+    provider ? { key: "provider", label: `查询源：${provider}` } : null,
+    statuses ? { key: "statuses", label: failedOnly ? "失败 / 未知" : `状态组：${statuses}` } : null,
+    favoriteOnly ? { key: "favorite", label: "仅收藏" } : null,
+    advancedRaw ? { key: "filter", label: "高级条件" } : null,
+  ].filter((item): item is { key: string; label: string } => Boolean(item));
+
+  function changeSort(field: DomainSort) {
+    if (!field) return;
+    updateParams({ sort: field, order: sort === field && order === "asc" ? "desc" : "asc" });
+  }
 
   async function runCheck(name: string) {
     setBusy(name);
@@ -177,6 +308,22 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     }
   }
 
+  function exportSelected() {
+    const names = Array.from(selected);
+    if (names.length === 0) return;
+    const byName = new Map(domains.map((item) => [item.name, item]));
+    const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rows = [
+      ["domain", "status", "registrar", "expiry_date", "query_method", "last_checked"].join(","),
+      ...names.map((name) => {
+        const item = byName.get(name);
+        return [name, item?.status, item?.registrar, item?.expiry_date, item?.query_method, item?.last_checked].map(escape).join(",");
+      }),
+    ];
+    downloadBlob(new Blob(["\uFEFF", rows.join("\n")], { type: "text/csv;charset=utf-8" }), "domainhunter-selected.csv");
+    toast(`已导出 ${names.length} 个选中域名`, "success");
+  }
+
   async function confirmDelete() {
     if (!pendingDelete) return;
     try {
@@ -209,39 +356,25 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" className="btn h-8" onClick={refresh} aria-label="刷新域名列表" title="刷新域名列表">
-            刷新
+          <button type="button" className="btn min-h-11 min-w-11 px-0 sm:min-h-9 sm:min-w-9" onClick={refresh} aria-label="刷新域名列表" title="刷新域名列表">
+            <RefreshIcon />
           </button>
-          <button type="button" className={cx("btn h-8", advancedRaw && "border-accent text-accent")} onClick={() => setShowAdvanced(true)}>
-            高级筛选{advancedRaw ? " · 已启用" : ""}
+          <button type="button" className={cx("btn min-h-11 sm:min-h-9", filterChips.length > 0 && "border-accent text-accent")} onClick={() => setShowAdvanced(true)}>
+            高级筛选{filterChips.length > 0 ? `（${filterChips.length}）` : ""}
           </button>
-          <SavedViewMenu
-            filter={advancedFilter}
-            onApply={(filter) => updateParams({ filter: JSON.stringify(filter) })}
-            onUnauthorized={onUnauthorized}
-          />
+          <div className="relative">
+            <button type="button" className="btn min-h-11 sm:min-h-9" onClick={() => setMoreOpen((value) => !value)} aria-expanded={moreOpen}>更多 <span aria-hidden="true">⌄</span></button>
+            {moreOpen && (
+              <div className="absolute right-0 top-12 z-30 w-52 rounded-card border border-line bg-surface-raised p-2 shadow-lg sm:top-10">
+                <SavedViewMenu filter={advancedFilter} onApply={(filter) => { updateParams({ filter: JSON.stringify(filter) }); setMoreOpen(false); }} onUnauthorized={onUnauthorized} embedded />
+                <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[12px] hover:bg-surface-muted" onClick={() => { setShowImportExport(true); setMoreOpen(false); }}>导入 / 导出</button>
+                <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[12px] hover:bg-surface-muted" onClick={() => void runBatchRetryFailed()} disabled={retrying}>{retrying && <Spinner />} 重试失败{failedCount > 0 ? `（${failedCount}）` : ""}</button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
-            className="btn h-8"
-            onClick={() => setShowImportExport(true)}
-            aria-label="打开域名导入导出"
-            title="导入或导出域名"
-          >
-            导入/导出
-          </button>
-          <button
-            type="button"
-            className={cx("btn h-8", failedCount > 0 && "border-amber-400 text-amber-700 dark:text-amber-300")}
-            onClick={() => void runBatchRetryFailed()}
-            disabled={retrying}
-            aria-label="重试失败和未知域名"
-            title="将失败和未知域名均摊到 30 秒重试窗口"
-          >
-            {retrying && <Spinner />}重试失败{failedCount > 0 ? `（${failedCount}）` : ""}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary h-8"
+            className="btn btn-primary min-h-11 sm:min-h-9"
             onClick={() => setShowAdd(true)}
             aria-label="添加域名"
             title="添加域名"
@@ -268,6 +401,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           }}
         >
           <input
+            ref={searchRef}
             className="input"
             placeholder="搜索域名…"
             value={searchInput}
@@ -358,55 +492,67 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             失败/未知
           </button>
         </div>
-        <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-6">
-          {advancedRaw && <button type="button" className="btn h-7 border-accent text-[12px] text-accent" onClick={() => updateParams({ filter: "" })}>清除高级条件</button>}
-          <span className="self-center text-[11px] text-ink-faint">高级条件支持状态、TLD、注册商、标签和 AI 质量分，可与基础筛选组合。</span>
+        <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-6">
+          {filterChips.map((chip) => (
+            <button key={chip.key} type="button" className="inline-flex min-h-8 items-center gap-2 rounded-tag border border-accent/20 bg-accent-soft/45 px-3 text-[11px] text-ink" onClick={() => updateParams({ [chip.key]: "" })} title={`移除${chip.label}`}>
+              {chip.label}<span aria-hidden="true">×</span>
+            </button>
+          ))}
+          {filterChips.length > 0 && <button type="button" className="min-h-8 px-2 text-[11px] text-accent hover:underline" onClick={() => setParams(new URLSearchParams(), { replace: true })}>清空全部</button>}
+          <span className="self-center text-[11px] text-ink-faint">高级条件支持状态、TLD、注册商、标签和 AI 质量分。</span>
         </div>
       </div>
 
+      <div className="relative flex justify-end">
+        <button type="button" className="btn min-h-9 text-[12px]" onClick={() => setColumnMenuOpen((value) => !value)} aria-expanded={columnMenuOpen}>列设置</button>
+        {columnMenuOpen && (
+          <div className="absolute right-0 top-10 z-20 grid w-48 gap-1 rounded-card border border-line bg-surface-raised p-2 shadow-lg">
+            {ALL_COLUMNS.map((column) => (
+              <label key={column.value} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-[12px] hover:bg-surface-muted">
+                <input type="checkbox" checked={visibleColumns.has(column.value)} onChange={() => setVisibleColumns((current) => { if (current.has(column.value) && current.size === 1) return current; const next = new Set(current); if (next.has(column.value)) next.delete(column.value); else next.add(column.value); return next; })} />
+                {column.label}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
       {failedCount > 0 && (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+        <p className="rounded-card border border-line bg-surface-muted px-4 py-3 text-[12px] text-ink-muted">
           当前有 {failedCount} 个失败或未知域名；“重试失败”会由后端在 30 秒窗口内均摊排队，可先用“失败/未知”筛选查看。
         </p>
       )}
 
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2 text-[13px]">
-          <span>已选择 {selected.size} 个域名</span>
-          <button type="button" className="btn h-7 text-[12px]" onClick={runBatchCheck}>
-            批量检查
-          </button>
-          <button type="button" className="btn h-7 text-[12px]" onClick={() => setShowBulkAction(true)}>
-            批量操作预览
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger h-7 text-[12px]"
-            onClick={() => setPendingDelete(Array.from(selected))}
-          >
-            批量删除
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost h-7 text-[12px]"
-            onClick={() => setSelected(new Set())}
-          >
-            取消选择
-          </button>
+        <div className="fixed inset-x-3 bottom-20 z-40 mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-2 rounded-card border border-accent/30 bg-surface-raised p-2 text-[13px] shadow-lg lg:bottom-6">
+          <span className="rounded-button bg-accent px-3 py-2 text-on-accent">已选择 {selected.size} 项</span>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={runBatchCheck}>立即检查</button>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={() => setShowBulkAction(true)}>打标签 / 移入文件夹</button>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={exportSelected}>导出 CSV</button>
+          <button type="button" className="btn min-h-10 text-[12px] text-danger" onClick={() => setPendingDelete(Array.from(selected))}>删除</button>
+          <button type="button" className="btn btn-ghost min-h-10 min-w-10 px-0" onClick={() => setSelected(new Set())} aria-label="取消选择">×</button>
         </div>
       )}
 
       {error && <ErrorNotice message={error} onRetry={refresh} />}
 
       {loading && domains.length === 0 ? (
-        <div className="flex items-center gap-2 py-12 text-ink-muted">
-          <Spinner /> 加载中…
+        <div className="space-y-3" aria-label="域名列表加载中">
+          <Skeleton className="h-12 w-full rounded-card" />
+          <div className="card overflow-hidden">{Array.from({ length: 7 }, (_, index) => <div key={index} className="flex items-center gap-3 border-b border-line p-4 last:border-0"><Skeleton className="h-4 w-4 rounded" /><Skeleton className="h-4 w-44" /><Skeleton className="ml-auto h-4 w-20" /><Skeleton className="h-4 w-24" /></div>)}</div>
         </div>
       ) : domains.length === 0 ? (
         <div className="card">
           <EmptyState
             title={data?.data_status === "empty" ? "还没有添加任何域名" : "没有匹配的域名"}
             hint={data?.data_status === "empty" ? '点击右上角"添加域名"开始监控' : "试试调整筛选条件"}
+            action={
+              data?.data_status === "empty" ? (
+                <button type="button" className="btn btn-primary min-h-10" onClick={() => setShowAdd(true)}>添加第一个域名</button>
+              ) : (
+                <button type="button" className="btn min-h-10" onClick={() => setParams(new URLSearchParams(), { replace: true })}>清空筛选</button>
+              )
+            }
           />
         </div>
       ) : (
@@ -414,6 +560,11 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           domains={domains}
           selected={selected}
           busy={busy}
+          visibleColumns={visibleColumns}
+          sort={sort as DomainSort}
+          order={order === "desc" ? "desc" : "asc"}
+          keyboardIndex={keyboardIndex}
+          onSort={changeSort}
           onToggle={(name) =>
             setSelected((current) => {
               const next = new Set(current);
@@ -428,6 +579,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           onOpen={setOpenDomain}
           onCheck={runCheck}
           onDelete={(name) => setPendingDelete([name])}
+          onHistory={(name) => navigate(`/history?domain=${encodeURIComponent(name)}`)}
         />
       )}
 
@@ -476,6 +628,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
 
       <DomainDrawer
         domain={openDomain}
+        domains={domains.map((item) => item.name)}
+        onNavigate={setOpenDomain}
         onClose={() => setOpenDomain(null)}
         onChanged={refresh}
         onUnauthorized={onUnauthorized}
@@ -527,6 +681,10 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   );
 }
 
+function RefreshIcon() {
+  return <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13.2 5.5A5.5 5.5 0 1 0 13 10.9" /><path d="M10.5 5.5h2.75V2.75" /></svg>;
+}
+
 function AddDomainsDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -573,7 +731,7 @@ function AddDomainsDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} role="presentation" />
+      <div className="absolute inset-0 bg-overlay/40" onClick={onClose} role="presentation" />
       <div className="card relative w-full max-w-lg p-4" role="dialog" aria-modal="true">
         <h3 className="text-[14px] font-semibold">添加域名</h3>
         <p className="mt-1 text-[12px] text-ink-muted">

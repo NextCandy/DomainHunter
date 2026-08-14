@@ -174,7 +174,7 @@ func (s *DomainService) List(ctx context.Context, filter ListFilter) (*ListResul
 	if page <= 0 {
 		page = 1
 	}
-	if limit <= 0 || limit > 500 {
+	if limit <= 0 || limit > 2000 {
 		limit = 10
 	}
 
@@ -224,6 +224,7 @@ func mergeEntry(entry domain.Domain, results map[string]domain.Info) *domain.Inf
 		info.Note = entry.Note
 		info.Priority = entry.Priority
 		info.NextCheckAt = entry.NextCheckAt
+		info.Notify = entry.Notify
 		info.FolderID = entry.FolderID
 		return &info
 	}
@@ -238,6 +239,7 @@ func mergeEntry(entry domain.Domain, results map[string]domain.Info) *domain.Inf
 		Note:        entry.Note,
 		Priority:    entry.Priority,
 		NextCheckAt: entry.NextCheckAt,
+		Notify:      entry.Notify,
 		FolderID:    entry.FolderID,
 	}
 }
@@ -329,6 +331,9 @@ func sortInfos(items []*domain.Info, field, order string) {
 		less = func(i, j int) bool { return beforePtr(items[i].NextCheckAt, items[j].NextCheckAt) }
 	case "added":
 		less = func(i, j int) bool { return beforePtr(items[i].AddedAt, items[j].AddedAt) }
+	case "ai_score":
+		// AI 评分由 v2 DTO 层补齐；基础列表保持稳定顺序。
+		return
 	default:
 		return
 	}

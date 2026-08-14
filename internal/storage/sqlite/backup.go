@@ -102,19 +102,17 @@ func (d *DB) ListBackups() ([]string, error) {
 	return out, nil
 }
 
-// backupPrefix 备份文件名前缀，跟随实际使用的数据库文件名
+// backupPrefix 备份文件名前缀，跟随实际使用的数据库文件名。
 func (d *DB) backupPrefix() string {
 	return strings.TrimSuffix(filepath.Base(d.path), ".db")
 }
 
 // isBackupName 判断是否是本程序生成的备份。
-// 同时认 puff- 与 domainhunter- 两个前缀，改名前后的备份都能被列出与清理。
 func isBackupName(name string) bool {
 	if !strings.HasSuffix(name, ".db") {
 		return false
 	}
-	return strings.HasPrefix(name, LegacyFile[:len(LegacyFile)-3]+"-") ||
-		strings.HasPrefix(name, DefaultFile[:len(DefaultFile)-3]+"-")
+	return strings.HasPrefix(name, DefaultFile[:len(DefaultFile)-3]+"-")
 }
 
 func sanitizeLabel(label string) string {

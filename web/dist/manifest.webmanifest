@@ -1,0 +1,26 @@
+{
+  "name": "DomainHunter",
+  "short_name": "DomainHunter",
+  "description": "Domain intelligence and monitoring workspace",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#3ba6f1",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/DomainHunter.png",
+      "sizes": "1200x1600",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/DomainHunter.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

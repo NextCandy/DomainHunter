@@ -20,13 +20,15 @@ const (
 	ProviderWhois             = "whois"
 	ProviderWhoisLS           = "whois_ls"
 	ProviderFallback          = "fallback"
+	ProviderSpaceship         = "spaceship"
 	ProviderAIFallback        = "ai_fallback"
 )
 
 // canonicalOrder 是未做任何配置时的默认查询顺序。
 // 专用 TLD 源（whois_ls / fallback）放在通用 whois-domain-lookup 之前；
 // Plan 会在同一 TLD 已有专用源时跳过通用服务，避免 .im/.do 重复打到
-// 不适合该注册局的上游 WHOIS 端口。
+// 不适合该注册局的上游 WHOIS 端口。Spaceship 是可选的 .im 最后补充源，
+// 只有前面来源无法确认且配置了 API 凭据时才会进入计划。
 var canonicalOrder = []string{
 	ProviderWhoDat,
 	ProviderWhoisLS,
@@ -35,6 +37,7 @@ var canonicalOrder = []string{
 	ProviderVercelWhoDat,
 	ProviderRDAP,
 	ProviderRdapOrg,
+	ProviderSpaceship,
 	ProviderAIFallback,
 }
 
@@ -268,8 +271,8 @@ func (p *Policy) ProviderEnabled(name string) bool {
 // Plan 为一次请求生成有序的查询步骤。
 //
 // 规则：
-//  1. 专用查询源（whois_ls / fallback）是按后缀显式启用的，其 available 结论
-//     直接采信。
+//  1. 专用查询源（whois_ls / fallback）是按后缀显式启用的；但 .im 的
+//     available 结论仍必须经过第二来源确认。
 //  2. TLD 有显式配置时，其余查询源按 validate_available 处理
 //     （true / distrust = 不单独采信，confirm = 需要第二个来源印证）。
 //  3. 没有显式配置时：该后缀若启用了专用查询源，通用的 RDAP / WHOIS 的
@@ -325,6 +328,11 @@ func (p *Policy) Plan(ctx context.Context, req Request, reg *Registry) []Step {
 	for _, name := range available {
 		mode := AvailableTrust
 		switch {
+		case tld == "im":
+			// .im 的公开 WHOIS 可能只有到期日，且 WHOIS.LS 的
+			// not-found 与结构化 who-dat 结果存在已知冲突。所有
+			// .im available 结论都必须由第二个来源确认。
+			mode = AvailableConfirm
 		case optInProviders[name]:
 			// 专用查询源是按后缀显式启用的，结论本身就有针对性，直接采信。
 		case explicit != nil && explicit.ValidateAvailable.Set:
@@ -353,6 +361,7 @@ func hasNewChainProvider(reg *Registry) bool {
 		ProviderWhoisDomainLookup,
 		ProviderVercelWhoDat,
 		ProviderRdapOrg,
+		ProviderSpaceship,
 		ProviderAIFallback,
 	} {
 		if _, ok := reg.Get(name); ok {

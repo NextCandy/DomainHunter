@@ -60,7 +60,7 @@ type Provider struct {
 }
 
 // New 从环境变量创建 Provider。
-// DOMAINHUNTER_WHOIS_FALLBACK_URL 默认为空；旧的 PUFF_WHOIS_FALLBACK_* 同样有效。
+// DOMAINHUNTER_WHOIS_FALLBACK_URL 默认为空。
 func New(timeout time.Duration) *Provider {
 	return NewNamed(query.ProviderFallback, timeout)
 }
@@ -72,12 +72,12 @@ func NewNamed(name string, timeout time.Duration) *Provider {
 	if timeout <= 0 {
 		timeout = 20 * time.Second
 	}
-	if configured := envcfg.First("DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT", "PUFF_WHOIS_FALLBACK_TIMEOUT"); configured != "" {
+	if configured := envcfg.Value("DOMAINHUNTER_WHOIS_FALLBACK_TIMEOUT"); configured != "" {
 		if parsed, ok := envcfg.ParseDuration(configured); ok {
 			timeout = parsed
 		}
 	}
-	tlds := envcfg.ParseTLDs(envcfg.First("DOMAINHUNTER_WHOIS_FALLBACK_TLDS", "PUFF_WHOIS_FALLBACK_TLDS"), "im", "do")
+	tlds := envcfg.ParseTLDs(envcfg.Value("DOMAINHUNTER_WHOIS_FALLBACK_TLDS"), "im", "do")
 	if name == query.ProviderWhoisDomainLookup {
 		// The standalone whois-domain-lookup container is the second product-wide
 		// fallback. Its API can query more TLDs than the legacy .im/.do opt-in.
@@ -85,7 +85,7 @@ func NewNamed(name string, timeout time.Duration) *Provider {
 	}
 	return &Provider{
 		name:    strings.TrimSpace(name),
-		baseURL: strings.TrimSpace(envcfg.First("DOMAINHUNTER_WHOIS_FALLBACK_URL", "PUFF_WHOIS_FALLBACK_URL")),
+		baseURL: envcfg.Value("DOMAINHUNTER_WHOIS_FALLBACK_URL"),
 		tlds:    tlds,
 		timeout: timeout,
 	}
@@ -175,6 +175,7 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 		Confidence:  domain.ConfidenceMedium,
 		StartedAt:   started,
 	}
+	result.LifecycleEvidence = hasLifecycleStatus(result.EPPStatuses)
 	defer func() {
 		result.FinishedAt = time.Now()
 		result.Latency = result.FinishedAt.Sub(started)
@@ -235,7 +236,7 @@ func (p *Provider) Query(ctx context.Context, req query.Request) query.Result {
 			result = parsed
 		}
 	}
-	return result
+	return query.NormalizeIMLifecycle(result)
 }
 
 func (p *Provider) fetch(ctx context.Context, name string) (*apiData, error) {
@@ -355,4 +356,20 @@ func statusFromFallback(statuses []string) domain.Status {
 		}
 	}
 	return domain.StatusRegistered
+}
+
+func hasLifecycleStatus(statuses []string) bool {
+	for _, raw := range statuses {
+		key := strings.ToLower(strings.NewReplacer(" ", "", "_", "", "-", "").Replace(raw))
+		switch {
+		case strings.Contains(key, "hold"),
+			strings.Contains(key, "redemption"),
+			strings.Contains(key, "pendingdelete"),
+			strings.Contains(key, "expired"),
+			strings.Contains(key, "renewperiod"),
+			strings.Contains(key, "grace"):
+			return true
+		}
+	}
+	return false
 }

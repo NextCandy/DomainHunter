@@ -184,9 +184,9 @@ func (c DeepSeekCompatibleClient) Evaluate(ctx context.Context, profile Profile,
 			return Output{}, latency, fmt.Errorf("%w：默认 AI API Key 没有调用权限，请检查 DeepSeek 账户权限或更换 Key", ErrProviderAuth)
 		case http.StatusTooManyRequests:
 			if providerMessage != "" {
-				return Output{}, latency, fmt.Errorf("默认 AI 请求额度已用完或触发限流，请稍后重试：%s", providerMessage)
+				return Output{}, latency, fmt.Errorf("默认 AI Provider 已限流，请稍后重试：%s", providerMessage)
 			}
-			return Output{}, latency, errors.New("默认 AI 请求额度已用完或触发限流，请稍后重试")
+			return Output{}, latency, errors.New("默认 AI Provider 已限流，请稍后重试")
 		case http.StatusNotFound:
 			return Output{}, latency, fmt.Errorf("%w：默认 AI 模型或接口地址不存在，请检查模型配置", ErrProviderConfig)
 		}

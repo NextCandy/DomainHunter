@@ -66,7 +66,7 @@ type TelegramConfig struct {
 // BarkConfig Bark 推送配置。
 //
 // URL 是完整的推送地址（自建服务器或 api.day.app），已包含设备 key，
-// 例如 https://bark.example.com/AbCdEf123。这与原 Puff 的配置格式一致。
+// 例如 https://bark.example.com/AbCdEf123。
 type BarkConfig struct {
 	URL     string `json:"url"`
 	Group   string `json:"group"`
@@ -320,25 +320,24 @@ func apply(cfg *Config, settings map[string]string) {
 	get(KeyCSRFEnabled, func(v string) { cfg.Security.CSRFEnabled = ParseBool(v) })
 }
 
-// applyEnvOverrides 部署级开关允许用环境变量覆盖数据库中的值。
-// 旧的 PUFF_* 变量继续被接受（已废弃，但不能直接删除）。
+// applyEnvOverrides 部署级开关允许用 DOMAINHUNTER_* 环境变量覆盖数据库中的值。
 func applyEnvOverrides(cfg *Config) {
-	if v := envFirst("DOMAINHUNTER_COOKIE_SECURE", "PUFF_COOKIE_SECURE"); v != "" {
+	if v := os.Getenv("DOMAINHUNTER_COOKIE_SECURE"); strings.TrimSpace(v) != "" {
 		cfg.Security.CookieSecure = v
 	}
-	if v := envFirst("DOMAINHUNTER_COOKIE_SAMESITE", "PUFF_COOKIE_SAMESITE"); v != "" {
+	if v := os.Getenv("DOMAINHUNTER_COOKIE_SAMESITE"); strings.TrimSpace(v) != "" {
 		cfg.Security.CookieSameSite = v
 	}
-	if v := envFirst("DOMAINHUNTER_CORS_ORIGINS", "PUFF_CORS_ORIGINS"); v != "" {
+	if v := os.Getenv("DOMAINHUNTER_CORS_ORIGINS"); strings.TrimSpace(v) != "" {
 		cfg.Security.CORSOrigins = splitCSV(v)
 	}
-	if v := envFirst("DOMAINHUNTER_CSRF_ENABLED", "PUFF_CSRF_ENABLED"); v != "" {
+	if v := os.Getenv("DOMAINHUNTER_CSRF_ENABLED"); strings.TrimSpace(v) != "" {
 		cfg.Security.CSRFEnabled = ParseBool(v)
 	}
-	if v := envFirst("DOMAINHUNTER_PORT", "PUFF_PORT"); v != "" {
+	if v := os.Getenv("DOMAINHUNTER_PORT"); strings.TrimSpace(v) != "" {
 		cfg.Server.Port = v
 	}
-	if v := envFirst("DOMAINHUNTER_LOG_LEVEL", "PUFF_LOG_LEVEL"); v != "" {
+	if v := os.Getenv("DOMAINHUNTER_LOG_LEVEL"); strings.TrimSpace(v) != "" {
 		cfg.Log.Level = v
 	}
 }
@@ -511,11 +510,4 @@ func splitCSV(v string) []string {
 		}
 	}
 	return out
-}
-
-func envFirst(primary, legacy string) string {
-	if v := strings.TrimSpace(os.Getenv(primary)); v != "" {
-		return v
-	}
-	return strings.TrimSpace(os.Getenv(legacy))
 }

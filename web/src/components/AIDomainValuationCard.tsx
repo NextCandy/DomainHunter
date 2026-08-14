@@ -40,7 +40,7 @@ export function ValuationBreakdown({ valuation }: { valuation: Valuation }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="质量" value={`${valuation.quality_score}/100`} /><Metric label="流动性" value={`${valuation.liquidity_score}/100`} /><Metric label="风险" value={valuation.risk_level} /><Metric label="置信度" value={valuation.confidence} /></div>
       <div className="rounded border border-line bg-surface-raised px-2 py-1.5">研究区间：<strong>¥{valuation.value_low.toLocaleString()} – ¥{valuation.value_high.toLocaleString()}</strong></div>
       <p className="text-ink-muted">{valuation.rationale}</p>
-      {valuation.data_gaps.length > 0 && <p className="text-amber-700 dark:text-amber-300">数据不足：{valuation.data_gaps.join("、")}</p>}
+      {valuation.data_gaps.length > 0 && <p className="text-ink-muted">数据不足：{valuation.data_gaps.join("、")}</p>}
       <p className="text-ink-faint">{valuation.disclaimer}</p>
       <div className="text-ink-faint">模型 {valuation.model} · 生成于 {new Date(valuation.generated_at).toLocaleString()}</div>
     </div>

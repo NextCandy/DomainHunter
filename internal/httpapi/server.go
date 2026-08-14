@@ -74,6 +74,9 @@ func NewServer(deps Deps) *Server {
 			deps.Domains.SetFolderRepository(sqlite.NewFolderRepo(deps.DB))
 		}
 		if deps.Notification != nil {
+			if err := deps.Notification.ReloadMutedTypes(context.Background()); err != nil {
+				logger.Warn("读取通知静音设置失败: %v", err)
+			}
 			if rules, err := deps.NotificationConfig.ListRules(context.Background()); err == nil {
 				deps.Notification.SetRules(rules)
 			}

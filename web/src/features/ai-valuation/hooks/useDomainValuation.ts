@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, UnauthorizedError } from "../../../lib/api";
 import { valuationApi } from "../lib/valuation-api";
-import type { EnqueueValuationInput, ValuationJob } from "../lib/valuation-types";
+import type {
+  EnqueueValuationInput,
+  ValuationJob,
+} from "../lib/valuation-types";
 import { isTerminalJobState } from "../lib/valuation-types";
 
 const POLL_INTERVAL_MS = 2_500;
@@ -27,14 +30,20 @@ export interface DomainValuationController {
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 409) {
-      if (error.message.includes("重试") || error.message.includes("任务状态")) return error.message;
+      if (error.message.includes("重试") || error.message.includes("任务状态"))
+        return error.message;
       return "该域名已在估价队列中，请等待当前任务完成。";
     }
     if (error.status === 422) {
-      if (error.message.includes("API Key") || error.message.includes("模型") || error.message.includes("接口地址")) return error.message;
+      if (
+        error.message.includes("API Key") ||
+        error.message.includes("模型") ||
+        error.message.includes("接口地址")
+      )
+        return error.message;
       return "当前域名状态或证据不足，暂不能加入 AI 估价。";
     }
-    if (error.status === 429) return "今日估价额度已用完，请稍后重试或调整额度。";
+    if (error.status === 429) return "AI Provider 暂时限流，请稍后重试。";
     if (error.status === 401) return "登录状态已失效，请重新登录后再试。";
   }
   return error instanceof Error ? error.message : "AI 估价请求失败";
@@ -81,7 +90,10 @@ export function useDomainValuation(
       try {
         const next = await valuationApi.valuations.getJob(job.id);
         setJob(next);
-        if (isTerminalJobState(next.state) && completionRef.current !== next.id) {
+        if (
+          isTerminalJobState(next.state) &&
+          completionRef.current !== next.id
+        ) {
           completionRef.current = next.id;
           onCompleted?.(next);
         }

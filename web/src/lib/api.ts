@@ -41,7 +41,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (token) headers.set("X-CSRF-Token", token);
   }
 
-  const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  const response = await fetch(path, {
+    ...init,
+    headers,
+    credentials: "same-origin",
+  });
   if (response.status === 401) throw new UnauthorizedError();
 
   const text = await response.text();
@@ -50,7 +54,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     try {
       const parsed = JSON.parse(text);
       if (parsed && typeof parsed.error === "string") message = parsed.error;
-      else if (parsed && typeof parsed.message === "string") message = parsed.message;
+      else if (parsed && typeof parsed.message === "string")
+        message = parsed.message;
     } catch {
       /* 后端错误响应是纯文本，直接使用 */
     }
@@ -60,7 +65,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return JSON.parse(text) as T;
 }
 
-async function requestRaw<T>(path: string, body: BodyInit, contentType: string): Promise<T> {
+async function requestRaw<T>(
+  path: string,
+  body: BodyInit,
+  contentType: string,
+): Promise<T> {
   return request<T>(path, {
     method: "POST",
     body,
@@ -77,15 +86,28 @@ async function requestDownload(path: string): Promise<ApiDownload> {
     try {
       const parsed = JSON.parse(text);
       if (parsed && typeof parsed.error === "string") message = parsed.error;
-      else if (parsed && typeof parsed.message === "string") message = parsed.message;
+      else if (parsed && typeof parsed.message === "string")
+        message = parsed.message;
     } catch {
       /* 后端错误响应是纯文本，直接使用 */
     }
     throw new ApiError(message, response.status);
   }
   const disposition = response.headers.get("Content-Disposition") ?? "";
-  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "domainhunter-domains";
+  const filename =
+    disposition.match(/filename="([^"]+)"/)?.[1] ?? "domainhunter-domains";
   return { blob: await response.blob(), filename };
+}
+
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export interface ApiDownload {
@@ -105,11 +127,20 @@ export const api = {
     }
   },
   post: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }),
+    request<T>(path, {
+      method: "POST",
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
   put: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: "PUT", body: body === undefined ? undefined : JSON.stringify(body) }),
+    request<T>(path, {
+      method: "PUT",
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
   patch: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: "PATCH", body: body === undefined ? undefined : JSON.stringify(body) }),
+    request<T>(path, {
+      method: "PATCH",
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   domains: {
     batchMoveFolder: (domains: string[], folderId: number | null) =>
@@ -121,13 +152,29 @@ export const api = {
         },
       ),
     batchRetryFailed: () =>
-      request<{ status: string; queued: number; window_seconds: number; message: string }>(
-        "/api/v2/domains/batch-retry-failed",
-        { method: "POST", body: JSON.stringify({}) },
-      ),
+      request<{
+        status: string;
+        queued: number;
+        window_seconds: number;
+        message: string;
+      }>("/api/v2/domains/batch-retry-failed", {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    batchValuation: (domains: string[]) =>
+      request<BatchValuationResult>('/api/v2/domains/batch-valuation', {
+        method: 'POST',
+        body: JSON.stringify({ domains }),
+      }),
     exportDomains: (format: "csv" | "json") =>
-      requestDownload(`/api/v2/domains/export?format=${encodeURIComponent(format)}`),
-    importDomains: (content: string, format: "csv" | "json", mode: ImportMode) =>
+      requestDownload(
+        `/api/v2/domains/export?format=${encodeURIComponent(format)}`,
+      ),
+    importDomains: (
+      content: string,
+      format: "csv" | "json",
+      mode: ImportMode,
+    ) =>
       requestRaw<{ status: string; result: DomainImportResult }>(
         `/api/v2/domains/import?format=${format}&mode=${mode}`,
         content,
@@ -147,110 +194,198 @@ export const api = {
         body: JSON.stringify({ name, parent_id: parentId }),
       }),
     remove: (id: number) =>
-      request<{ status: string; id: number }>(`/api/v2/folders/${id}`, { method: "DELETE" }),
+      request<{ status: string; id: number }>(`/api/v2/folders/${id}`, {
+        method: "DELETE",
+      }),
   },
   notifications: {
+    markRead: (ids: number[], read: boolean) =>
+      request<{ status: string; updated: number }>("/api/v2/notifications/read", {
+        method: "PATCH",
+        body: JSON.stringify({ ids, read }),
+      }),
+    preferences: {
+      get: () => request<{ muted_types: string[] }>("/api/v2/notifications/preferences"),
+      update: (mutedTypes: string[]) => request<{ status: string; muted_types: string[] }>("/api/v2/notifications/preferences", {
+        method: "PUT",
+        body: JSON.stringify({ muted_types: mutedTypes }),
+      }),
+    },
     rules: {
-      list: () => request<{ rules: NotificationRule[] }>("/api/v2/notifications/rules"),
+      list: () =>
+        request<{ rules: NotificationRule[] }>("/api/v2/notifications/rules"),
       create: (rule: NotificationRuleInput) =>
         request<NotificationRule>("/api/v2/notifications/rules", {
           method: "POST",
           body: JSON.stringify(rule),
         }),
       update: (id: number, rule: NotificationRuleInput) =>
-        request<{ status: string; id: number }>(`/api/v2/notifications/rules/${id}`, {
-          method: "PUT",
-          body: JSON.stringify({ ...rule, id }),
-        }),
+        request<{ status: string; id: number }>(
+          `/api/v2/notifications/rules/${id}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ ...rule, id }),
+          },
+        ),
       remove: (id: number) =>
-        request<{ status: string; id: number }>(`/api/v2/notifications/rules/${id}`, {
-          method: "DELETE",
-        }),
+        request<{ status: string; id: number }>(
+          `/api/v2/notifications/rules/${id}`,
+          {
+            method: "DELETE",
+          },
+        ),
     },
     templates: {
-      list: () => request<{ templates: NotificationTemplate[] }>("/api/v2/notifications/templates"),
+      list: () =>
+        request<{ templates: NotificationTemplate[] }>(
+          "/api/v2/notifications/templates",
+        ),
       create: (template: NotificationTemplateInput) =>
         request<NotificationTemplate>("/api/v2/notifications/templates", {
           method: "POST",
           body: JSON.stringify(template),
         }),
       update: (id: number, template: NotificationTemplateInput) =>
-        request<{ status: string; id: number }>(`/api/v2/notifications/templates/${id}`, {
-          method: "PUT",
-          body: JSON.stringify({ ...template, id }),
-        }),
+        request<{ status: string; id: number }>(
+          `/api/v2/notifications/templates/${id}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ ...template, id }),
+          },
+        ),
       remove: (id: number) =>
-        request<{ status: string; id: number }>(`/api/v2/notifications/templates/${id}`, {
-          method: "DELETE",
-        }),
+        request<{ status: string; id: number }>(
+          `/api/v2/notifications/templates/${id}`,
+          {
+            method: "DELETE",
+          },
+        ),
     },
     digest: {
       get: () => request<NotificationDigest>("/api/v2/notifications/digest"),
       update: (digest: NotificationDigestInput) =>
-        request<{ status: string; digest: NotificationDigest }>("/api/v2/notifications/digest", {
-          method: "PUT",
-          body: JSON.stringify(digest),
-        }),
+        request<{ status: string; digest: NotificationDigest }>(
+          "/api/v2/notifications/digest",
+          {
+            method: "PUT",
+            body: JSON.stringify(digest),
+          },
+        ),
     },
   },
   tokens: {
     list: () => request<{ tokens: ApiToken[] }>("/api/v2/tokens"),
     create: (input: ApiTokenInput) =>
-      request<ApiToken>("/api/v2/tokens", { method: "POST", body: JSON.stringify(input) }),
+      request<ApiToken>("/api/v2/tokens", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
     revoke: (id: number) =>
-      request<{ status: string; id: number }>(`/api/v2/tokens/${id}`, { method: "DELETE" }),
+      request<{ status: string; id: number }>(`/api/v2/tokens/${id}`, {
+        method: "DELETE",
+      }),
   },
   p1: {
     savedViews: {
       list: () => request<{ views: SavedView[] }>("/api/v2/saved-views"),
       create: (input: { name: string; filter: FilterNode; shared: boolean }) =>
-        request<SavedView>("/api/v2/saved-views", { method: "POST", body: JSON.stringify(input) }),
-      update: (id: number, input: { name: string; filter: FilterNode; shared: boolean }) =>
-        request<SavedView>(`/api/v2/saved-views/${id}`, { method: "PUT", body: JSON.stringify(input) }),
-      remove: (id: number) => request<{ status: string; id: number }>(`/api/v2/saved-views/${id}`, { method: "DELETE" }),
+        request<SavedView>("/api/v2/saved-views", {
+          method: "POST",
+          body: JSON.stringify(input),
+        }),
+      update: (
+        id: number,
+        input: { name: string; filter: FilterNode; shared: boolean },
+      ) =>
+        request<SavedView>(`/api/v2/saved-views/${id}`, {
+          method: "PUT",
+          body: JSON.stringify(input),
+        }),
+      remove: (id: number) =>
+        request<{ status: string; id: number }>(`/api/v2/saved-views/${id}`, {
+          method: "DELETE",
+        }),
     },
     bulkPreview: (action: BulkAction) =>
-      request<BulkPreview>("/api/v2/bulk-actions/preview", { method: "POST", body: JSON.stringify(action) }),
-    bulkExecute: (action: BulkAction) =>
-      request<{ status: string; updated: number; queued?: number }>("/api/v2/bulk-actions", {
+      request<BulkPreview>("/api/v2/bulk-actions/preview", {
         method: "POST",
         body: JSON.stringify(action),
       }),
-    bulkAudits: () => request<{ audits: BulkAudit[] }>("/api/v2/bulk-actions/audits?limit=100"),
+    bulkExecute: (action: BulkAction) =>
+      request<{ status: string; updated: number; queued?: number }>(
+        "/api/v2/bulk-actions",
+        {
+          method: "POST",
+          body: JSON.stringify(action),
+        },
+      ),
+    bulkAudits: () =>
+      request<{ audits: BulkAudit[] }>("/api/v2/bulk-actions/audits?limit=100"),
     ai: {
       settings: () => request<AISettings>("/api/v2/ai/settings"),
       saveSettings: (input: AISettingsInput) =>
-        request<AISettings>("/api/v2/ai/settings", { method: "PUT", body: JSON.stringify(input) }),
+        request<AISettings>("/api/v2/ai/settings", {
+          method: "PUT",
+          body: JSON.stringify(input),
+        }),
       providers: {
-        list: () => request<{ providers: AIProviderProfile[] }>("/api/v2/ai/providers"),
+        list: () =>
+          request<{ providers: AIProviderProfile[] }>("/api/v2/ai/providers"),
         create: (input: AISettingsInput) =>
-          request<AIProviderProfile>("/api/v2/ai/providers", { method: "POST", body: JSON.stringify(input) }),
-        remove: (id: number) => request<{ status: string; id: number }>(`/api/v2/ai/providers/${id}`, { method: "DELETE" }),
+          request<AIProviderProfile>("/api/v2/ai/providers", {
+            method: "POST",
+            body: JSON.stringify(input),
+          }),
+        remove: (id: number) =>
+          request<{ status: string; id: number }>(
+            `/api/v2/ai/providers/${id}`,
+            { method: "DELETE" },
+          ),
       },
       models: () => request<{ models: string[] }>("/api/v2/ai/models"),
       usage: () => request<AIUsage>("/api/v2/ai/usage"),
       jobs: () => request<{ jobs: AIJob[] }>("/api/v2/ai/jobs?limit=100"),
       enqueue: (domains: string[]) =>
-        request<{ status: string; queued: number }>("/api/v2/ai/jobs", { method: "POST", body: JSON.stringify({ domains }) }),
+        request<{ status: string; queued: number }>("/api/v2/ai/jobs", {
+          method: "POST",
+          body: JSON.stringify({ domains }),
+        }),
       valuation: (domain: string) =>
-        request<{ valuation: Valuation | null }>(`/api/v2/ai/valuations/${encodeURIComponent(domain)}`),
+        request<{ valuation: Valuation | null }>(
+          `/api/v2/ai/valuations/${encodeURIComponent(domain)}`,
+        ),
     },
     automation: {
-      rules: () => request<{ rules: AutomationRule[] }>("/api/v2/automation/rules"),
+      rules: () =>
+        request<{ rules: AutomationRule[] }>("/api/v2/automation/rules"),
       createRule: (rule: AutomationRuleInput) =>
-        request<AutomationRule>("/api/v2/automation/rules", { method: "POST", body: JSON.stringify(rule) }),
-      updateRule: (id: number, rule: AutomationRuleInput) =>
-        request<{ status: string; id: number }>(`/api/v2/automation/rules/${id}`, {
-          method: "PUT",
-          body: JSON.stringify({ ...rule, id }),
-        }),
-      removeRule: (id: number) => request<{ status: string; id: number }>(`/api/v2/automation/rules/${id}`, { method: "DELETE" }),
-      dryRun: (id: number, event: AutomationEvent) =>
-        request<{ runs: AutomationRun[]; side_effects: boolean }>(`/api/v2/automation/rules/${id}/dry-run`, {
+        request<AutomationRule>("/api/v2/automation/rules", {
           method: "POST",
-          body: JSON.stringify(event),
+          body: JSON.stringify(rule),
         }),
-      runs: () => request<{ runs: AutomationRun[] }>("/api/v2/automation/runs?limit=100"),
+      updateRule: (id: number, rule: AutomationRuleInput) =>
+        request<{ status: string; id: number }>(
+          `/api/v2/automation/rules/${id}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ ...rule, id }),
+          },
+        ),
+      removeRule: (id: number) =>
+        request<{ status: string; id: number }>(
+          `/api/v2/automation/rules/${id}`,
+          { method: "DELETE" },
+        ),
+      dryRun: (id: number, event: AutomationEvent) =>
+        request<{ runs: AutomationRun[]; side_effects: boolean }>(
+          `/api/v2/automation/rules/${id}/dry-run`,
+          {
+            method: "POST",
+            body: JSON.stringify(event),
+          },
+        ),
+      runs: () =>
+        request<{ runs: AutomationRun[] }>("/api/v2/automation/runs?limit=100"),
     },
   },
 };
@@ -297,6 +432,7 @@ export interface DomainInfo {
   epp_statuses?: string[];
   evidence?: Evidence[];
   next_check_at?: string | null;
+  notify?: boolean;
   favorite?: boolean;
   tags?: string[];
   note?: string;
@@ -305,6 +441,7 @@ export interface DomainInfo {
   folder?: string;
   cached?: boolean;
   review?: ReviewState;
+  ai_quality_score?: number | null;
 }
 
 export type ReviewReason =
@@ -414,6 +551,7 @@ export interface OverviewTrendPoint {
   available: number;
   high_score: number;
   changes: number;
+  status_counts?: Record<string, number>;
 }
 
 export interface SessionInfo {
@@ -474,7 +612,11 @@ export interface SettingsV2 {
   bark: BarkSettings;
   feishu: FeishuSettings;
   webhook: WebhookSettings;
-  monitor: { check_interval: number; concurrent_limit: number; timeout: number };
+  monitor: {
+    check_interval: number;
+    concurrent_limit: number;
+    timeout: number;
+  };
   history: {
     retention_days: number;
     max_per_domain: number;
@@ -501,6 +643,7 @@ export interface NotificationRecord {
   old_status: string;
   sent_at: string;
   type: string;
+  read_at?: string | null;
 }
 
 export type ImportMode = "skip" | "overwrite" | "deduplicate";
@@ -597,7 +740,8 @@ export interface SavedView {
 }
 
 export interface BulkAction {
-  type: "tag" | "priority" | "folder" | "notification" | "monitor" | "ai_valuation";
+  type:
+    "tag" | "priority" | "folder" | "notification" | "monitor" | "ai_valuation";
   domains?: string[];
   filter?: FilterNode;
   tag?: string;
@@ -613,10 +757,16 @@ export interface BulkPreview {
   samples: string[];
   task_count: number;
   cache_hits: number;
-  daily_limit: number;
-  daily_used: number;
-  within_limit: boolean;
   warning?: string;
+}
+
+export interface BatchValuationResult {
+  requested: number;
+  queued: number;
+  cached: number;
+  failed: number;
+  jobs?: Array<{ id: string; domain: string; state: string; cached?: boolean }>;
+  errors?: Array<{ domain: string; error: string }>;
 }
 
 export interface BulkAudit {
@@ -640,7 +790,6 @@ export interface AISettings {
   timeout_seconds: number;
   concurrency: number;
   max_output_tokens: number;
-  daily_limit: number;
   cache_ttl_seconds: number;
   enabled: boolean;
 }
@@ -656,7 +805,6 @@ export interface AISettingsInput {
   timeout_seconds: number;
   concurrency: number;
   max_output_tokens: number;
-  daily_limit: number;
   cache_ttl_seconds: number;
   enabled: boolean;
 }
@@ -673,14 +821,12 @@ export interface AIProviderProfile {
   timeout_seconds: number;
   concurrency: number;
   max_output_tokens: number;
-  daily_limit: number;
   cache_ttl_seconds: number;
   enabled: boolean;
 }
 
 export interface AIUsage {
   date: string;
-  daily_limit: number;
   used: number;
   queued: number;
   running: number;
@@ -735,7 +881,10 @@ export interface AutomationRule {
   updated_at: string;
 }
 
-export type AutomationRuleInput = Omit<AutomationRule, "id" | "created_at" | "updated_at">;
+export type AutomationRuleInput = Omit<
+  AutomationRule,
+  "id" | "created_at" | "updated_at"
+>;
 
 export interface AutomationEvent {
   event_id: string;

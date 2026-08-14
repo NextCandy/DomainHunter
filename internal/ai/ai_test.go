@@ -201,8 +201,8 @@ func TestValidateProfileInput(t *testing.T) {
 		t.Fatalf("default profile invalid: %v", err)
 	}
 	input.DailyLimit = 0
-	if err := validateProfileInput(input); err == nil {
-		t.Fatal("zero daily limit must fail")
+	if err := validateProfileInput(input); err != nil {
+		t.Fatalf("zero daily limit should be accepted as unlimited compatibility value: %v", err)
 	}
 }
 

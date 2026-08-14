@@ -284,7 +284,7 @@ function FolderNode({
         </button>
         <button
           type="button"
-          className="btn btn-ghost h-7 w-7 shrink-0 px-0 text-red-500 opacity-70 focus-visible:opacity-100 group-hover:opacity-100"
+          className="btn btn-ghost h-7 w-7 shrink-0 px-0 text-ink-muted opacity-70 focus-visible:opacity-100 group-hover:opacity-100"
           onClick={() => onDelete(node)}
           aria-label={`删除 ${node.name}`}
           title={`删除 ${node.name}`}
@@ -331,7 +331,7 @@ function FolderFormDialog({
   const [name, setName] = useState(folder?.name ?? "");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel} role="presentation" />
+      <div className="absolute inset-0 bg-overlay/40" onClick={onCancel} role="presentation" />
       <form
         className="card relative w-full max-w-sm p-4"
         role="dialog"

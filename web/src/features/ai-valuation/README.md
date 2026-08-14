@@ -6,8 +6,8 @@
 
 | 路径 | 职责 |
 | --- | --- |
-| `components/DomainValuationPanel.tsx` | 域名详情的估价模块，按“域名 / 评分 / 价格评估 / 核心分析”逐行展示，完整覆盖空态、数据复核禁用、入队、轮询、结果、失败、取消、额度与免责声明。 |
-| `components/DeepSeekProfileForm.tsx` | DeepSeek / OpenAI-compatible 档案配置，覆盖 Base URL、模型、Key 写入、连接测试与并发额度。 |
+| `components/DomainValuationPanel.tsx` | 域名详情的估价模块，按“域名 / 评分 / 价格评估 / 核心分析”逐行展示，完整覆盖空态、数据复核禁用、入队、轮询、结果、失败、取消、Provider 限流与免责声明。 |
+| `components/DeepSeekProfileForm.tsx` | DeepSeek / OpenAI-compatible 档案配置，覆盖 Base URL、模型、Key 写入、连接测试与并发控制；每日估价不限额。 |
 | `hooks/useDomainValuation.ts` | 当前任务加载、2.5 秒轮询、入队、取消、错误映射和 401 回调。 |
 | `hooks/useAIProfiles.ts` | 档案加载、保存、删除、默认档案选择和连接测试。 |
 | `lib/valuation-api.ts` | 同源 API 适配层，复用 `web/src/lib/api.ts` 的 CSRF 和认证行为。 |
@@ -133,7 +133,7 @@ import "./features/ai-valuation/valuation.css";
 | 未配置档案 | 面板显示空态与配置引导，不显示假装可用的估价按钮。 |
 | 复核 / 低可信域名 | 估价按钮安全禁用，明确解释必须先重新检查。 |
 | 新任务 | 任务进入 `queued` 或 `running`，每 2.5 秒轮询，不重复入队。 |
-| 额度耗尽 | API `429` 显示额度提示；UI 不继续自动重试。 |
+| Provider 限流 | API `429` 显示上游限流提示；UI 不继续自动重试。 |
 | 返回非法 JSON | 后端 Job 标记失败，面板显示安全失败态，不渲染分数。 |
 | Key 已存在 | 表单只显示来源/是否已设置；完全不回显 Key。 |
 | 自定义 Base URL | 浏览器仅做格式反馈，服务端继续执行完整 SSRF 校验。 |

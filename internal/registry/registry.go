@@ -136,9 +136,6 @@ func load(force bool) error {
 func mergeRDAPBootstrap(servers map[string]TLDServers) BootstrapStatus {
 	endpoint := strings.TrimSpace(os.Getenv("DOMAINHUNTER_RDAP_BOOTSTRAP_URL"))
 	if endpoint == "" {
-		endpoint = strings.TrimSpace(os.Getenv("PUFF_RDAP_BOOTSTRAP_URL"))
-	}
-	if endpoint == "" {
 		endpoint = defaultRDAPBootstrapURL
 	}
 	status := BootstrapStatus{Attempted: true, Source: endpoint}

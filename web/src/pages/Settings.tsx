@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api, UnauthorizedError } from "../lib/api";
 import type { ApiToken, SettingsV2 } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
-import { Card, ConfirmDialog, ErrorNotice, Pill, Spinner, useToast } from "../components/ui";
+import { Card, ConfirmDialog, ErrorNotice, InfoTip, Pill, Spinner, useToast } from "../components/ui";
 import { formatDateTime } from "../lib/format";
 
 const RAW_MODES = [
@@ -44,12 +44,23 @@ export function SettingsPage({
         <p className="text-[12px] text-ink-muted">DomainHunter {data.version}</p>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <MonitorCard settings={data} onSaved={reload} />
-        <HistoryCard settings={data} onSaved={reload} />
-        <AccountCard settings={data} onChanged={onCredentialsChanged} />
-        <TokenManagementCard onUnauthorized={onUnauthorized} />
-        <MaintenanceCard settings={data} onSaved={reload} />
+      <div className="grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)]">
+        <aside className="settings-sidebar h-max overflow-x-auto lg:sticky lg:top-24" aria-label="设置分区">
+          <nav className="flex min-w-max gap-1 lg:grid lg:min-w-0 lg:gap-1">
+            <SettingsNav href="#monitoring" label="监控" />
+            <SettingsNav href="#retention" label="数据保留" />
+            <SettingsNav href="#account" label="账户" />
+            <SettingsNav href="#api-token" label="API Token" />
+            <SettingsNav href="#security" label="安全" />
+          </nav>
+        </aside>
+        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+          <section id="monitoring" className="scroll-mt-24"><MonitorCard settings={data} onSaved={reload} /></section>
+          <section id="retention" className="scroll-mt-24"><HistoryCard settings={data} onSaved={reload} /></section>
+          <section id="account" className="scroll-mt-24"><AccountCard settings={data} onChanged={onCredentialsChanged} /></section>
+          <section id="api-token" className="scroll-mt-24"><TokenManagementCard onUnauthorized={onUnauthorized} /></section>
+          <section id="maintenance" className="scroll-mt-24 xl:col-span-2"><MaintenanceCard settings={data} onSaved={reload} /></section>
+        </div>
       </div>
     </div>
   );
@@ -76,7 +87,7 @@ function MonitorCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
   return (
     <Card title="监控参数">
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="检查间隔（秒）" hint="所有正常状态的域名共用这个间隔">
+        <Field label="检查间隔（秒）" hint="所有正常状态的域名共用这个间隔" example="300 表示每 5 分钟">
           <input
             className="input"
             type="number"
@@ -86,7 +97,7 @@ function MonitorCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             onChange={(event) => setForm({ ...form, check_interval: Number(event.target.value) })}
           />
         </Field>
-        <Field label="并发 worker" hint="1–1000">
+        <Field label="并发 worker" hint="1–1000" example="树莓派建议 4–8">
           <input
             className="input"
             type="number"
@@ -97,7 +108,7 @@ function MonitorCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
             onChange={(event) => setForm({ ...form, concurrent_limit: Number(event.target.value) })}
           />
         </Field>
-        <Field label="查询超时（秒）" hint="1–120">
+        <Field label="查询超时（秒）" hint="1–120" example="10">
           <input
             className="input"
             type="number"
@@ -142,7 +153,7 @@ function HistoryCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
         观测与查询尝试会长期累积。这里的上限保证树莓派 / NAS 上的数据库不会无限增长。
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="保留天数" hint="0 表示不按时间清理">
+        <Field label="保留天数" hint="0 表示不按时间清理" example="90">
           <input
             className="input"
             type="number"
@@ -295,7 +306,7 @@ function AccountCard({ settings, onChanged }: { settings: SettingsV2; onChanged:
         </div>
       </div>
 
-      <div className="mt-4 space-y-1 border-t border-line pt-3 text-[12px] text-ink-muted">
+      <div id="security" className="mt-4 scroll-mt-24 space-y-1 border-t border-line pt-3 text-[12px] text-ink-muted">
         <div className="flex items-center gap-2">
           Cookie Secure <Pill>{settings.security.cookie_secure}</Pill>
           SameSite <Pill>{settings.security.cookie_same_site}</Pill>
@@ -409,9 +420,9 @@ function TokenManagementCard({ onUnauthorized }: { onUnauthorized: () => void })
       </button>
 
       {createdToken && (
-        <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10" role="alert">
-          <p className="text-[12px] font-medium text-amber-900 dark:text-amber-200">请立即复制，此 Token 只显示一次</p>
-          <code className="mt-2 block break-all rounded bg-black/5 px-2 py-1.5 text-[12px] text-amber-950 dark:bg-black/20 dark:text-amber-100">{createdToken}</code>
+        <div className="mt-3 rounded-card border border-accent/30 bg-accent-soft/45 p-3" role="alert">
+          <p className="text-[12px] font-medium text-ink">请立即复制，此 Token 只显示一次</p>
+          <code className="mt-2 block break-all rounded-[6px] bg-surface px-2 py-1.5 text-[12px] text-ink">{createdToken}</code>
           <button
             type="button"
             className="btn mt-2 h-7 px-2 text-[12px]"
@@ -579,17 +590,24 @@ function MaintenanceCard({ settings, onSaved }: { settings: SettingsV2; onSaved:
 function Field({
   label,
   hint,
+  example,
   children,
 }: {
   label: string;
   hint?: string;
+  example?: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <span className="label">{label}</span>
+      <span className="label flex items-center gap-1.5">{label}{hint && <InfoTip content={hint} />}</span>
       {children}
       {hint && <p className="mt-1 text-[11px] text-ink-faint">{hint}</p>}
+      {example && <p className="mt-0.5 text-[11px] text-ink-faint">示例：{example}</p>}
     </div>
   );
+}
+
+function SettingsNav({ href, label }: { href: string; label: string }) {
+  return <a href={href} className="relative rounded-md px-3 py-2 text-[12px] text-ink-muted hover:bg-surface-muted hover:text-ink lg:block" onClick={(event) => { const target = document.querySelector(href); if (target) { event.preventDefault(); target.scrollIntoView({ behavior: "smooth", block: "start" }); } }}>{label}</a>;
 }

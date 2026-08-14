@@ -238,6 +238,7 @@ func ParseResponse(name string, resp *Response, raw string) query.Result {
 	}
 
 	result.EPPStatuses = append([]string(nil), resp.Status...)
+	result.LifecycleEvidence = hasLifecycleStatus(resp.Status)
 	result.Status = ParseStatus(resp.Status)
 	result.Registrar = parseRegistrar(resp.Entities)
 	applyEvents(resp.Events, &result)
@@ -274,7 +275,23 @@ func ParseResponse(name string, resp *Response, raw string) query.Result {
 		// RDAP 是结构化数据源，拿到注册商/事件即视为高可信
 		result.Confidence = domain.ConfidenceHigh
 	}
-	return result
+	return query.NormalizeIMLifecycle(result)
+}
+
+func hasLifecycleStatus(statuses []string) bool {
+	for _, raw := range statuses {
+		key := strings.ToLower(strings.NewReplacer(" ", "", "_", "", "-", "").Replace(raw))
+		switch {
+		case strings.Contains(key, "hold"),
+			strings.Contains(key, "redemption"),
+			strings.Contains(key, "pendingdelete"),
+			strings.Contains(key, "expired"),
+			strings.Contains(key, "renewperiod"),
+			strings.Contains(key, "grace"):
+			return true
+		}
+	}
+	return false
 }
 
 func hasRegistrationData(result query.Result, resp *Response) bool {

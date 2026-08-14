@@ -84,7 +84,7 @@ export function ImportExportDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} role="presentation" />
+      <div className="absolute inset-0 bg-overlay/40" onClick={onClose} role="presentation" />
       <section
         className="card relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto p-4"
         role="dialog"
@@ -249,7 +249,7 @@ export function ImportExportDialog({
 
 function ImportResult({ result }: { result: DomainImportResult }) {
   return (
-    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300" role="status">
+    <div className="rounded-card border border-accent/30 bg-accent-soft/45 px-3 py-2 text-[12px] text-ink" role="status">
       导入 {result.imported} 个 · 覆盖 {result.overwritten} 个 · 跳过 {result.skipped} 个 · 重复 {result.duplicates} 个
       {result.invalid && result.invalid.length > 0 && <span> · 无效 {result.invalid.length} 个</span>}
     </div>

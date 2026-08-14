@@ -47,29 +47,31 @@ const (
 
 // Profile is the safe response model. APIKey is never serialized or returned.
 type Profile struct {
-	ID                string          `json:"id"`
-	Name              string          `json:"name"`
-	Provider          ProviderKind    `json:"provider"`
-	Enabled           bool            `json:"enabled"`
-	IsDefault         bool            `json:"is_default"`
-	Status            ProfileStatus   `json:"status"`
-	BaseURL           string          `json:"base_url"`
-	BaseURLHost       string          `json:"base_url_host"`
-	Model             string          `json:"model"`
-	APIKeySet         bool            `json:"api_key_set"`
-	APIKeySource      SecretSource    `json:"api_key_source"`
-	ThinkingType      ThinkingType    `json:"thinking_type"`
-	ReasoningEffort   ReasoningEffort `json:"reasoning_effort"`
-	TimeoutSeconds    int             `json:"timeout_seconds"`
-	MaxTokens         int             `json:"max_tokens"`
-	Concurrency       int             `json:"concurrency"`
-	DailyLimit        int             `json:"daily_limit"`
-	CacheTTLHours     int             `json:"cache_ttl_hours"`
-	LastTestedAt      *time.Time      `json:"last_tested_at,omitempty"`
-	LastTestLatencyMS *int64          `json:"last_test_latency_ms,omitempty"`
-	LastError         string          `json:"last_error,omitempty"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Provider        ProviderKind    `json:"provider"`
+	Enabled         bool            `json:"enabled"`
+	IsDefault       bool            `json:"is_default"`
+	Status          ProfileStatus   `json:"status"`
+	BaseURL         string          `json:"base_url"`
+	BaseURLHost     string          `json:"base_url_host"`
+	Model           string          `json:"model"`
+	APIKeySet       bool            `json:"api_key_set"`
+	APIKeySource    SecretSource    `json:"api_key_source"`
+	ThinkingType    ThinkingType    `json:"thinking_type"`
+	ReasoningEffort ReasoningEffort `json:"reasoning_effort"`
+	TimeoutSeconds  int             `json:"timeout_seconds"`
+	MaxTokens       int             `json:"max_tokens"`
+	Concurrency     int             `json:"concurrency"`
+	// DailyLimit is retained only so old SQLite rows can still be read. Daily
+	// valuation limits are no longer supported and this field is never exposed.
+	DailyLimit        int        `json:"-"`
+	CacheTTLHours     int        `json:"cache_ttl_hours"`
+	LastTestedAt      *time.Time `json:"last_tested_at,omitempty"`
+	LastTestLatencyMS *int64     `json:"last_test_latency_ms,omitempty"`
+	LastError         string     `json:"last_error,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // ProfileInput accepts a write-only API key. An empty APIKey means retain an existing key.
@@ -86,8 +88,9 @@ type ProfileInput struct {
 	TimeoutSeconds  int             `json:"timeout_seconds"`
 	MaxTokens       int             `json:"max_tokens"`
 	Concurrency     int             `json:"concurrency"`
-	DailyLimit      int             `json:"daily_limit"`
-	CacheTTLHours   int             `json:"cache_ttl_hours"`
+	// Retained for source compatibility with older callers; ignored on input.
+	DailyLimit    int `json:"-"`
+	CacheTTLHours int `json:"cache_ttl_hours"`
 }
 
 type JobState string
@@ -142,12 +145,6 @@ type Valuation struct {
 	ExpiresAt          *time.Time  `json:"expires_at,omitempty"`
 }
 
-type Quota struct {
-	UsedToday      int `json:"used_today"`
-	DailyLimit     int `json:"daily_limit"`
-	RemainingToday int `json:"remaining_today"`
-}
-
 type Job struct {
 	ID           string      `json:"id"`
 	Domain       string      `json:"domain"`
@@ -162,13 +159,26 @@ type Job struct {
 	ErrorCode    string      `json:"error_code,omitempty"`
 	ErrorMessage string      `json:"error_message,omitempty"`
 	Cached       bool        `json:"cached"`
-	Quota        *Quota      `json:"quota,omitempty"`
 }
 
 type EnqueueInput struct {
 	ProfileID    string      `json:"profile_id,omitempty"`
 	Priority     JobPriority `json:"priority,omitempty"`
 	ForceRefresh bool        `json:"force_refresh,omitempty"`
+}
+
+type BatchEnqueueError struct {
+	Domain string `json:"domain"`
+	Error  string `json:"error"`
+}
+
+type BatchEnqueueResult struct {
+	Requested int                 `json:"requested"`
+	Queued    int                 `json:"queued"`
+	Cached    int                 `json:"cached"`
+	Failed    int                 `json:"failed"`
+	Jobs      []*Job              `json:"jobs,omitempty"`
+	Errors    []BatchEnqueueError `json:"errors,omitempty"`
 }
 
 type ConnectionTestResult struct {
@@ -209,7 +219,7 @@ func DefaultDeepSeekProfile() ProfileInput {
 		TimeoutSeconds:  30,
 		MaxTokens:       900,
 		Concurrency:     1,
-		DailyLimit:      50,
+		DailyLimit:      0,
 		CacheTTLHours:   24,
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -59,19 +58,27 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestResolveFilePrefersLegacyDatabase 既有部署的 puff.db 必须继续被使用，
-// 绝不能因为改名而在旁边新建一个空库
-func TestResolveFilePrefersLegacyDatabase(t *testing.T) {
+func TestUnlimitedAIMigrationClearsLegacyDailyLimits(t *testing.T) {
+	db := newTestDB(t)
+	var strictLimit, providerLimit, settingsLimit int
+	if err := db.QueryRow(`SELECT COALESCE(MAX(daily_limit),0) FROM ai_profiles WHERE is_default=1`).Scan(&strictLimit); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT daily_limit FROM ai_provider_profiles WHERE is_default=1`).Scan(&providerLimit); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT daily_limit FROM ai_provider_settings WHERE id=1`).Scan(&settingsLimit); err != nil {
+		t.Fatal(err)
+	}
+	if strictLimit != 0 || providerLimit != 0 || settingsLimit != 0 {
+		t.Fatalf("legacy AI daily limits were not cleared: strict=%d provider=%d settings=%d", strictLimit, providerLimit, settingsLimit)
+	}
+}
+
+func TestResolveFileDefaultsToDomainHunterDatabase(t *testing.T) {
 	dir := t.TempDir()
 	if got := ResolveFile(dir); got != DefaultFile {
 		t.Fatalf("全新安装应创建 %s，实际 %s", DefaultFile, got)
-	}
-
-	if err := os.WriteFile(filepath.Join(dir, LegacyFile), []byte{}, 0o644); err != nil {
-		t.Fatalf("创建旧库失败: %v", err)
-	}
-	if got := ResolveFile(dir); got != LegacyFile {
-		t.Fatalf("存在 %s 时必须继续使用它，实际 %s", LegacyFile, got)
 	}
 
 	t.Setenv("DOMAINHUNTER_DB_FILE", "custom.db")
@@ -80,10 +87,9 @@ func TestResolveFilePrefersLegacyDatabase(t *testing.T) {
 	}
 }
 
-// TestMigrateMarksLegacyBaseline 模拟既有 Puff 数据库：已有表但没有迁移记录
-func TestMigrateMarksLegacyBaseline(t *testing.T) {
+func TestMigrateMarksExistingBaseline(t *testing.T) {
 	dir := t.TempDir()
-	raw, err := sql.Open("sqlite", filepath.Join(dir, LegacyFile))
+	raw, err := sql.Open("sqlite", filepath.Join(dir, DefaultFile))
 	if err != nil {
 		t.Fatalf("创建旧库失败: %v", err)
 	}
@@ -475,6 +481,14 @@ func TestNotificationHistory(t *testing.T) {
 	records, err := repo.ListRecent(ctx, 10)
 	if err != nil || len(records) != 1 {
 		t.Fatalf("通知历史数量不对: %d %v", len(records), err)
+	}
+	updated, err := repo.MarkRead(ctx, []int64{records[0].ID}, true)
+	if err != nil || updated != 1 {
+		t.Fatalf("标记通知已读失败: %d %v", updated, err)
+	}
+	records, err = repo.ListRecent(ctx, 10)
+	if err != nil || records[0].ReadAt == nil {
+		t.Fatalf("通知已读状态未持久化: %+v %v", records, err)
 	}
 }
 
