@@ -21,17 +21,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: [
-          "var(--font-inter)",
-          "Inter",
-          "ui-sans-serif",
-          "system-ui",
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "Segoe UI",
-          "sans-serif",
-        ],
-        display: ["var(--font-roobert)", "Inter Tight", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["var(--font-inter)"],
+        display: ["var(--font-roobert)"],
         mono: ["var(--font-mono)", "JetBrains Mono", "IBM Plex Mono", "ui-monospace", "monospace"],
       },
       colors: {
@@ -60,6 +51,7 @@ export default {
           raised: "rgb(var(--surface-raised) / <alpha-value>)",
         },
         canvas: "rgb(var(--canvas) / <alpha-value>)",
+        sidebar: "rgb(var(--sidebar) / <alpha-value>)",
         line: "rgb(var(--line) / <alpha-value>)",
         ink: {
           DEFAULT: "rgb(var(--ink) / <alpha-value>)",
@@ -93,12 +85,21 @@ export default {
         "on-accent": "oklch(var(--on-accent) / <alpha-value>)",
         overlay: "oklch(var(--overlay) / <alpha-value>)",
       },
+      // 规范：卡片与按钮 14px，徽章/标签全圆，导航项 7px。
       borderRadius: {
-        card: "10px",
-        button: "9999px",
-        pill: "1000px",
-        nav: "100px",
-        tag: "100px",
+        card: "14px",
+        button: "14px",
+        pill: "999px",
+        nav: "7px",
+        tag: "999px",
+      },
+      boxShadow: {
+        // 这套系统靠色块分层，不靠投影。保留键名让残留类名不至于报错。
+        sm: "none",
+        DEFAULT: "none",
+        md: "none",
+        lg: "none",
+        xl: "none",
       },
       maxWidth: {
         workbench: "1200px",

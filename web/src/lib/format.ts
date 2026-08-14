@@ -28,19 +28,24 @@ export const STATUS_ORDER: DomainStatus[] = [
   "skipped",
 ];
 
-/** 状态颜色只引用语义令牌；浅色/深色主题由 CSS 统一校准。 */
+/**
+ * 状态色全部落在植物调色板内，紧急度靠色块的「重量」递进而不是新色相：
+ * 发丝边（常态）→ 青柠 wash → 薄荷 → 鼠尾草 → 森林墨实底反白（最重）。
+ * 冷色 slate 专门留给 hold / 赎回期这类「流程中断」，跳出绿色序列。
+ * 浅色/深色主题由 CSS 令牌统一校准。
+ */
 export const STATUS_CLASSES: Record<DomainStatus, string> = {
-  available: "bg-success/12 text-success border-success/20",
-  registered: "bg-neutral/12 text-neutral border-neutral/20",
-  grace: "bg-warning/12 text-warning border-warning/20",
-  redemption: "bg-info/12 text-info border-info/20",
-  pending_delete: "bg-danger/12 text-danger border-danger/20",
-  expired: "bg-danger/12 text-danger border-danger/20",
-  transfer_locked: "bg-info/12 text-info border-info/20",
-  hold: "bg-info/12 text-info border-info/20",
-  unknown: "bg-neutral/12 text-neutral border-neutral/20",
-  error: "bg-danger/12 text-danger border-danger/20",
-  skipped: "bg-neutral/12 text-neutral border-neutral/20",
+  available: "bg-accent-soft text-ink border-transparent",
+  registered: "bg-transparent text-ink-muted border-line",
+  grace: "bg-blush text-ink border-accent/25",
+  redemption: "bg-periwinkle-mist text-ink border-transparent",
+  pending_delete: "bg-accent text-on-accent border-transparent",
+  expired: "bg-deep-teal text-on-accent border-transparent",
+  transfer_locked: "bg-card-mint text-ink border-transparent",
+  hold: "bg-periwinkle-mist/75 text-ink border-transparent",
+  unknown: "bg-transparent text-ink-faint border-line",
+  error: "bg-transparent text-ink border-accent",
+  skipped: "bg-transparent text-ink-faint border-line",
 };
 
 export function hasTransferLock(statuses?: string[] | null): boolean {

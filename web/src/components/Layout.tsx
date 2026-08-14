@@ -109,7 +109,8 @@ export function Layout({
   return (
     <div className="min-h-full min-w-0 bg-canvas">
       <div className="flex min-h-full min-w-0 flex-col lg:flex-row">
-        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[248px] lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-surface lg:px-5 lg:py-7">
+        {/* 层叠顺序：鼠尾草侧栏 → 青柠画布 → 奶油卡片。深度只来自色块，没有投影。 */}
+        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[248px] lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-sidebar lg:px-5 lg:py-7">
           <BrandBlock />
           <div className="mt-12">
             <p className="section-label mb-3 px-3">WORKSPACE</p>
@@ -121,9 +122,10 @@ export function Layout({
           </div>
 
           <div className="mt-auto space-y-4 pt-8">
-            <div className="rounded-card border border-line bg-surface-muted p-4">
+            {/* 奶油纸片贴在鼠尾草面板上 */}
+            <div className="rounded-card border-0 bg-surface p-4">
               <p className="section-label">SESSION</p>
-              <p className="mt-2 truncate text-[13px] font-medium text-ink">{username}</p>
+              <p className="mt-2 truncate text-[13px] text-ink">{username}</p>
               <p className="mt-0.5 text-[11px] text-ink-muted">DomainHunter {version}</p>
             </div>
             <button type="button" className="btn btn-ghost w-full" onClick={onLogout}>退出登录</button>
@@ -131,13 +133,13 @@ export function Layout({
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-30 hidden min-h-16 items-center justify-end gap-4 border-b border-line bg-surface/95 px-8 backdrop-blur lg:flex">
+          <header className="sticky top-0 z-30 hidden min-h-16 items-center justify-end gap-4 border-b border-line bg-canvas px-8 lg:flex">
             <SegmentedControl label="主题" value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />
             <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={changeDensity} />
             <SegmentedControl label={t("common.language")} value={locale} options={[{ value: "zh-CN", label: "中文" }, { value: "en-US", label: "EN" }]} onChange={(value) => setLocale(value as "zh-CN" | "en-US")} />
             <button type="button" className="btn btn-ghost h-9 px-3 text-[11px]" onClick={() => setCommandOpen(true)} aria-label={t("common.command")} title="Command palette (⌘/Ctrl K)"><kbd>⌘K</kbd></button>
           </header>
-          <header className="sticky top-0 z-30 border-b border-line bg-surface lg:hidden">
+          <header className="sticky top-0 z-30 border-b border-line bg-canvas lg:hidden">
             <div className="flex min-h-16 items-center gap-3 px-4">
               <BrandBlock compact />
               <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">WORKSPACE</span>
@@ -249,7 +251,8 @@ function NavItem({ item, onClick }: { item: (typeof NAV)[number]; onClick?: () =
     >
       <NavIcon name={item.icon} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="hidden text-[10px] text-ink-faint xl:block">{item.detail}</span>
+      {/* ink-faint 在鼠尾草侧栏上对比度不足，这里用 muted。 */}
+      <span className="hidden text-[10px] text-ink-muted xl:block">{item.detail}</span>
     </NavLink>
   );
 }
@@ -262,7 +265,7 @@ function BrandBlock({ compact = false }: { compact?: boolean }) {
       </span>
       <div className="min-w-0">
         <div className="brand-wordmark truncate">DomainHunter</div>
-        {!compact && <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-faint">domain intelligence</p>}
+        {!compact && <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">domain intelligence</p>}
       </div>
     </div>
   );

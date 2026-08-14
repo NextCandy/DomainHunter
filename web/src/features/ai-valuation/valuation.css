@@ -3,14 +3,13 @@
  * Import once from the feature entry point or DomainValuationPanel.
  * Token definitions intentionally have fallbacks so the module can land before the global theme refactor.
  */
-/* A quiet research surface: depth comes from white paper, hairlines and one cyan signal. */
+/* 冷调的研究面板：slate 是这套系统里唯一的非绿色面，专门留给产品/报告展示。 */
 .ai-valuation-panel {
   position: relative;
   overflow: hidden;
-  background: rgb(var(--surface));
+  background: rgb(var(--slate-hush) / 0.35);
   border: 1px solid rgb(var(--line));
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.05);
+  border-radius: 14px;
 }
 
 .ai-valuation-panel::before {
@@ -23,6 +22,11 @@
 
 .ai-valuation-panel .mono {
   font-variant-numeric: tabular-nums;
+}
+
+/* slate 面板比奶油纸暗一档，最浅的墨色在上面掉到 4.1:1，统一提到 muted。 */
+.ai-valuation-panel .text-ink-faint {
+  color: rgb(var(--ink-muted));
 }
 
 .ai-valuation-score {

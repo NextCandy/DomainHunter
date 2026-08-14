@@ -29,10 +29,11 @@ export const DOMAIN_TABLE_DEFAULT_WIDTHS: Record<TableColumnKey, number> = {
   domain: 180,
   status: 120,
   registrar: 160,
-  expiry: 110,
+  // Inter 的数字比之前的系统字体宽，日期列留出余量，避免字体回退时被裁。
+  expiry: 122,
   provider: 100,
   ai_score: 90,
-  last_checked: 110,
+  last_checked: 118,
   next_check: 120,
   // 三个 32px 图标按钮 + 列内左右 padding，低于 108 会把最右边的删除按钮挤出列外。
   actions: 112,

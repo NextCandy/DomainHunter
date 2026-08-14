@@ -320,8 +320,9 @@ function ActionQueue({ counts }: { counts: Overview["action_counts"] }) {
     { label: "续费风险", count: counts.renewal_risk, hint: "未来 7 天内到期", href: "/domains?sort=expiry", tone: "text-ink" },
     { label: "需要复核", count: counts.review, hint: "查询事实或证据异常", href: "/domains?statuses=error,unknown,skipped", tone: "text-review" },
   ];
-  const borders = ["border-l-success", "border-l-info", "border-l-warning", "border-l-danger"];
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map((item, index) => <Link key={item.label} to={item.href} className={cx("action-queue-item card block min-h-[134px] border-l-4 px-6 py-5 transition-colors hover:bg-accent-soft/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7", borders[index])}><div className="flex items-start justify-between gap-4"><span className={cx("text-[13px] font-semibold", item.tone)}>{item.label}</span><span className={cx("tabular text-[24px] font-semibold leading-none", index === 0 ? "text-success" : index === 1 ? "text-info" : index === 2 ? "text-warning" : "text-danger")}>{item.count}</span></div><p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-3 block text-[11px] font-medium text-accent">打开工作区 →</span></Link>)}</div>;
+  // 四张卡靠色块深浅区分，不靠彩色描边 —— 按 sage → mint → keylime → slate 的顺序层叠。
+  const surfaces = ["bg-accent-soft", "bg-card-mint", "bg-blush", "bg-periwinkle-mist"];
+  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map((item, index) => <Link key={item.label} to={item.href} className={cx("action-queue-item card block min-h-[134px] border-transparent px-6 py-5 transition-colors hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7", surfaces[index])}><div className="flex items-start justify-between gap-4"><span className="text-[13px] font-semibold text-ink">{item.label}</span><span className="tabular font-display text-[32px] font-light leading-none text-ink">{item.count}</span></div><p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-3 block text-[11px] font-medium text-ink">打开工作区 →</span></Link>)}</div>;
 }
 
 function ProviderAlert({ providers }: { providers: ProviderHealth[] | null }) {
