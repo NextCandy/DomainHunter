@@ -311,7 +311,7 @@ function OverviewTab({ info, onUnauthorized, onToggleNotify, onCompleted }: { in
         </Field>
       )}
       </section>
-      <DomainValuationPanel domain={info.name} status={info.status} confidence={info.confidence} reviewRequired={Boolean(info.review?.required)} onUnauthorized={onUnauthorized} onCompleted={onCompleted} compact />
+      <DomainValuationPanel domain={info.name} onUnauthorized={onUnauthorized} onCompleted={onCompleted} compact />
       <ConsistencyTable info={info} />
     </div>
   );

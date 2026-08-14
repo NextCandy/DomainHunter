@@ -21,7 +21,7 @@ import (
 var (
 	ErrProfileNotFound = errors.New("AI 档案不存在")
 	ErrProfileDisabled = errors.New("AI 档案未启用")
-	ErrIneligible      = errors.New("当前域名状态或证据不足，暂不能加入 AI 估价")
+	ErrIneligible      = errors.New("域名尚未加入清单，暂不能加入 AI 估价")
 )
 
 type Service struct {
@@ -175,22 +175,20 @@ func (s *Service) Enqueue(ctx context.Context, name string, input EnqueueInput, 
 	if name == "" {
 		return nil, ErrIneligible
 	}
-	info, err := s.results.Get(ctx, name)
-	if err != nil {
-		return nil, err
-	}
 	watched, err := s.domains.Get(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-	if info == nil || watched == nil || !eligible(info) {
+	if watched == nil {
 		return nil, ErrIneligible
 	}
-	review := domain.BuildReviewState(info, s.clock())
-	if review != nil && review.Required {
-		return nil, ErrIneligible
+	info, err := s.results.Get(ctx, name)
+	if err != nil {
+		return nil, err
 	}
-	info.Review = review
+	// Valuation is a domain-name research operation. A query result is useful
+	// context when it exists, but it is not a prerequisite for creating a job.
+	info = valuationInfo(name, info, s.clock())
 	var profile *ProfileRecord
 	if input.ProfileID != "" {
 		profile, err = s.store.GetProfileRecord(ctx, input.ProfileID)
@@ -315,21 +313,16 @@ func (s *Service) ProcessOne(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 	info, err := s.results.Get(ctx, job.Domain)
-	if err != nil || info == nil {
-		_ = s.store.FailJob(ctx, job.ID, "domain_result_missing", "域名最新查询结果不可用", nil, now)
+	if err != nil {
+		_ = s.store.FailJob(ctx, job.ID, "domain_result_unavailable", "读取域名查询结果失败", nil, now)
 		return true, nil
 	}
 	watched, err := s.domains.Get(ctx, job.Domain)
-	if err != nil || watched == nil || !eligible(info) {
-		_ = s.store.FailJob(ctx, job.ID, "domain_ineligible", "域名状态或证据已不满足估价条件", nil, now)
+	if err != nil || watched == nil {
+		_ = s.store.FailJob(ctx, job.ID, "domain_not_watched", "域名已不在清单中", nil, now)
 		return true, nil
 	}
-	review := domain.BuildReviewState(info, now)
-	if review != nil && review.Required {
-		_ = s.store.FailJob(ctx, job.ID, "domain_ineligible", "域名状态或证据已不满足估价条件", nil, now)
-		return true, nil
-	}
-	info.Review = review
+	info = valuationInfo(job.Domain, info, now)
 	input := SanitizeInput(*watched, *info)
 	output, _, err := s.client.Evaluate(ctx, profile.Profile, key, input)
 	if err != nil {
@@ -398,6 +391,9 @@ func SanitizeInput(watched domain.Domain, info domain.Info) SanitizedInput {
 	in.SystemFacts.Registrar = safeText(info.Registrar, 80)
 	in.SystemFacts.EPPStatuses = sanitizeStrings(info.EPPStatuses, 12, 80)
 	in.SystemFacts.ProviderConsensus = "single_result"
+	if info.LastChecked.IsZero() && info.Status == domain.StatusUnknown && info.Confidence == "" {
+		in.SystemFacts.ProviderConsensus = "no_result"
+	}
 	if info.ExpiryDate != nil {
 		value := info.ExpiryDate.UTC().Format(time.RFC3339)
 		in.SystemFacts.ExpiryDate = &value
@@ -407,15 +403,15 @@ func SanitizeInput(watched domain.Domain, info domain.Info) SanitizedInput {
 	return in
 }
 
-func eligible(info *domain.Info) bool {
-	if info == nil || (info.Confidence != domain.ConfidenceHigh && info.Confidence != domain.ConfidenceMedium) {
-		return false
+func valuationInfo(name string, info *domain.Info, now time.Time) *domain.Info {
+	if info == nil {
+		info = &domain.Info{Name: name, Status: domain.StatusUnknown}
 	}
-	switch info.Status {
-	case domain.StatusUnknown, domain.StatusError, domain.StatusSkipped:
-		return false
+	if info.Name == "" {
+		info.Name = name
 	}
-	return true
+	info.Review = domain.BuildReviewState(info, now)
+	return info
 }
 func sanitizeStrings(in []string, max, count int) []string {
 	out := make([]string, 0, len(in))

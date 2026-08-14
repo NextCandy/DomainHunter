@@ -51,7 +51,7 @@ export function BulkActionPreviewDialog({
         samples: domains.slice(0, 10),
         task_count: domains.length,
         cache_hits: 0,
-        warning: "严格估价队列会逐个检查状态与证据；不设置每日额度，已有有效结果会自动命中缓存。",
+        warning: "估价只按域名本身进行；无需先检查或复核。不设置每日额度，已有有效结果会自动命中缓存。",
       });
       setLoading(false);
       return;

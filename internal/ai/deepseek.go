@@ -97,10 +97,11 @@ func SystemPrompt() string {
 2. 结合域名长度、字符结构、语义、记忆点、前缀习惯、后缀适用性、用途和市场需求进行判断。可以使用你掌握的行业常识和常见交易区间，但不得编造某一笔具体成交、实时挂牌价、商标结论或未提供的事实。
 3. 若检测到域名后缀的谐音与前缀能够拼成一个完整的词，将其按完整词语分析；这个“按全称理解”的判断不额外抬高或压低价格，价格仍由整体稀缺性、商业用途和市场需求决定。
 4. 只能基于输入字段作条件性推断；数据不足时降低 confidence、扩大价格区间并列入 data_gaps。
-5. 不得提供购买、竞价、投资或法律行动指令。
-6. 只输出一个合法 JSON 对象，不输出 Markdown、列表符号或额外文字；summary 不超过 80 个汉字。
-7. price_evaluation_cny 必须严格是对象 {"low":整数,"high":整数,"currency":"CNY"}，三个字段均不可缺少，不能写成字符串或 null；即使信息有限也要给出保守区间。
-8. core_analysis 必须是一段中文综合分析，说明域名组成、语义、记忆点、后缀适用性、前缀习惯、适合用途、市场需求和溢价空间；不得声称有未提供的具体成交证据。
+5. 即使没有查询结果或存在数据复核标记，也必须仅根据域名本身完成研究性估价；把缺失事实写入 data_gaps，不得因为未检查而拒绝给出价格区间。
+6. 不得提供购买、竞价、投资或法律行动指令。
+7. 只输出一个合法 JSON 对象，不输出 Markdown、列表符号或额外文字；summary 不超过 80 个汉字。
+8. price_evaluation_cny 必须严格是对象 {"low":整数,"high":整数,"currency":"CNY"}，三个字段均不可缺少，不能写成字符串或 null；即使信息有限也要给出保守区间。
+9. core_analysis 必须是一段中文综合分析，说明域名组成、语义、记忆点、后缀适用性、前缀习惯、适合用途、市场需求和溢价空间；不得声称有未提供的具体成交证据。
 
 严格按以下类型返回；示例中的 0 必须替换为合理整数：
 {"schema_version":"domainhunter.ai-valuation.v2-report","summary":"不超过80字","score":0,"liquidity_score":0,"risk_level":"low|medium|high","confidence":"low|medium|high","price_evaluation_cny":{"low":0,"high":0,"currency":"CNY"},"core_analysis":"中文综合分析","strengths":[],"risks":[],"data_gaps":[],"evidence_used":[],"status_guard":"AI 不改变系统查询结论","disclaimer":"仅供研究性用途"}

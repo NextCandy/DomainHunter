@@ -67,9 +67,6 @@ import { DomainValuationPanel } from "../features/ai-valuation";
   <div className="space-y-4">
     <DomainValuationPanel
       domain={info.name}
-      status={info.status}
-      confidence={info.confidence}
-      reviewRequired={Boolean(info.review?.required)}
       onUnauthorized={onUnauthorized}
       onCompleted={() => {
         onChanged?.();
@@ -82,7 +79,7 @@ import { DomainValuationPanel } from "../features/ai-valuation";
 )}
 ```
 
-估价面板将自动禁用低可信、未知、错误、跳过或已标记复核的对象。不要移除该前端提醒；更不能把它当成后端授权校验的替代，后端仍必须拒绝不满足规则的入队请求。
+估价面板按域名本身工作：只要域名已加入清单，即使尚未查询、状态未知、可信度较低或被标记复核，也可以直接入队。查询结果（如果存在）只作为补充事实；缺失信息由后端传给模型并记录为数据缺口，不能作为拒绝估价的理由。
 
 ## 3. 在“AI 与自动化”页面挂载 Provider 配置
 
@@ -130,8 +127,8 @@ import "./features/ai-valuation/valuation.css";
 
 | 场景 | 预期 |
 | --- | --- |
-| 未配置档案 | 面板显示空态与配置引导，不显示假装可用的估价按钮。 |
-| 复核 / 低可信域名 | 估价按钮安全禁用，明确解释必须先重新检查。 |
+| 已加入清单、尚未查询 | 估价按钮可用，直接创建任务；模型按域名本身估价并标注数据缺口。 |
+| 复核 / 低可信域名 | 估价按钮仍可用；复核信息仅作为模型输入事实，不阻止入队。 |
 | 新任务 | 任务进入 `queued` 或 `running`，每 2.5 秒轮询，不重复入队。 |
 | Provider 限流 | API `429` 显示上游限流提示；UI 不继续自动重试。 |
 | 返回非法 JSON | 后端 Job 标记失败，面板显示安全失败态，不渲染分数。 |

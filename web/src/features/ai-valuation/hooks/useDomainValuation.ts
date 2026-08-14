@@ -41,7 +41,7 @@ function errorMessage(error: unknown): string {
         error.message.includes("接口地址")
       )
         return error.message;
-      return "当前域名状态或证据不足，暂不能加入 AI 估价。";
+      return "域名尚未加入清单，或当前 AI 估价请求不符合配置要求。";
     }
     if (error.status === 429) return "AI Provider 暂时限流，请稍后重试。";
     if (error.status === 401) return "登录状态已失效，请重新登录后再试。";

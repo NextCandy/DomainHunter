@@ -243,7 +243,7 @@ func (s *Server) writeAIError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, ai.ErrJobNotRetryable):
 		s.writeError(w, r, http.StatusConflict, "任务不在待重试状态，请刷新后查看最新结果")
 	case errors.Is(err, ai.ErrIneligible):
-		s.writeError(w, r, http.StatusUnprocessableEntity, "当前域名状态或证据不足，暂不能加入 AI 估价")
+		s.writeError(w, r, http.StatusUnprocessableEntity, "域名尚未加入清单，暂不能加入 AI 估价")
 	case errors.Is(err, ai.ErrProviderAuth):
 		s.writeError(w, r, http.StatusUnprocessableEntity, "默认 AI 的 API Key 无效或已过期，请在 AI 与自动化中更新 Key")
 	case errors.Is(err, ai.ErrProviderConfig):

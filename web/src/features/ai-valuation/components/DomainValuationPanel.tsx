@@ -1,6 +1,5 @@
 import { useState } from "react";
 import "../valuation.css";
-import type { DomainStatus } from "../../../lib/api";
 import { formatDateTime, formatRelative } from "../../../lib/format";
 import {
   ErrorNotice,
@@ -21,9 +20,6 @@ import {
 
 export interface DomainValuationPanelProps {
   domain: string;
-  status: DomainStatus;
-  confidence?: string;
-  reviewRequired?: boolean;
   defaultProfileId?: string;
   onUnauthorized?: () => void;
   onCompleted?: () => void;
@@ -36,9 +32,6 @@ export interface DomainValuationPanelProps {
  */
 export function DomainValuationPanel({
   domain,
-  status,
-  confidence,
-  reviewRequired = false,
   defaultProfileId,
   onUnauthorized,
   onCompleted,
@@ -66,14 +59,7 @@ export function DomainValuationPanel({
     },
   });
 
-  const hasReviewConstraint =
-    reviewRequired ||
-    confidence === "low" ||
-    status === "error" ||
-    status === "unknown" ||
-    status === "skipped";
   const canEnqueue =
-    !hasReviewConstraint &&
     (!job || ["idle", "failed", "cancelled", "deferred"].includes(job.state));
 
   async function startValuation(forceRefresh = false) {
@@ -103,8 +89,7 @@ export function DomainValuationPanel({
             AI 域名鉴定报告
           </h3>
           <p className="mt-1 text-[12px] leading-5 text-ink-muted">
-            默认使用当前启用的 AI
-            配置；输出评分、人民币价格区间和用途分析，不改变查询状态或可注册结论。
+            按域名本身进行研究性估价；已有查询结果会作为补充事实，无需先检查或复核。输出评分、人民币价格区间和用途分析，不改变查询状态或可注册结论。
           </p>
         </div>
         <button
@@ -129,20 +114,10 @@ export function DomainValuationPanel({
           />
         )}
 
-        {hasReviewConstraint && (
-          <div className="mb-3 rounded-card border border-line bg-surface-muted px-3 py-2.5 text-[12px] leading-5 text-ink">
-            <div className="font-semibold text-ink">需要先复核查询事实</div>
-            <p className="mt-1 text-ink-muted">
-              当前状态、可信度或查询结果不足以支撑研究性估价。请先完成“立即检查”并在证据一致后入队。
-            </p>
-          </div>
-        )}
-
         {loading && !job && <LoadingSkeleton />}
         {!loading && !job && (
           <EmptyValuationState
-            disabled={!canEnqueue || submitting}
-            reviewRequired={hasReviewConstraint}
+            disabled={submitting || !canEnqueue}
             onStart={() => void startValuation(false)}
           />
         )}
@@ -183,11 +158,9 @@ function JobStatePill({ state }: { state: ValuationJob["state"] }) {
 
 function EmptyValuationState({
   disabled,
-  reviewRequired,
   onStart,
 }: {
   disabled: boolean;
-  reviewRequired: boolean;
   onStart: () => void;
 }) {
   return (
@@ -195,8 +168,8 @@ function EmptyValuationState({
       <div>
         <p className="text-[13px] font-medium text-ink">尚无估价记录</p>
         <p className="mt-1 text-[12px] leading-5 text-ink-muted">
-          默认使用已启用的 AI 配置档案。可在 AI
-          与自动化中更换提供商、模型、并发和安全的 Base URL。
+          只要域名已经加入清单即可估价，无需先执行查询或复核。默认使用已启用的 AI
+          配置档案；查询结果会作为可选补充事实。
         </p>
       </div>
       <button
@@ -207,11 +180,6 @@ function EmptyValuationState({
       >
         加入估价队列
       </button>
-      {reviewRequired && (
-        <p className="sm:col-span-2 text-[11px] text-ink-muted">
-          该操作已因数据复核状态安全禁用。
-        </p>
-      )}
     </div>
   );
 }
@@ -310,7 +278,6 @@ function ValuationJobContent({
   return (
     <EmptyValuationState
       disabled={pending || !allowRetry}
-      reviewRequired={!allowRetry}
       onStart={() => void onStart(false)}
     />
   );

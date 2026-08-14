@@ -184,6 +184,21 @@ func TestSanitizeInputExcludesSensitiveFields(t *testing.T) {
 	}
 }
 
+func TestValuationInfoAllowsUnqueriedDomain(t *testing.T) {
+	info := valuationInfo("brand-new.example", nil, time.Now().UTC())
+	if info.Name != "brand-new.example" || info.Status != domain.StatusUnknown {
+		t.Fatalf("unqueried domain should retain its name and unknown fact state: %#v", info)
+	}
+	if info.Review == nil || !info.Review.Required {
+		t.Fatalf("missing query evidence should be recorded as a limitation, not dropped: %#v", info.Review)
+	}
+
+	input := SanitizeInput(domain.Domain{Name: info.Name}, *info)
+	if input.Domain != "brand-new.example" || input.SystemFacts.ProviderConsensus != "no_result" {
+		t.Fatalf("unqueried domain was not represented as a name-only valuation input: %#v", input)
+	}
+}
+
 func TestForbiddenIP(t *testing.T) {
 	for _, raw := range []string{"127.0.0.1", "10.0.0.1", "169.254.169.254", "100.64.0.1", "::1"} {
 		if !forbiddenIP(net.ParseIP(raw)) {
