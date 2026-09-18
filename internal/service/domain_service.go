@@ -20,12 +20,18 @@ type ListFilter struct {
 	Status string
 	// Statuses 多个状态取并集；非空时优先于 Status。
 	// 抢注看板要一次看齐"处于掉落流程"的全部状态。
-	Statuses  []string
-	TLD       string
+	Statuses []string
+	TLD      string
+	// TLDs 多个后缀取并集；非空时优先于 TLD。
+	// 可搜索筛选器允许一次选中 .com + .net，单值参数表达不了。
+	TLDs      []string
 	Registrar string
-	Provider  string
-	Tag       string
-	Favorite  bool
+	// Registrars 多个注册商取并集；非空时优先于 Registrar。
+	// 与 Registrar 的模糊包含不同，多选来自 facets 的精确值，按全名精确比对。
+	Registrars []string
+	Provider   string
+	Tag        string
+	Favorite   bool
 	// Review 只保留「查询事实或证据需要复核」的域名。
 	// 这与状态筛选是两个维度：需复核的域名状态可以是 registered / pending_delete
 	// 等任意值，所以概览的「需要复核」不能用 statuses 去筛。
@@ -260,6 +266,12 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 	registrarFilter := strings.ToLower(strings.TrimSpace(filter.Registrar))
 	tldFilter := strings.ToLower(strings.Trim(strings.TrimSpace(filter.TLD), "."))
 	tagFilter := strings.ToLower(strings.TrimSpace(filter.Tag))
+	tldSet := normalizedSet(filter.TLDs, func(v string) string {
+		return strings.ToLower(strings.Trim(strings.TrimSpace(v), "."))
+	})
+	registrarSet := normalizedSet(filter.Registrars, func(v string) string {
+		return strings.ToLower(strings.TrimSpace(v))
+	})
 
 	out := make([]*domain.Info, 0, len(items))
 	for _, item := range items {
@@ -274,10 +286,18 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 			continue
 		}
 		// 后缀精确匹配：选 cn 不会把 com.cn 也带进来，与筛选项列表一一对应
-		if tldFilter != "" && TLDOf(item.Name) != tldFilter {
+		if len(tldSet) > 0 {
+			if _, ok := tldSet[TLDOf(item.Name)]; !ok {
+				continue
+			}
+		} else if tldFilter != "" && TLDOf(item.Name) != tldFilter {
 			continue
 		}
-		if registrarFilter != "" && !strings.Contains(strings.ToLower(item.Registrar), registrarFilter) {
+		if len(registrarSet) > 0 {
+			if _, ok := registrarSet[strings.ToLower(strings.TrimSpace(item.Registrar))]; !ok {
+				continue
+			}
+		} else if registrarFilter != "" && !strings.Contains(strings.ToLower(item.Registrar), registrarFilter) {
 			continue
 		}
 		if filter.Provider != "" && item.QueryMethod != filter.Provider {
@@ -296,6 +316,21 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 		out = append(out, item)
 	}
 	return out
+}
+
+// normalizedSet 把多值筛选参数归一化成集合，空值会被丢弃。
+// 返回空集合表示"没有选任何项"，调用方据此回落到单值参数。
+func normalizedSet(values []string, normalize func(string) string) map[string]struct{} {
+	if len(values) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if normalized := normalize(value); normalized != "" {
+			set[normalized] = struct{}{}
+		}
+	}
+	return set
 }
 
 func containsFold(values []string, want string) bool {

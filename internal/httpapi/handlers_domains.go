@@ -265,19 +265,21 @@ func (s *Server) advancedFilterFromRequest(r *http.Request) (p1.FilterNode, erro
 func parseListFilter(r *http.Request) service.ListFilter {
 	q := r.URL.Query()
 	filter := service.ListFilter{
-		Search:    strings.TrimSpace(q.Get("search")),
-		Status:    strings.TrimSpace(q.Get("status")),
-		Statuses:  splitCSV(q.Get("statuses")),
-		TLD:       strings.TrimSpace(q.Get("tld")),
-		Registrar: strings.TrimSpace(q.Get("registrar")),
-		Provider:  strings.TrimSpace(q.Get("provider")),
-		Tag:       strings.TrimSpace(q.Get("tag")),
-		Favorite:  q.Get("favorite") == "true" || q.Get("favorite") == "1",
-		Review:    q.Get("review") == "true" || q.Get("review") == "1",
-		Sort:      strings.TrimSpace(q.Get("sort")),
-		Order:     strings.TrimSpace(q.Get("order")),
-		Page:      1,
-		Limit:     10,
+		Search:     strings.TrimSpace(q.Get("search")),
+		Status:     strings.TrimSpace(q.Get("status")),
+		Statuses:   splitCSV(q.Get("statuses")),
+		TLD:        strings.TrimSpace(q.Get("tld")),
+		TLDs:       splitCSV(q.Get("tlds")),
+		Registrar:  strings.TrimSpace(q.Get("registrar")),
+		Registrars: splitCSV(q.Get("registrars")),
+		Provider:   strings.TrimSpace(q.Get("provider")),
+		Tag:        strings.TrimSpace(q.Get("tag")),
+		Favorite:   q.Get("favorite") == "true" || q.Get("favorite") == "1",
+		Review:     q.Get("review") == "true" || q.Get("review") == "1",
+		Sort:       strings.TrimSpace(q.Get("sort")),
+		Order:      strings.TrimSpace(q.Get("order")),
+		Page:       1,
+		Limit:      10,
 	}
 	if v, err := strconv.Atoi(q.Get("page")); err == nil && v > 0 {
 		filter.Page = v

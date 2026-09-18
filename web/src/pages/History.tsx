@@ -1,22 +1,43 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
-import type { Attempt, Observation } from "../lib/api";
+import type { Attempt, DomainListResult, Observation } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
+import { SearchableMultiSelect } from "../components/SearchableMultiSelect";
+import type { SelectOption } from "../components/SearchableMultiSelect";
 import { Card, EmptyState, ErrorNotice, Pill, Skeleton, Spinner, StatusBadge } from "../components/ui";
 import { CONFIDENCE_LABELS, formatDateTime, formatLatency, providerLabel } from "../lib/format";
 
 export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [params, setParams] = useSearchParams();
   const domain = (params.get("domain") ?? "").trim().toLowerCase();
-  const [input, setInput] = useState(domain);
-
-  useEffect(() => setInput(domain), [domain]);
 
   const { data, error, loading, reload } = useAsync<{ observations: Observation[] | null }>(
     () => api.get<{ observations: Observation[] | null }>("/api/v2/observations?limit=200"),
     [],
     onUnauthorized,
+  );
+
+  // 域名选择器的选项。原来是一个必须手打完整域名的文本框，
+  // 500+ 个域名时基本靠记忆；拉一次全量清单换成可搜索选择。
+  const domainList = useAsync<DomainListResult>(
+    () => api.get<DomainListResult>("/api/v2/domains?limit=2000"),
+    [],
+    onUnauthorized,
+  );
+  const domainOptions = useMemo<SelectOption[]>(
+    () => (domainList.data?.domains ?? []).map((item) => ({ value: item.name, label: item.name })),
+    [domainList.data],
+  );
+
+  const pickDomain = useCallback(
+    (name: string) => {
+      const next = new URLSearchParams(params);
+      if (name) next.set("domain", name);
+      else next.delete("domain");
+      setParams(next, { replace: true });
+    },
+    [params, setParams],
   );
 
   return (
@@ -37,26 +58,16 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       <Card
         title="按域名查看"
         action={
-          <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const next = new URLSearchParams(params);
-              const name = input.trim().toLowerCase();
-              if (name) next.set("domain", name); else next.delete("domain");
-              setParams(next, { replace: true });
-            }}
-          >
-            <input
-              className="input h-7 w-[200px] py-0 text-[12px]"
-              placeholder="example.com"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-            />
-            <button type="submit" className="btn h-7 px-2 text-[12px]">
-              查看
-            </button>
-          </form>
+          <SearchableMultiSelect
+            className="w-[min(260px,60vw)]"
+            label={domainList.loading ? "载入域名清单…" : `选择域名（${domainOptions.length}）`}
+            searchPlaceholder="输入域名以筛选…"
+            options={domainOptions}
+            selected={domain ? [domain] : []}
+            onChange={(next) => pickDomain(next[0] ?? "")}
+            multiple={false}
+            disabled={domainList.loading}
+          />
         }
         bodyClassName="p-0"
       >
@@ -80,15 +91,7 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         ) : !data?.observations || data.observations.length === 0 ? (
           <EmptyState title="暂无状态变化记录" hint="域名状态发生变化后会自动记录在这里" />
         ) : (
-          <ObservationTable
-            observations={data.observations}
-            onPick={(name) => {
-              setInput(name);
-              const next = new URLSearchParams(params);
-              next.set("domain", name);
-              setParams(next, { replace: true });
-            }}
-          />
+          <ObservationTable observations={data.observations} onPick={pickDomain} />
         )}
       </Card>
     </div>

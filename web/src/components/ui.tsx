@@ -16,6 +16,27 @@ export function cx(...parts: Array<string | false | undefined | null>): string {
   return parts.filter(Boolean).join(" ");
 }
 
+/**
+ * 是否处于移动视口。768px 与 Tailwind 的 md 断点对齐，
+ * 底栏导航、全屏筛选 sheet、表格转卡片都用这一个判断，避免各处断点飘移。
+ */
+export function useIsMobile(breakpoint = 768): boolean {
+  const query = `(max-width: ${breakpoint - 1}px)`;
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    setIsMobile(mql.matches);
+    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+
+  return isMobile;
+}
+
 export type DensityMode = "comfortable" | "compact" | "dense";
 
 const DENSITY_STORAGE_KEY = "dh-density";

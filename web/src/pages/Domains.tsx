@@ -12,8 +12,25 @@ import { ImportExportDialog } from "../components/ImportExportDialog";
 import { AdvancedFilterDrawer } from "../components/AdvancedFilterDrawer";
 import { SavedViewMenu } from "../components/SavedViewMenu";
 import { BulkActionPreviewDialog } from "../components/BulkActionPreviewDialog";
+import { SearchableMultiSelect } from "../components/SearchableMultiSelect";
+import type { SelectOption } from "../components/SearchableMultiSelect";
 import { ConfirmDialog, EmptyState, ErrorNotice, Skeleton, Spinner, cx, useDensity, useToast } from "../components/ui";
 import { STATUS_LABELS, STATUS_ORDER } from "../lib/format";
+import { registrarShortName } from "../lib/registrar";
+
+/**
+ * 筛选参数读取：多值参数（statuses/tlds/registrars）优先，
+ * 回落到旧的单值参数（status/tld/registrar），这样别人分享出去的旧链接仍然有效。
+ */
+function readMulti(multi: string | null, single: string | null): string[] {
+  const fromMulti = (multi ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (fromMulti.length > 0) return fromMulti;
+  const one = (single ?? "").trim();
+  return one ? [one] : [];
+}
 
 const SORT_OPTIONS = [
   { value: "", label: "默认（加入顺序）" },
@@ -43,11 +60,16 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const toast = useToast();
 
   const search = params.get("search") ?? "";
-  const status = params.get("status") ?? "";
-  const tld = params.get("tld") ?? "";
-  const registrar = params.get("registrar") ?? "";
   const provider = params.get("provider") ?? "";
-  const statuses = params.get("statuses") ?? "";
+  const statusList = useMemo(
+    () => readMulti(params.get("statuses"), params.get("status")),
+    [params],
+  );
+  const tldList = useMemo(() => readMulti(params.get("tlds"), params.get("tld")), [params]);
+  const registrarList = useMemo(
+    () => readMulti(params.get("registrars"), params.get("registrar")),
+    [params],
+  );
   const sort = params.get("sort") ?? "";
   const order = params.get("order") ?? "asc";
   const favoriteOnly = params.get("favorite") === "true";
@@ -135,11 +157,11 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const query = useMemo(() => {
     const q = new URLSearchParams();
     if (search) q.set("search", search);
-    if (status) q.set("status", status);
-    if (tld) q.set("tld", tld);
-    if (registrar) q.set("registrar", registrar);
+    // 一律用多值参数发给后端；后端对 statuses/tlds/registrars 的空值会回落到单值字段。
+    if (statusList.length > 0) q.set("statuses", statusList.join(","));
+    if (tldList.length > 0) q.set("tlds", tldList.join(","));
+    if (registrarList.length > 0) q.set("registrars", registrarList.join(","));
     if (provider) q.set("provider", provider);
-    if (statuses) q.set("statuses", statuses);
     if (sort) {
       q.set("sort", sort);
       q.set("order", order);
@@ -150,7 +172,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     q.set("page", String(page));
     q.set("limit", String(folderSelection === "all" ? limit : 2000));
     return q.toString();
-  }, [search, status, statuses, tld, registrar, provider, sort, order, page, limit, favoriteOnly, reviewOnly, advancedRaw, folderSelection]);
+  }, [search, statusList, tldList, registrarList, provider, sort, order, page, limit, favoriteOnly, reviewOnly, advancedRaw, folderSelection]);
 
   const { data, error, loading, reload } = useAsync<DomainListResult>(
     () => api.get<DomainListResult>(`/api/v2/domains?${query}`),
@@ -236,26 +258,88 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     [params, setParams],
   );
 
-  const tldOptions = facets.data?.tlds ?? [];
-  const registrarOptions = facets.data?.registrars ?? [];
   const statusCounts = useMemo(() => {
     const map = new Map<string, number>();
     (facets.data?.statuses ?? []).forEach((item) => map.set(item.value, item.count));
     return map;
   }, [facets.data]);
   const failedCount = (statusCounts.get("error") ?? 0) + (statusCounts.get("unknown") ?? 0);
-  const failedOnly = statuses === "error,unknown";
-  const filterChips = [
-    search ? { key: "search", label: `搜索：${search}` } : null,
-    status ? { key: "status", label: `状态：${STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status}` } : null,
-    tld ? { key: "tld", label: `后缀：.${tld.replace(/^\./, "")}` } : null,
-    registrar ? { key: "registrar", label: `注册商：${registrar}` } : null,
-    provider ? { key: "provider", label: `查询源：${provider}` } : null,
-    statuses ? { key: "statuses", label: failedOnly ? "失败 / 未知" : `状态组：${statuses}` } : null,
-    favoriteOnly ? { key: "favorite", label: "仅收藏" } : null,
-    reviewOnly ? { key: "review", label: "需要复核" } : null,
-    advancedRaw ? { key: "filter", label: "高级条件" } : null,
-  ].filter((item): item is { key: string; label: string } => Boolean(item));
+  // 「失败/未知」是状态多选的一个快捷方式，而不是另一个维度——
+  // 两者共用 statuses 参数，按钮的选中态就是"选中的正好是这两项"。
+  const failedOnly =
+    statusList.length === 2 && statusList.includes("error") && statusList.includes("unknown");
+
+  const statusOptions = useMemo<SelectOption[]>(
+    () =>
+      STATUS_ORDER.filter((value) => statusCounts.get(value) || statusList.includes(value)).map(
+        (value) => ({
+          value,
+          label: STATUS_LABELS[value],
+          count: statusCounts.get(value),
+        }),
+      ),
+    [statusCounts, statusList],
+  );
+
+  const tldOptions = useMemo<SelectOption[]>(
+    () =>
+      (facets.data?.tlds ?? []).map((item) => ({
+        value: item.value,
+        label: `.${item.value}`,
+        count: item.count,
+      })),
+    [facets.data],
+  );
+
+  // 注册商全名长到能撑破列宽，列表里只放短名，全名进 title 和搜索关键词。
+  const registrarOptions = useMemo<SelectOption[]>(
+    () =>
+      (facets.data?.registrars ?? []).map((item) => ({
+        value: item.value,
+        label: registrarShortName(item.value) || item.value,
+        count: item.count,
+        title: item.value,
+        keywords: item.value,
+      })),
+    [facets.data],
+  );
+
+  const setStatusList = useCallback(
+    (next: string[]) => updateParams({ statuses: next.join(","), status: "" }),
+    [updateParams],
+  );
+  const setTldList = useCallback(
+    (next: string[]) => updateParams({ tlds: next.join(","), tld: "" }),
+    [updateParams],
+  );
+  const setRegistrarList = useCallback(
+    (next: string[]) => updateParams({ registrars: next.join(","), registrar: "" }),
+    [updateParams],
+  );
+
+  type FilterChip = { key: string; label: string; onRemove: () => void };
+  const filterChips: FilterChip[] = [
+    ...(search ? [{ key: "search", label: `搜索：${search}`, onRemove: () => updateParams({ search: "" }) }] : []),
+    ...statusList.map((value) => ({
+      key: `status:${value}`,
+      label: `状态：${STATUS_LABELS[value as keyof typeof STATUS_LABELS] ?? value}`,
+      onRemove: () => setStatusList(statusList.filter((item) => item !== value)),
+    })),
+    ...tldList.map((value) => ({
+      key: `tld:${value}`,
+      label: `后缀：.${value.replace(/^\./, "")}`,
+      onRemove: () => setTldList(tldList.filter((item) => item !== value)),
+    })),
+    ...registrarList.map((value) => ({
+      key: `registrar:${value}`,
+      label: `注册商：${registrarShortName(value) || value}`,
+      onRemove: () => setRegistrarList(registrarList.filter((item) => item !== value)),
+    })),
+    ...(provider ? [{ key: "provider", label: `查询源：${provider}`, onRemove: () => updateParams({ provider: "" }) }] : []),
+    ...(favoriteOnly ? [{ key: "favorite", label: "仅收藏", onRemove: () => updateParams({ favorite: "" }) }] : []),
+    ...(reviewOnly ? [{ key: "review", label: "需要复核", onRemove: () => updateParams({ review: "" }) }] : []),
+    ...(advancedRaw ? [{ key: "filter", label: "高级条件", onRemove: () => updateParams({ filter: "" }) }] : []),
+  ];
 
   function changeSort(field: DomainSort) {
     if (!field) return;
@@ -415,49 +499,29 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           />
         </form>
 
-        <select
-          className="input"
-          aria-label="按状态筛选"
-          value={status}
-          onChange={(event) => updateParams({ status: event.target.value, statuses: "" })}
-        >
-          <option value="">全部状态</option>
-          {STATUS_ORDER.map((value) => {
-            const count = statusCounts.get(value);
-            if (!count && status !== value) return null;
-            return (
-              <option key={value} value={value}>
-                {STATUS_LABELS[value]}
-                {count ? `（${count}）` : ""}
-              </option>
-            );
-          })}
-        </select>
+        <SearchableMultiSelect
+          label="全部状态"
+          searchPlaceholder="筛选状态…"
+          options={statusOptions}
+          selected={statusList}
+          onChange={setStatusList}
+        />
 
-        <select className="input" aria-label="按后缀筛选" value={tld} onChange={(event) => updateParams({ tld: event.target.value })}>
-          <option value="">全部后缀（{tldOptions.length}）</option>
-          {tldOptions.map((item) => (
-            <option key={item.value} value={item.value}>
-              .{item.value}（{item.count}）
-            </option>
-          ))}
-        </select>
+        <SearchableMultiSelect
+          label={`全部后缀（${tldOptions.length}）`}
+          searchPlaceholder="输入后缀，如 com"
+          options={tldOptions}
+          selected={tldList}
+          onChange={setTldList}
+        />
 
-        <select
-          className="input"
-          aria-label="按注册商筛选"
-          // 注册商名字普遍比列宽长，原生 select 只会把尾部裁掉，用 title 补一个完整值。
-          title={registrar || `全部注册商（${registrarOptions.length}）`}
-          value={registrar}
-          onChange={(event) => updateParams({ registrar: event.target.value })}
-        >
-          <option value="">全部注册商（{registrarOptions.length}）</option>
-          {registrarOptions.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.value}（{item.count}）
-            </option>
-          ))}
-        </select>
+        <SearchableMultiSelect
+          label={`全部注册商（${registrarOptions.length}）`}
+          searchPlaceholder="输入注册商名…"
+          options={registrarOptions}
+          selected={registrarList}
+          onChange={setRegistrarList}
+        />
 
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-4">
           <select
@@ -482,17 +546,20 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           </button>
           <button
             type="button"
-            className={cx("btn shrink-0", favoriteOnly && "border-accent text-accent")}
+            className={cx("btn shrink-0 gap-1", favoriteOnly && "border-accent text-accent")}
             onClick={() => updateParams({ favorite: favoriteOnly ? "" : "true" })}
             title="只看收藏"
+            aria-label="只看收藏"
             aria-pressed={favoriteOnly}
           >
-            ★
+            <span aria-hidden="true">★</span>
+            {/* 图标单独出现时没人知道它是筛选器，选中后补一个文字态说明当前在筛什么。 */}
+            {favoriteOnly && <span className="text-[12px]">只看收藏</span>}
           </button>
           <button
             type="button"
             className={cx("btn shrink-0 text-[12px]", failedOnly && "border-accent text-accent")}
-            onClick={() => updateParams({ statuses: failedOnly ? "" : "error,unknown", status: "" })}
+            onClick={() => setStatusList(failedOnly ? [] : ["error", "unknown"])}
             aria-label={failedOnly ? "取消失败域名筛选" : "筛选失败和未知域名"}
             title="筛选 error 和 unknown 状态"
             aria-pressed={failedOnly}
@@ -504,7 +571,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         {filterChips.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-4">
             {filterChips.map((chip) => (
-              <button key={chip.key} type="button" className="chip chip-active" onClick={() => updateParams({ [chip.key]: "" })} title={`移除${chip.label}`}>
+              <button key={chip.key} type="button" className="chip chip-active" onClick={chip.onRemove} title={`移除${chip.label}`}>
                 {chip.label}<span aria-hidden="true">×</span>
               </button>
             ))}
