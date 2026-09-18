@@ -12,7 +12,8 @@ interface ProvidersResponse {
 }
 
 const STATE_LABEL: Record<ProviderHealth["state"], string> = { healthy: "正常", degraded: "降级", offline: "离线", unknown: "暂无数据" };
-const STATE_CLASS: Record<ProviderHealth["state"], string> = { healthy: "bg-success", degraded: "bg-warning", offline: "bg-danger", unknown: "bg-neutral" };
+// 只有 healthy 用会呼吸的 .live-dot —— 离线的查询源不该有心跳。
+const STATE_CLASS: Record<ProviderHealth["state"], string> = { healthy: "live-dot bg-success", degraded: "state-dot bg-warning", offline: "state-dot bg-danger", unknown: "state-dot bg-neutral" };
 const STATE_EDGE: Record<ProviderHealth["state"], string> = { healthy: "border-l-success", degraded: "border-l-warning", offline: "border-l-danger", unknown: "border-l-neutral" };
 const STATE_ORDER: Record<ProviderHealth["state"], number> = { offline: 0, degraded: 1, healthy: 2, unknown: 3 };
 const DEFAULT_CHAIN = ["who_dat", "whois_domain_lookup", "vercel_who_dat", "rdap", "rdap_org", "ai_fallback"];
@@ -70,7 +71,7 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
   return (
     <div className="space-y-5">
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
-        <div><span className="workspace-kicker">PROVIDER HEALTH</span><h1 className="mt-1 text-[28px] font-semibold tracking-tight">查询源</h1><p className="text-[12px] text-ink-muted">异常优先展示；链路顺序可调整，默认策略保持 Pi → RDAP → AI。</p></div>
+        <div><span className="workspace-kicker">PROVIDER HEALTH</span><h1 className="mt-1">查询源</h1><p className="text-[12px] text-ink-muted">异常优先展示；链路顺序可调整，默认策略保持 Pi → RDAP → AI。</p></div>
         <button type="button" className="btn min-h-10" onClick={reload}>刷新</button>
       </header>
       {error && <ErrorNotice message={error} onRetry={reload} />}
@@ -83,7 +84,7 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
               const health = byName.get(name);
               return <li key={name} className="flex shrink-0 items-center gap-2">
                 <div className={cx("min-w-[150px] rounded-card border border-l-4 bg-surface px-3 py-2", STATE_EDGE[health?.state ?? "unknown"])}>
-                  <div className="flex items-center gap-2"><span className={cx("h-2 w-2 rounded-full", STATE_CLASS[health?.state ?? "unknown"])} /><strong className="text-[12px]">{providerLabel(name)}</strong></div>
+                  <div className="flex items-center gap-2"><span className={cx(STATE_CLASS[health?.state ?? "unknown"])} /><strong className="text-[12px]">{providerLabel(name)}</strong></div>
                 <div className="mt-2 flex gap-1"><button type="button" className="btn h-7 w-7 px-0" disabled={index === 0 || saving} onClick={() => moveProvider(index, -1)} aria-label={`${providerLabel(name)}前移`}>←</button><button type="button" className="btn h-7 w-7 px-0" disabled={index === chain.length - 1 || saving} onClick={() => moveProvider(index, 1)} aria-label={`${providerLabel(name)}后移`}>→</button></div>
                 </div>{index < chain.length - 1 && <span className="text-ink-faint" aria-hidden="true">→</span>}
               </li>;
@@ -92,7 +93,7 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
         </Card>
         <div id="provider-health" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {providers.map((provider) => <div key={provider.provider} className={cx("card border-l-4 p-4", STATE_EDGE[provider.state])}>
-            <div className="flex items-center gap-2"><span className={cx("h-2 w-2 rounded-full", STATE_CLASS[provider.state])} /><span className="text-[13px] font-medium">{providerLabel(provider.provider)}</span><Pill className="ml-auto">{STATE_LABEL[provider.state]}</Pill></div>
+            <div className="flex items-center gap-2"><span className={cx(STATE_CLASS[provider.state])} /><span className="text-[13px] font-medium">{providerLabel(provider.provider)}</span><Pill className="ml-auto">{STATE_LABEL[provider.state]}</Pill></div>
             <ErrorBars provider={provider} />
             <dl className="mt-3 space-y-1 text-[12px] text-ink-muted"><Row label="近 30 分钟请求" value={String(provider.requests)} /><Row label="错误率" value={`${((provider.error_rate ?? 0) * 100).toFixed(1)}%`} /><Row label="平均 / P95" value={`${formatLatency(provider.avg_latency_ms)} / ${formatLatency(provider.p95_latency_ms ?? 0)}`} /><Row label="连续失败" value={String(provider.consecutive_failures ?? 0)} /><Row label="最近成功" value={formatDateTime(provider.last_success)} /></dl>
             {provider.state_reason && <p className="mt-2 text-[11px] text-ink-faint">{provider.state_reason}</p>}

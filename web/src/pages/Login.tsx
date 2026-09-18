@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { api } from "../lib/api";
 import { Logo } from "../components/Logo";
 import { Spinner } from "../components/ui";
+import { AuroraBackground } from "../components/AuroraBackground";
 
 export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
   const [username, setUsername] = useState("");
@@ -26,18 +27,17 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <div className="relative flex min-h-full items-center justify-center overflow-hidden bg-canvas px-4 py-10 sm:px-6">
-      <div className="design-wash design-wash-coral" aria-hidden="true" />
-      <div className="design-wash design-wash-blue" aria-hidden="true" />
+    <div className="relative flex min-h-full items-center justify-center overflow-hidden px-4 py-10 sm:px-6">
+      {/* 登录页也挂氛围层，和工作台是同一片灯光（原先那两个 design-wash 早被 CSS 隐藏了）。 */}
+      <AuroraBackground />
       <div className="relative w-full max-w-[460px]">
-        <div className="mb-8 flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-ink bg-transparent">
-            <Logo className="h-8 w-8" />
-          </div>
+        <div className="mb-8 flex items-start gap-3.5">
+          {/* 标记直接呈现，不套方框。 */}
+          <Logo className="mt-0.5 h-9 w-9 shrink-0 text-ink" />
           <div>
             <p className="workspace-kicker">DOMAIN INTELLIGENCE</p>
-            <h1 className="editorial-title mt-2 text-[36px] leading-tight">DomainHunter</h1>
-            <p className="mt-2 text-[13px] leading-5 text-ink-muted">域名状态长期监控与研究工作台</p>
+            <h1 className="editorial-title mt-2">DomainHunter</h1>
+            <p className="editorial-lede mt-2">域名状态长期监控与研究工作台</p>
           </div>
         </div>
 
@@ -79,7 +79,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           </label>
 
           {error && (
-            <p className="mb-3 rounded-[6px] border border-line bg-surface-muted px-2.5 py-2 text-[12px] text-ink-muted">
+            <p className="mb-3 rounded-[8px] border border-danger/30 bg-danger/8 px-2.5 py-2 text-[12px] text-ink">
               {error}
             </p>
           )}

@@ -3,33 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="dark light" />
     <meta name="robots" content="noindex, nofollow" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#e1f4df" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1f12" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf8f5" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d0b0a" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>DomainHunter</title>
     <link rel="icon" type="image/svg+xml" href="/DomainHunter.svg" />
     <link rel="apple-touch-icon" href="/DomainHunter.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/cormorant-garamond-latin-300-normal.woff2" />
-    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/inter-latin-400-normal.woff2" />
+    <!-- 只预载 sans 可变字重；等宽由数字区按需加载，不阻塞首屏。 -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/geist-latin-wght-normal.woff2" />
     <script>
-      // 首屏前应用主题，避免深色模式下的白屏闪烁
+      // 首屏前应用主题，避免闪烁。深色是默认主题。
       (function () {
         try {
-          var stored = localStorage.getItem("dh-theme") || "light";
+          var stored = localStorage.getItem("dh-theme") || "dark";
           var dark =
             stored === "dark" ||
             (stored === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
           document.documentElement.classList.toggle("dark", dark);
-        } catch (e) {}
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-zN2cUKQw.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-B-OlgWj5.css">
+    <script type="module" crossorigin src="/assets/index-D1X1LrZw.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-C-fyFHrl.css">
   </head>
   <body>
     <div id="root"></div>

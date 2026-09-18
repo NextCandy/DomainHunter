@@ -37,10 +37,11 @@ const HEALTH_DOT: Record<ProviderHealth["state"], string> = {
   unknown: "bg-neutral",
 };
 
+/* 三条线靠明度分离，不靠色相：墨色（总量）→ 陶土（可注册，唯一彩色）→ 暖中性。 */
 const TREND_COLORS = {
-  total: "oklch(var(--info))",
-  available: "oklch(var(--success))",
-  highScore: "oklch(var(--warning))",
+  total: "rgb(var(--ink))",
+  available: "rgb(var(--action))",
+  highScore: "rgb(var(--cloud-dark))",
 };
 
 export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void }) {
@@ -97,7 +98,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="workspace-kicker">DOMAIN WORKSPACE</span>
-          <h1 className="editorial-title mt-2 text-[38px] leading-tight sm:text-[52px]">今日工作台</h1>
+          <h1 className="editorial-title mt-2">今日工作台</h1>
           <p className="text-[12px] text-ink-muted">
             共 {data.total} 个域名 · 调度器
             <span className={cx("ml-1", monitorRunning ? "text-accent" : "text-ink-muted")}>
@@ -318,11 +319,13 @@ function ActionQueue({ counts }: { counts: Overview["action_counts"] }) {
     { label: "立即行动", count: counts.available, hint: "高可信可注册结果", href: "/domains?status=available", tone: "text-accent" },
     { label: "抢注窗口", count: counts.drop_window, hint: "高可信掉落流程", href: "/watchlist", tone: "text-ink" },
     { label: "续费风险", count: counts.renewal_risk, hint: "未来 7 天内到期", href: "/domains?sort=expiry", tone: "text-ink" },
-    { label: "需要复核", count: counts.review, hint: "查询事实或证据异常", href: "/domains?statuses=error,unknown,skipped", tone: "text-review" },
+    // 复核是「证据维度」，不能用状态筛选去凑：需复核的域名状态多是 registered /
+    // pending_delete，用 statuses=error,unknown,skipped 会筛出 0 条。
+    { label: "需要复核", count: counts.review, hint: "查询事实或证据异常", href: "/domains?review=1", tone: "text-review" },
   ];
   // 四张卡靠色块深浅区分，不靠彩色描边 —— 按 sage → mint → keylime → slate 的顺序层叠。
   const surfaces = ["bg-accent-soft", "bg-card-mint", "bg-blush", "bg-periwinkle-mist"];
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map((item, index) => <Link key={item.label} to={item.href} className={cx("action-queue-item card block min-h-[134px] border-transparent px-6 py-5 transition-colors hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7", surfaces[index])}><div className="flex items-start justify-between gap-4"><span className="text-[13px] font-semibold text-ink">{item.label}</span><span className="tabular font-display text-[32px] font-light leading-none text-ink">{item.count}</span></div><p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-3 block text-[11px] font-medium text-ink">打开工作区 →</span></Link>)}</div>;
+  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map((item, index) => <Link key={item.label} to={item.href} className={cx("action-queue-item card block min-h-[134px] border-transparent px-6 py-5 transition-colors hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7", surfaces[index])}><div className="flex items-start justify-between gap-4"><span className="text-[13px] font-semibold text-ink">{item.label}</span><span className="tabular font-mono text-[24px] font-medium leading-none text-ink">{item.count}</span></div><p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-3 block text-[11px] font-medium text-ink">打开工作区 →</span></Link>)}</div>;
 }
 
 function ProviderAlert({ providers }: { providers: ProviderHealth[] | null }) {
@@ -448,7 +451,7 @@ function StatTile({
     <div className="overview-stat-tile min-h-[126px] px-5 py-5 sm:px-6 sm:py-6">
       <div className="font-mono text-[10px] uppercase tracking-[-0.02em] text-ink-muted">{label}</div>
       <div className="mt-2 flex items-end justify-between gap-2">
-        <div className={cx("tabular font-display text-[30px] font-normal leading-tight", tone === "accent" && value > 0 ? "text-accent" : "text-ink")}>{value}</div>
+        <div className={cx("tabular font-mono text-[24px] font-semibold leading-tight", tone === "accent" && value > 0 ? "text-accent" : "text-ink")}>{value}</div>
         <MiniSparkline values={sparkline} color={sparkColor} label={`${label} 最近七天`} />
       </div>
       <div className={cx("mt-1 text-right text-[10px]", delta > 0 ? "text-success" : delta < 0 ? "text-danger" : "text-ink-faint")}>

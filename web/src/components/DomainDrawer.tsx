@@ -29,18 +29,20 @@ interface DetailResponse {
   attempts?: Attempt[] | null;
 }
 
+/* 时间线节点同样零新色相：唯一的陶土只落在「可注册 / 待删除」这两个
+   需要立刻行动的节点上，其余用墨色到暖中性的明度阶梯。 */
 const TIMELINE_COLORS: Record<DomainStatus, string> = {
-  available: "oklch(var(--success))",
-  registered: "oklch(var(--neutral))",
-  grace: "oklch(var(--warning))",
-  redemption: "oklch(var(--info))",
-  pending_delete: "oklch(var(--danger))",
-  expired: "oklch(var(--danger))",
-  transfer_locked: "oklch(var(--info))",
-  hold: "oklch(var(--info))",
-  unknown: "oklch(var(--neutral))",
-  error: "oklch(var(--danger))",
-  skipped: "oklch(var(--neutral))",
+  available: "rgb(var(--action))",
+  registered: "rgb(var(--neutral))",
+  grace: "rgb(var(--warning))",
+  redemption: "rgb(var(--info))",
+  pending_delete: "rgb(var(--action))",
+  expired: "rgb(var(--warning))",
+  transfer_locked: "rgb(var(--info))",
+  hold: "rgb(var(--info))",
+  unknown: "rgb(var(--neutral))",
+  error: "rgb(var(--danger))",
+  skipped: "rgb(var(--neutral))",
 };
 
 type Tab = "overview" | "evidence" | "timeline" | "raw";

@@ -26,10 +26,14 @@ type ListFilter struct {
 	Provider  string
 	Tag       string
 	Favorite  bool
-	Sort      string
-	Order     string
-	Page      int
-	Limit     int
+	// Review 只保留「查询事实或证据需要复核」的域名。
+	// 这与状态筛选是两个维度：需复核的域名状态可以是 registered / pending_delete
+	// 等任意值，所以概览的「需要复核」不能用 statuses 去筛。
+	Review bool
+	Sort   string
+	Order  string
+	Page   int
+	Limit  int
 }
 
 // ListResult 分页结果
@@ -280,6 +284,10 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 			continue
 		}
 		if filter.Favorite && !item.Favorite {
+			continue
+		}
+		// applyReview 在 List 里已经对全量算过，这里直接用即可。
+		if filter.Review && (item.Review == nil || !item.Review.Required) {
 			continue
 		}
 		if tagFilter != "" && !hasTag(item.Tags, tagFilter) {

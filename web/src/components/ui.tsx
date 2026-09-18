@@ -115,7 +115,7 @@ export function Card({
     <section className={cx("card min-w-0", className)}>
       {(title || action) && (
         <header className="density-card-header flex min-w-0 items-center justify-between gap-3 border-b border-line px-6 py-4">
-          <h2 className="min-w-0 truncate font-display text-[20px] font-normal tracking-[-0.02em] text-ink">{title}</h2>
+          <h2 className="min-w-0 truncate text-ink">{title}</h2>
           {action}
         </header>
       )}
@@ -137,7 +137,7 @@ export function StatusBadge({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-tag border px-2.5 py-1 text-[10px] font-medium uppercase leading-4 tracking-[-0.02em]",
+        "tag gap-1 whitespace-nowrap border",
         STATUS_CLASSES[status] ?? STATUS_CLASSES.unknown,
         className,
       )}
@@ -289,12 +289,12 @@ export function EmptyState({
   return (
     <div className="empty-state flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
       <span
-        className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border border-line bg-surface-muted font-display text-[18px] text-ink-faint"
+        className="mb-2 flex h-12 w-12 items-center justify-center rounded-sm border border-line bg-surface-muted text-[18px] text-ink-faint"
         aria-hidden="true"
       >
         {icon ?? <EmptyStateIcon />}
       </span>
-      <p className="text-[13px] text-ink-muted">{title}</p>
+      <p className="prose-serif text-ink-muted">{title}</p>
       {hint && <p className="text-[12px] text-ink-faint">{hint}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
@@ -393,7 +393,7 @@ export function Drawer({
       >
         <header className="flex items-start justify-between gap-3 border-b border-line px-6 py-5">
           <div className="min-w-0">
-            <h2 className="truncate font-display text-[24px] font-normal tracking-[-0.02em] text-ink">{title}</h2>
+            <h2 className="truncate text-ink">{title}</h2>
             {subtitle && <div className="mt-0.5 text-[12px] text-ink-muted">{subtitle}</div>}
           </div>
           <button
@@ -444,7 +444,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-overlay/40" onClick={onCancel} role="presentation" />
       <div className="card relative w-full max-w-sm p-6" role="dialog" aria-modal="true">
-        <h3 className="font-display text-[24px] font-normal tracking-[-0.02em] text-ink">{title}</h3>
+        <h3 className="text-ink">{title}</h3>
         {description && <p className="mt-1.5 text-[13px] text-ink-muted">{description}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className="btn" onClick={onCancel}>

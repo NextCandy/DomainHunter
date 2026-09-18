@@ -3,13 +3,14 @@
  * Import once from the feature entry point or DomainValuationPanel.
  * Token definitions intentionally have fallbacks so the module can land before the global theme refactor.
  */
-/* 冷调的研究面板：slate 是这套系统里唯一的非绿色面，专门留给产品/报告展示。 */
+/* 研究面板 = 规范里的 Featured 编辑面：manilla 纸色把它从普通卡片里抬出来，
+   左沿一道墨色实边代替阴影。 */
 .ai-valuation-panel {
   position: relative;
   overflow: hidden;
-  background: rgb(var(--slate-hush) / 0.35);
+  background: rgb(var(--manilla) / 0.55);
   border: 1px solid rgb(var(--line));
-  border-radius: 14px;
+  border-radius: 24px;
 }
 
 .ai-valuation-panel::before {
@@ -17,14 +18,14 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 5px;
-  background: rgb(var(--cyan-signal));
+  background: rgb(var(--ink));
 }
 
 .ai-valuation-panel .mono {
   font-variant-numeric: tabular-nums;
 }
 
-/* slate 面板比奶油纸暗一档，最浅的墨色在上面掉到 4.1:1，统一提到 muted。 */
+/* manilla 面比象牙纸暗一档，最浅的墨色在上面掉到 4.1:1，统一提到 muted。 */
 .ai-valuation-panel .text-ink-faint {
   color: rgb(var(--ink-muted));
 }
@@ -52,29 +53,34 @@
   border-bottom: 0;
 }
 
+/* 标签是 chrome，走 sans；正文是 voice，走衬线。 */
 .ai-report-label {
   color: rgb(var(--ink-muted));
-  font-family: var(--font-abc-diatype-mono);
+  font-family: var(--font-sans);
   font-size: 0.625rem;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
 }
 
 .ai-report-value {
   min-width: 0;
   color: rgb(var(--ink));
-  font-size: 0.8125rem;
+  font-family: var(--font-serif);
+  font-size: 0.9375rem;
   font-weight: 400;
 }
 
 .ai-report-emphasis {
-  color: rgb(var(--lake-blue));
-  font-size: 1.1rem;
-  letter-spacing: -0.02em;
+  color: rgb(var(--ink));
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  letter-spacing: -0.015em;
 }
 
 .ai-report-multiline {
-  line-height: 1.75;
-  font-weight: 450;
+  line-height: 1.6;
+  font-weight: 400;
 }
 
 @media (max-width: 420px) {
@@ -91,28 +97,30 @@
 }
 
 .workspace-kicker {
-  color: rgb(var(--warm-gray));
-  font-family: var(--font-abc-diatype-mono);
+  color: rgb(var(--ink-muted));
+  font-family: var(--font-sans);
   font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.13em;
+  font-weight: 600;
+  letter-spacing: 0.09em;
 }
 
 .data-table-refined tbody tr {
-  border-color: rgb(var(--line) / 0.78);
+  border-color: rgb(var(--line));
 }
 
 .data-table-refined tbody tr:hover {
-  background: rgb(var(--sky-wash) / 0.24);
+  background: rgb(var(--oat-warm) / 0.45);
 }
 
+/* 徽章 0 圆角 —— 规范里 badge 是直角的排版元素，不是容器。 */
 .review-badge {
-  border: 1px solid oklch(var(--review) / 0.34);
-  border-radius: 100px;
-  background: oklch(var(--review) / 0.09);
-  color: oklch(var(--review));
+  border: 1px solid rgb(var(--review) / 0.34);
+  border-radius: 0;
+  background: rgb(var(--review) / 0.09);
+  color: rgb(var(--review));
+  font-family: var(--font-sans);
   font-size: 0.6875rem;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.1rem;
 }
 

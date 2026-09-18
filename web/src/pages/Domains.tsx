@@ -51,6 +51,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const sort = params.get("sort") ?? "";
   const order = params.get("order") ?? "asc";
   const favoriteOnly = params.get("favorite") === "true";
+  // 「需要复核」是证据维度而不是状态维度，单独一个参数。
+  const reviewOnly = params.get("review") === "1" || params.get("review") === "true";
   const advancedRaw = params.get("filter") ?? "";
   const columnsParam = params.get("columns") ?? "";
   const page = Number(params.get("page") ?? "1") || 1;
@@ -143,11 +145,12 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       q.set("order", order);
     }
     if (favoriteOnly) q.set("favorite", "true");
+    if (reviewOnly) q.set("review", "1");
     if (advancedRaw) q.set("filter", advancedRaw);
     q.set("page", String(page));
     q.set("limit", String(folderSelection === "all" ? limit : 2000));
     return q.toString();
-  }, [search, status, statuses, tld, registrar, provider, sort, order, page, limit, favoriteOnly, advancedRaw, folderSelection]);
+  }, [search, status, statuses, tld, registrar, provider, sort, order, page, limit, favoriteOnly, reviewOnly, advancedRaw, folderSelection]);
 
   const { data, error, loading, reload } = useAsync<DomainListResult>(
     () => api.get<DomainListResult>(`/api/v2/domains?${query}`),
@@ -250,6 +253,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     provider ? { key: "provider", label: `查询源：${provider}` } : null,
     statuses ? { key: "statuses", label: failedOnly ? "失败 / 未知" : `状态组：${statuses}` } : null,
     favoriteOnly ? { key: "favorite", label: "仅收藏" } : null,
+    reviewOnly ? { key: "review", label: "需要复核" } : null,
     advancedRaw ? { key: "filter", label: "高级条件" } : null,
   ].filter((item): item is { key: string; label: string } => Boolean(item));
 
@@ -347,7 +351,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="workspace-kicker">DOMAIN OPERATIONS</span>
-          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">域名资产</h1>
+          <h1 className="mt-1">域名资产</h1>
           <p className="text-[12px] text-ink-muted">
             {folderSelection === "all" ? `共 ${data?.total ?? 0} 个域名` : `当前文件夹 ${domains.length} 个域名`}
             {folderSelection === "all" && data && data.total_filtered !== data.total
@@ -500,7 +504,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         {filterChips.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-4">
             {filterChips.map((chip) => (
-              <button key={chip.key} type="button" className="inline-flex min-h-8 items-center gap-2 rounded-tag border border-accent/20 bg-accent-soft/45 px-3 text-[11px] text-ink" onClick={() => updateParams({ [chip.key]: "" })} title={`移除${chip.label}`}>
+              <button key={chip.key} type="button" className="chip chip-active" onClick={() => updateParams({ [chip.key]: "" })} title={`移除${chip.label}`}>
                 {chip.label}<span aria-hidden="true">×</span>
               </button>
             ))}

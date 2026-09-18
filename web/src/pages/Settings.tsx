@@ -40,7 +40,7 @@ export function SettingsPage({
     <div className="space-y-4">
       <header className="workspace-header">
         <span className="workspace-kicker">SYSTEM SETTINGS</span>
-        <h1 className="mt-1 text-[28px] font-semibold tracking-tight">系统设置</h1>
+        <h1 className="mt-1">系统设置</h1>
         <p className="text-[12px] text-ink-muted">DomainHunter {data.version}</p>
       </header>
 
@@ -121,7 +121,7 @@ function MonitorCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
         </Field>
       </div>
       <div className="mt-4">
-        <button type="button" className="btn btn-primary h-8" onClick={save} disabled={saving}>
+        <button type="button" className="btn btn-secondary h-8" onClick={save} disabled={saving}>
           {saving && <Spinner />}保存
         </button>
       </div>
@@ -212,7 +212,7 @@ function HistoryCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
         </Field>
       </div>
       <div className="mt-4">
-        <button type="button" className="btn btn-primary h-8" onClick={save} disabled={saving}>
+        <button type="button" className="btn btn-secondary h-8" onClick={save} disabled={saving}>
           {saving && <Spinner />}保存
         </button>
       </div>
@@ -297,7 +297,7 @@ function AccountCard({ settings, onChanged }: { settings: SettingsV2; onChanged:
         <div>
           <button
             type="button"
-            className="btn btn-primary h-8"
+            className="btn btn-secondary h-8"
             onClick={savePassword}
             disabled={busy || !current || next.length < 6}
           >
@@ -410,7 +410,7 @@ function TokenManagementCard({ onUnauthorized }: { onUnauthorized: () => void })
       </div>
       <button
         type="button"
-        className="btn btn-primary mt-3 h-8"
+        className="btn btn-secondary mt-3 h-8"
         onClick={() => void createToken()}
         disabled={busy || !name.trim() || scopes.length === 0}
         aria-label="创建 API Token"

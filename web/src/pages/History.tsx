@@ -24,7 +24,7 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="workspace-kicker">QUERY HISTORY</span>
-          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">查询历史</h1>
+          <h1 className="mt-1">查询历史</h1>
           <p className="text-[12px] text-ink-muted">
             状态流转记录与每个查询源的历史结论，用于回答"当前状态为什么是这个结果"
           </p>

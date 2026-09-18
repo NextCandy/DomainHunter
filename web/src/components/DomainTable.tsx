@@ -232,13 +232,15 @@ function DesktopTable({
       {visibleColumns.has("registrar") && <td className="truncate px-3 py-2 text-ink-muted" title={item.registrar}>{item.registrar || "—"}</td>}
       {visibleColumns.has("expiry") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">{formatDate(item.expiry_date)}</td>}
       {visibleColumns.has("provider") && <td className="truncate whitespace-nowrap px-3 py-2 text-ink-muted" title={providerLabel(item.query_method)}>{providerLabel(item.query_method)}</td>}
-      {visibleColumns.has("ai_score") && <td className="tabular px-3 py-2"><span className={item.ai_quality_score == null ? "text-ink-faint" : item.ai_quality_score >= 80 ? "text-success" : item.ai_quality_score >= 60 ? "text-warning" : "text-danger"}>{item.ai_quality_score ?? "—"}</span></td>}
+      {/* 评分用「重量」而不是色相分档：高分墨色加粗，低分退到弱墨。陶土只留给行动信号。 */}
+      {visibleColumns.has("ai_score") && <td className="tabular px-3 py-2"><span className={item.ai_quality_score == null ? "text-ink-faint" : item.ai_quality_score >= 80 ? "font-semibold text-ink" : item.ai_quality_score >= 60 ? "text-ink" : "text-ink-faint"}>{item.ai_quality_score ?? "—"}</span></td>}
       {visibleColumns.has("last_checked") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">{formatRelative(item.last_checked)}</td>}
       {visibleColumns.has("next_check") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">{formatRelative(item.next_check_at)}</td>}
       <td className="sticky-action-column sticky right-0 z-10 whitespace-nowrap bg-surface px-1.5 py-2 text-right group-hover:bg-surface-muted">
         <button type="button" className="btn btn-ghost h-8 w-8 px-0" onClick={() => onHistory(item.name)} aria-label={`打开 ${item.name} 状态时间线`} title="状态时间线"><TimelineIcon /></button>
         <button type="button" className="btn btn-ghost h-8 w-8 px-0" onClick={() => onCheck(item.name)} disabled={busy === item.name} aria-label={`检查 ${item.name}`} title={busy === item.name ? "查询中" : "立即检查"}>{busy === item.name ? <SpinnerIcon /> : <RefreshIcon />}</button>
-        <button type="button" className="btn btn-ghost h-8 w-8 px-0 text-danger" onClick={() => onDelete(item.name)} aria-label={`删除 ${item.name}`} title="删除"><DeleteIcon /></button>
+        {/* 规范里陶土不给图标用：静态时是中性墨色，hover 才亮出警示色。 */}
+        <button type="button" className="btn btn-ghost h-8 w-8 px-0 text-ink-faint hover:text-danger" onClick={() => onDelete(item.name)} aria-label={`删除 ${item.name}`} title="删除"><DeleteIcon /></button>
       </td>
     </tr>
   ), [busy, highlighted, keyboardIndex, onCheck, onDelete, onHistory, onOpen, onToggle, selected, visibleColumns]);
@@ -369,7 +371,7 @@ function MobileDomainCard({ item, checked, busy, highlighted, onToggle, onOpen, 
             <div className="absolute bottom-12 right-0 z-20 w-36 rounded-card border border-line bg-surface-raised p-1 shadow-lg">
               <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[13px] hover:bg-surface-muted" onClick={() => { setMenuOpen(false); onOpen(); }}>查看详情</button>
               <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[13px] hover:bg-surface-muted" onClick={() => { setMenuOpen(false); onHistory(); }}>状态时间线</button>
-              <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[13px] text-danger hover:bg-danger/12" onClick={() => { setMenuOpen(false); onDelete(); }}>删除域名</button>
+              <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[13px] text-ink hover:bg-danger/12 hover:text-danger" onClick={() => { setMenuOpen(false); onDelete(); }}>删除域名</button>
             </div>
           )}
         </div>

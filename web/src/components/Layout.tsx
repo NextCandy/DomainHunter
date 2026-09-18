@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { useTheme } from "../lib/theme";
 import type { ThemeMode } from "../lib/theme";
@@ -6,6 +6,7 @@ import { Logo } from "./Logo";
 import { cx, useDensity } from "./ui";
 import { Breadcrumb } from "./Breadcrumb";
 import { CommandPalette } from "./CommandPalette";
+import { AuroraBackground } from "./AuroraBackground";
 import { useLocale } from "../lib/i18n";
 
 const NAV = [
@@ -107,42 +108,43 @@ export function Layout({
   }, []);
 
   return (
-    <div className="min-h-full min-w-0 bg-canvas">
+    // 氛围层在最底（-z-10），内容不设不透明底色，让底光从半透明面板后面透上来。
+    <div className="relative min-h-full min-w-0">
+      <AuroraBackground />
       <div className="flex min-h-full min-w-0 flex-col lg:flex-row">
-        {/* 层叠顺序：鼠尾草侧栏 → 青柠画布 → 奶油卡片。深度只来自色块，没有投影。 */}
-        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[248px] lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-sidebar lg:px-5 lg:py-7">
+        {/* 侧栏：198px、sticky 全高，80% 不透明 + 背板模糊。深度只来自发丝线。 */}
+        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-nav lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-sidebar/80 lg:px-3.5 lg:py-5 lg:backdrop-blur-chrome">
           <BrandBlock />
-          <div className="mt-12">
-            <p className="section-label mb-3 px-3">WORKSPACE</p>
-            <nav className="space-y-1" aria-label="主导航">
+          <div className="mt-8">
+            <p className="section-label mb-2 px-2.5">WORKSPACE</p>
+            <nav className="enter-stagger space-y-0.5" aria-label="主导航">
               {NAV.map((item) => (
                 <NavItem key={item.to} item={item} />
               ))}
             </nav>
           </div>
 
-          <div className="mt-auto space-y-4 pt-8">
-            {/* 奶油纸片贴在鼠尾草面板上 */}
-            <div className="rounded-card border-0 bg-surface p-4">
+          <div className="mt-auto space-y-3 pt-6">
+            <div className="rounded-card border border-line bg-raised/50 p-3">
               <p className="section-label">SESSION</p>
-              <p className="mt-2 truncate text-[13px] text-ink">{username}</p>
-              <p className="mt-0.5 text-[11px] text-ink-muted">DomainHunter {version}</p>
+              <p className="mt-1.5 truncate text-[13px] text-ink">{username}</p>
+              <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint">DomainHunter {version}</p>
             </div>
             <button type="button" className="btn btn-ghost w-full" onClick={onLogout}>退出登录</button>
           </div>
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-30 hidden min-h-16 items-center justify-end gap-4 border-b border-line bg-canvas px-8 lg:flex">
+          <header className="sticky top-0 z-30 hidden min-h-14 items-center justify-end gap-3 border-b border-line bg-canvas/80 px-6 backdrop-blur-chrome lg:flex">
             <SegmentedControl label="主题" value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />
             <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={changeDensity} />
             <SegmentedControl label={t("common.language")} value={locale} options={[{ value: "zh-CN", label: "中文" }, { value: "en-US", label: "EN" }]} onChange={(value) => setLocale(value as "zh-CN" | "en-US")} />
-            <button type="button" className="btn btn-ghost h-9 px-3 text-[11px]" onClick={() => setCommandOpen(true)} aria-label={t("common.command")} title="Command palette (⌘/Ctrl K)"><kbd>⌘K</kbd></button>
+            <button type="button" className="btn btn-ghost" onClick={() => setCommandOpen(true)} aria-label={t("common.command")} title="Command palette (⌘/Ctrl K)"><kbd className="font-mono text-[10.5px]">⌘K</kbd></button>
           </header>
-          <header className="sticky top-0 z-30 border-b border-line bg-canvas lg:hidden">
-            <div className="flex min-h-16 items-center gap-3 px-4">
+          <header className="sticky top-0 z-30 border-b border-line bg-canvas/80 backdrop-blur-chrome lg:hidden">
+            <div className="flex min-h-14 items-center gap-3 px-4">
               <BrandBlock compact />
-              <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">WORKSPACE</span>
+              <span className="section-label">WORKSPACE</span>
               <button
                 type="button"
                 className="btn btn-ghost ml-auto h-9 w-9 px-0"
@@ -174,7 +176,7 @@ export function Layout({
             <Outlet />
           </main>
 
-          <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-line bg-surface px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden" aria-label="移动端主导航">
+          <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-line bg-canvas/80 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-chrome lg:hidden" aria-label="移动端主导航">
             <div className="mx-auto grid max-w-lg grid-cols-5">
               {MOBILE_NAV.map((item) => item.to === "/more" ? (
                 <button
@@ -192,7 +194,7 @@ export function Layout({
                   to={item.to}
                   end={"end" in item ? item.end : undefined}
                   onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) => cx("flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-nav px-1 py-1 text-[10px] transition-colors", isActive ? "bg-sky-wash/60 font-medium text-ink" : "text-ink-muted hover:text-ink")}
+                  className={({ isActive }) => cx("flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-nav px-1 py-1 text-[10px] transition-colors duration-fast ease-std", isActive ? "bg-accent-soft font-nav text-action" : "text-ink-muted hover:text-ink")}
                   aria-label={t(MOBILE_LABEL_KEYS[item.to], item.label)}
                   title={t(MOBILE_LABEL_KEYS[item.to], item.label)}
                 >
@@ -219,14 +221,20 @@ export function Layout({
           {shortcutsOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <button type="button" className="absolute inset-0 bg-overlay/40" onClick={() => setShortcutsOpen(false)} aria-label="关闭快捷键帮助" />
-              <section className="card relative w-full max-w-md p-5" role="dialog" aria-modal="true" aria-label="快捷键帮助"><div className="flex items-center justify-between"><h2 className="text-[20px]">快捷键</h2><button type="button" className="btn h-9 w-9 px-0" onClick={() => setShortcutsOpen(false)}>×</button></div><dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-[13px]"><dt><kbd>/</kbd></dt><dd>聚焦域名搜索</dd><dt><kbd>j / k</kbd></dt><dd>列表上下选行</dd><dt><kbd>Enter</kbd></dt><dd>打开选中域名详情</dd><dt><kbd>r</kbd></dt><dd>刷新当前数据</dd><dt><kbd>?</kbd></dt><dd>打开本帮助</dd></dl></section>
+              <section className="card relative w-full max-w-md p-5" role="dialog" aria-modal="true" aria-label="快捷键帮助"><div className="flex items-center justify-between"><h2>快捷键</h2><button type="button" className="btn h-9 w-9 px-0" onClick={() => setShortcutsOpen(false)}>×</button></div><dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-[13px]"><dt><kbd>/</kbd></dt><dd>聚焦域名搜索</dd><dt><kbd>j / k</kbd></dt><dd>列表上下选行</dd><dt><kbd>Enter</kbd></dt><dd>打开选中域名详情</dd><dt><kbd>r</kbd></dt><dd>刷新当前数据</dd><dt><kbd>?</kbd></dt><dd>打开本帮助</dd></dl></section>
             </div>
           )}
 
           <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
 
-          <footer className="border-t border-line px-4 py-5 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-ink-faint sm:px-6 lg:px-8">
-            DomainHunter · {version}
+          {/* 墨色反转页脚 —— 整套象牙纸面之后唯一的深色带，给页面一个落地的锚。 */}
+          <footer className="footer-inversion mt-12 px-4 py-8 sm:px-6 lg:px-8">
+            <div className="mx-auto flex max-w-workbench flex-wrap items-baseline justify-between gap-3">
+              <span className="text-[12px] font-semibold uppercase tracking-[0.09em]">DomainHunter</span>
+              <span className="footer-meta text-[12px] tracking-[-0.02em]">
+                RDAP-first 域名监控与研究工作台 · {version}
+              </span>
+            </div>
           </footer>
         </div>
       </div>
@@ -235,7 +243,50 @@ export function Layout({
 }
 
 function SegmentedControl({ label, value, options, onChange }: { label: string; value: string; options: ReadonlyArray<{ value: string; label: string }>; onChange: (value: string) => void }) {
-  return <fieldset><legend className="sr-only">{label}</legend><div className="inline-flex rounded-button border border-line bg-surface-muted p-1" aria-label={label}>{options.map((option) => <button key={option.value} type="button" className={cx("min-h-9 rounded-button px-3 text-[11px] transition-colors", option.value === value ? "bg-surface text-accent shadow-sm" : "text-ink-muted hover:text-ink")} onClick={() => onChange(option.value)} aria-pressed={option.value === value}>{option.label}</button>)}</div></fieldset>;
+  // 规范里成本最低、读起来最讲究的动效：滑动的药丸是一个绝对定位的独立元素，
+  // 切换选项时它「滑过去」而不是让底色在两个按钮之间闪烁。
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [thumb, setThumb] = useState({ left: 0, width: 0 });
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const measure = () => {
+      const index = options.findIndex((option) => option.value === value);
+      const target = wrap.querySelectorAll<HTMLButtonElement>("[data-seg]")[index < 0 ? 0 : index];
+      if (target) setThumb({ left: target.offsetLeft, width: target.offsetWidth });
+    };
+    measure();
+    // 字体加载完成、语言切换、容器换行都会改变按钮宽度，跟着重测一次。
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [value, options]);
+
+  return (
+    <fieldset>
+      <legend className="sr-only">{label}</legend>
+      <div ref={wrapRef} className="segmented" aria-label={label}>
+        <span
+          className="segmented-thumb"
+          style={{ transform: `translateX(${thumb.left}px)`, width: thumb.width, opacity: thumb.width ? 1 : 0 }}
+          aria-hidden="true"
+        />
+        {options.map((option) => (
+          <button
+            key={option.value}
+            data-seg=""
+            type="button"
+            className="segmented-option"
+            onClick={() => onChange(option.value)}
+            aria-pressed={option.value === value}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
 }
 
 function NavItem({ item, onClick }: { item: (typeof NAV)[number]; onClick?: () => void }) {
@@ -251,8 +302,7 @@ function NavItem({ item, onClick }: { item: (typeof NAV)[number]; onClick?: () =
     >
       <NavIcon name={item.icon} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {/* ink-faint 在鼠尾草侧栏上对比度不足，这里用 muted。 */}
-      <span className="hidden text-[10px] text-ink-muted xl:block">{item.detail}</span>
+      {/* 198px 的侧栏装不下副标题，detail 只留在 title 提示里。 */}
     </NavLink>
   );
 }
@@ -260,12 +310,11 @@ function NavItem({ item, onClick }: { item: (typeof NAV)[number]; onClick?: () =
 function BrandBlock({ compact = false }: { compact?: boolean }) {
   return (
     <div className={cx("flex min-w-0 items-center gap-2.5", compact && "gap-2")}>
-      <span className={cx("flex shrink-0 items-center justify-center rounded-full border border-cyan-edge", compact ? "h-8 w-8" : "h-10 w-10")}>
-        <Logo className={cx(compact ? "h-5 w-5" : "h-7 w-7")} />
-      </span>
+      {/* 标记直接呈现，不套「圆角方块」—— 那是默认占位的做法。 */}
+      <Logo className={cx("shrink-0 text-ink", compact ? "h-5 w-5" : "h-6 w-6")} />
       <div className="min-w-0">
         <div className="brand-wordmark truncate">DomainHunter</div>
-        {!compact && <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">domain intelligence</p>}
+        {!compact && <p className="section-label mt-0.5">domain intelligence</p>}
       </div>
     </div>
   );

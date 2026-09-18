@@ -51,15 +51,17 @@ func Open(dir string) (*DB, error) {
 
 	path := filepath.Join(dir, ResolveFile(dir))
 	// busy_timeout 让并发写入等待而不是立刻报 database is locked。
-	dsn := path + "?_pragma=busy_timeout(10000)&_pragma=foreign_keys(0)"
+	dsn := path + "?_pragma=busy_timeout(15000)&_pragma=foreign_keys(0)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
 
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
-	// SQLite 单写者；限制为 1 条连接可以避免锁冲突，这与重构前一致。
-	conn.SetMaxOpenConns(1)
-	conn.SetMaxIdleConns(1)
+	// WAL 模式下读不阻塞写、写不阻塞读，因此放开连接数：单连接会让前台请求
+	// 排在调度器的每一次写入后面（实测 /health 从 5ms 的裸查询被拖到 2.5s）。
+	// SQLite 仍是单写者，写冲突由 busy_timeout 重试兜底。
+	conn.SetMaxOpenConns(4)
+	conn.SetMaxIdleConns(4)
 
 	if err := conn.Ping(); err != nil {
 		conn.Close()

@@ -517,7 +517,7 @@ function ScoreCell({ label, score }: { label: string; score: number }) {
       <div className="mono text-[11px] text-ink-muted">
         {label.toUpperCase()}
       </div>
-      <div className="mt-1 text-[24px] font-semibold text-ink">
+      <div className="tabular mt-1 font-mono text-[24px] font-semibold text-ink">
         {score}
         <span className="ml-0.5 text-[11px] font-normal text-ink-muted">
           /100

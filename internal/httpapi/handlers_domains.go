@@ -273,6 +273,7 @@ func parseListFilter(r *http.Request) service.ListFilter {
 		Provider:  strings.TrimSpace(q.Get("provider")),
 		Tag:       strings.TrimSpace(q.Get("tag")),
 		Favorite:  q.Get("favorite") == "true" || q.Get("favorite") == "1",
+		Review:    q.Get("review") == "true" || q.Get("review") == "1",
 		Sort:      strings.TrimSpace(q.Get("sort")),
 		Order:     strings.TrimSpace(q.Get("order")),
 		Page:      1,

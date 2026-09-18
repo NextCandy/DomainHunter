@@ -29,22 +29,27 @@ export const STATUS_ORDER: DomainStatus[] = [
 ];
 
 /**
- * 状态色全部落在植物调色板内，紧急度靠色块的「重量」递进而不是新色相：
- * 发丝边（常态）→ 青柠 wash → 薄荷 → 鼠尾草 → 森林墨实底反白（最重）。
- * 冷色 slate 专门留给 hold / 赎回期这类「流程中断」，跳出绿色序列。
+ * 状态色全部落在暖纸张调色板内（ivory / oat / manilla / clay / 墨色），
+ * 紧急度靠色块的「重量」递进而不是新色相：
+ * 发丝边（常态）→ manilla 淡 → manilla → 燕麦 → 墨色实底反白（最重）。
+ * 唯一的彩色 Clay 只留给「可注册」——这套设计语言里 Clay 的定义就是
+ * 「只在必须行动的时刻出现」，而可注册正是这个产品唯一需要立刻行动的信号。
  * 浅色/深色主题由 CSS 令牌统一校准。
  */
+// 规范：状态标签 1px「同色描边」—— 边框是文字色的低透明度版本，底色更淡一层。
+// 唯一的实底留给 available：可注册是这个系统里最重要的行动信号，
+// 也是规范允许强调色出现的三处之一。
 export const STATUS_CLASSES: Record<DomainStatus, string> = {
-  available: "bg-accent-soft text-ink border-transparent",
+  available: "bg-action text-amber-ink border-transparent",
   registered: "bg-transparent text-ink-muted border-line",
-  grace: "bg-blush text-ink border-accent/25",
-  redemption: "bg-periwinkle-mist text-ink border-transparent",
-  pending_delete: "bg-accent text-on-accent border-transparent",
-  expired: "bg-deep-teal text-on-accent border-transparent",
-  transfer_locked: "bg-card-mint text-ink border-transparent",
-  hold: "bg-periwinkle-mist/75 text-ink border-transparent",
+  grace: "bg-warn/12 text-warn border-warn/45",
+  redemption: "bg-warn/20 text-warn border-warn/60",
+  pending_delete: "bg-neg/15 text-neg border-neg/55",
+  expired: "bg-neg/12 text-neg border-neg/40",
+  transfer_locked: "bg-s3/12 text-s3 border-s3/45",
+  hold: "bg-transparent text-ink-muted border-line",
   unknown: "bg-transparent text-ink-faint border-line",
-  error: "bg-transparent text-ink border-accent",
+  error: "bg-neg/12 text-neg border-neg/45",
   skipped: "bg-transparent text-ink-faint border-line",
 };
 

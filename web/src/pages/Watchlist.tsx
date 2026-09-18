@@ -132,7 +132,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
       <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="workspace-kicker">DROP WINDOW</span>
-          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">抢注看板</h1>
+          <h1 className="mt-1">抢注看板</h1>
           <p className="text-[12px] text-ink-muted">
             只显示处于掉落流程中的域名，按抢注紧迫度排序。全量清单在「域名」页。
           </p>
@@ -150,7 +150,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
             </div>
             <div
               className={cx(
-                "tabular mt-3 text-[22px] font-semibold leading-tight",
+                "tabular font-mono mt-3 text-[22px] font-semibold leading-tight",
                 status === "available" && (counts.get(status) ?? 0) > 0
                   ? "text-accent"
                   : "text-ink",

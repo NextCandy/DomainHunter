@@ -23,7 +23,7 @@
   <a href="https://github.com/NextCandy/DomainHunter"><img src="https://img.shields.io/badge/stack-Go%20%2B%20React%20%2B%20SQLite-4a4636.svg" alt="Go React SQLite" /></a>
 </p>
 
-> 当前版本基线：`v2.11.0` · Seline 暖纸张工作台 · DeepSeek 官方 OpenAI-compatible · `.im` 稳定生命周期判断
+> 当前版本基线：`v2.12.0` · Anthropic 暖纸张编辑系统 · DeepSeek 官方 OpenAI-compatible · `.im` 稳定生命周期判断
 
 ## 产品定位
 
@@ -62,14 +62,34 @@ DomainHunter 是一个面向长期运行的 Go 域名监控器。它把多个查
 
 ## 视觉系统
 
-前端采用 React 18 + TypeScript + Vite + Tailwind，按照 `DESIGN (1).md` 重做为安静的分析工作台：
+前端采用 React 18 + TypeScript + Vite + Tailwind。2026-08-17 起按 Anthropic 风格规范
+（*scientific field journal on warm parchment*）重做为编辑腔的分析工作台：
 
-- `#fafaf9` 暖石色画布，白色平面卡片，`#e8e6e5` 细边框。
-- `#3ba6f1` 单一青蓝信号，只用于主要操作、当前导航和可注册重点。
-- Roobert 风格展示字体 + Inter UI 字体 + 等宽元数据字体。
-- 10px 卡片圆角、9999px 操作胶囊、宽松内边距和低对比结构线。
+- **表面色阶代替阴影**：`#f0eee6` 象牙画布 → `#faf9f5` 纸卡 → `#e3dacc` 燕麦分组面 →
+  `#f5e3c7` manilla 重点面 → `#141413` 墨色反转（页脚与最重的状态）。全系统零 box-shadow。
+- **唯一彩色**：陶土 `#d97757` 只出现在「必须行动」的时刻 —— 主 CTA 按钮与「可注册」徽章。
+  其余状态靠色块重量递进（发丝边 → manilla → 燕麦 → 墨色反转），不引入任何冷灰或新色相。
+- **衬线承载 voice，无衬线承载 chrome**：标题、页面导语、卡片标题、AI 报告正文走衬线；
+  导航、按钮、表格、徽章、表单标签走 Inter。等宽只留给域名与原始报文。
+  衬线族按光学尺寸分两档 —— `--font-serif`（Sitka Heading，用于标题）与
+  `--font-serif-text`（Sitka Text，小字号下笔画略粗，用于导语正文）；
+  Sitka 是 Matthew Carter 为屏幕阅读设计的字体族、Windows 自带，macOS 回落
+  Iowan Old Style，其余回落规范列出的 Georgia。中文走思源宋体（Noto Serif SC）。
+  **标题字重取 600 而不是 400**：中文宋体在 400 下大字号屏显会发虚，规范的 serif
+  本就有 400/600 两档，标题统一取重的那一档。
+  另外 Sitka 默认是旧式数字（有升降部、比例宽度），与中文方块字混排时基线会显得高低不齐，
+  所以衬线场景统一 `font-variant-numeric: lining-nums`，表格再叠加 `tabular-nums`。
+- **半径语言**：卡片 24px；filled 按钮 8px 且**只圆下沿**（签名细节）；outlined 按钮 12px；
+  徽章与导航项 0px 直角。
+- 正文链接保持常驻下划线（编辑印刷惯例），导航与按钮豁免。
+- 深色模式按同一套语言推到暗部：墨色作画布、象牙作墨，manilla/燕麦一并下沉，陶土保持不变。
 - 桌面端左侧工作区导航；移动端顶部完整菜单和底部五项导航。
 - 表格在窄屏自动切换为可读卡片，不把数据压缩成不可用的小表格。
+
+规范里的 68px/61px 展示字号与 20px 正文是营销页尺度，在数据密集的后台按同比例压到
+32–48px 标题 / 16–18px 导语；表格与控件保持 12–14px 无衬线 —— 规范本身就把 UI chrome 划给 sans。
+`Cloud Medium/Dark` 这两个装饰性弱字色在后台会掉到 2:1 以下，次级墨色改用同族的 `Slate Medium #3d3d3a`，
+在保持暖调的前提下把正文对比度顶到 WCAG AA 以上。
 
 Logo 资源位于 [`web/public/DomainHunter.svg`](web/public/DomainHunter.svg)，同时提供 [`web/public/DomainHunter.png`](web/public/DomainHunter.png) 作为应用图标。
 

@@ -1,7 +1,7 @@
 # 前端产物 web/dist 随仓库提交，因此镜像只需要 Go 工具链：
 # 构建更快，也避免在 arm64（树莓派）上跑一遍 Node 构建。
 # 修改前端后请先在 web/ 执行 npm run build 再提交。
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=v2.11.0

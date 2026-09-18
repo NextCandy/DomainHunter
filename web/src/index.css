@@ -2,205 +2,216 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 自托管字体：内网部署不依赖外部 CDN。只带 latin 子集，
-   中文由系统字体承担（标题落到宋体，正文落到苹方/思源黑）。 */
+/* 自托管字体：内网部署不依赖外部 CDN。只带 latin 子集的可变字重档，
+   中文由系统字体承担（苹方 / 微软雅黑）—— Geist 没有 CJK 字形。
+   这套设计语言里没有衬线角色：正文与 chrome 全用 Geist Variable，
+   一切数字走 Geist Mono Variable。 */
 @font-face {
-  font-family: "Cormorant Garamond";
+  font-family: "Geist Variable";
   font-style: normal;
-  font-weight: 300;
+  font-weight: 100 900;
   font-display: swap;
-  src: url("/fonts/cormorant-garamond-latin-300-normal.woff2") format("woff2");
+  src: url("/fonts/geist-latin-wght-normal.woff2") format("woff2-variations");
 }
 @font-face {
-  font-family: "Cormorant Garamond";
+  font-family: "Geist Mono Variable";
   font-style: normal;
-  font-weight: 400;
+  font-weight: 100 900;
   font-display: swap;
-  src: url("/fonts/cormorant-garamond-latin-400-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url("/fonts/inter-latin-300-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/inter-latin-400-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/inter-latin-600-normal.woff2") format("woff2");
+  src: url("/fonts/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
 }
 
-/* DomainHunter · botanical greenhouse on cream paper
-   植物温室配色：奶油纸底、层叠的青柠/薄荷/鼠尾草色块、唯一的森林墨绿。
-   没有任何阴影 —— 层次完全由色块深浅表达。 */
+/* DomainHunter · 炭黑 × 琥珀橙的精密仪表盘
+   三条铁律：① 只有 1px / 12% 墨色的发丝线，没有投影；② 一切数字等宽 + tabular-nums；
+   ③ 全站唯一强调色（琥珀橙）只花在三处 —— 当前导航项、主操作按钮、最重要的一组数据；
+   其余一切都是墨色的不同透明度。
+
+   token 分工（沿用既有语义名，组件层因此无需大改）：
+     --accent  = 墨色。active / hover / focus 这类高频状态用它，不消耗强调色。
+                 深色主题下它自然反转成象牙墨，仍然是「墨色的不同透明度」。
+     --action  = 琥珀橙。全站唯一彩色，只给主 CTA 与最重要的信号。
+   深色是默认主题（见 theme.tsx 默认值与 index.html 首屏脚本）；
+   :root 承载亮色、.dark 承载深色，沿用既有的 class 切换机制。 */
 @layer base {
   :root {
-    /* 标题衬线：Cormorant Garamond 只覆盖拉丁字形，中文回落到宋体族。 */
-    --font-roobert: "Cormorant Garamond", "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
-      "Noto Serif SC", Georgia, serif;
-    --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
-      "Microsoft YaHei", system-ui, sans-serif;
-    --font-mono: "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
-
-    /* Legacy names remain available to existing page components. */
+    /* ---- 字体族 ---- */
+    /* 西文无衬线：Geist Variable（100–900 可变），回退苹方 / 微软雅黑。 */
+    --font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    /* 等宽：一切数字、编号、徽章。 */
+    --font-mono: "Geist Mono Variable", "SFMono-Regular", Menlo, Consolas, monospace;
+    /* 这套语言没有衬线角色。别名保留，让散落的 font-serif / font-display 落回 sans。 */
+    --font-serif: var(--font-sans);
+    --font-serif-text: var(--font-sans);
+    --font-roobert: var(--font-sans);
+    --font-inter: var(--font-sans);
     --font-abc-diatype-mono: var(--font-mono);
-    --font-untitled-serif: var(--font-roobert);
-    --font-untitled-sans: var(--font-inter);
+    --font-untitled-serif: var(--font-sans);
+    --font-untitled-sans: var(--font-sans);
 
-    /* 规范调色板 */
-    --forest-ink: 15 62 23;
-    --forest-shadow: 12 47 16;
-    --sage-mist: 177 219 184;
-    --keylime-wash: 225 244 223;
-    --mint-veil: 207 231 211;
-    --slate-hush: 182 206 213;
-    --cream-paper: 255 254 252;
-    --charcoal-ink: 34 34 34;
-    --border-mist: 239 238 235;
+    /* ================= 亮色主题（可切换） ================= */
+    /* ---- 规范原生 token ---- */
+    --bg: 250 248 245;         /* #faf8f5 页面底 */
+    --panel: 255 255 255;      /* #ffffff 面板 */
+    --raised: 244 241 236;     /* #f4f1ec 悬停 / 抬升面 */
+    --ink: 27 24 21;           /* #1b1815 主文字 */
+    --muted: 109 103 95;       /* #6d675f 次要文字 */
+    --faint: 160 154 144;      /* #a09a90 弱提示文字 */
+    --line: 232 227 218;       /* #e8e3da 发丝线 */
+    --line-soft: 242 238 231;  /* #f2eee7 更浅的分隔线 */
+    --amber: 194 80 13;        /* #c2500d 强调色 */
+    --accent-ink: 255 255 255; /* #ffffff 强调色上的文字 */
+    --amber-soft: 251 233 221; /* #fbe9dd 强调色浅底 */
+    --pos: 31 122 82;          /* #1f7a52 */
+    --neg: 176 53 38;          /* #b03526 */
+    --warn: 150 101 10;        /* #96650a */
+    /* 图表序列色 */
+    --s1: 194 80 13;           /* #c2500d */
+    --s2: 224 139 60;          /* #e08b3c */
+    --s3: 138 106 82;          /* #8a6a52 */
+    --s4: 31 122 82;           /* #1f7a52 */
+    --s5: 176 53 38;           /* #b03526 */
+    /* WebGL 氛围层专用，独立于序列色，只以 ~8% 振幅出现 */
+    --fx-bg: 250 248 245;
+    --fx-1: 240 177 132;       /* #f0b184 */
+    --fx-2: 227 211 194;       /* #e3d3c2 */
+    --fx-3: 245 201 168;       /* #f5c9a8 */
 
-    /* 旧命名保留，避免散落在组件里的类名失效。 */
-    --stone-canvas: var(--keylime-wash);
-    --pure-white: var(--cream-paper);
-    --stone-border: var(--border-mist);
-    --stone-muted: var(--sage-mist);
-    /* 两档次要墨色：都是森林墨的去饱和版本，压到 4.5:1 以上
-       —— 奶油纸和鼠尾草底都很亮，浅灰绿在上面读不出来。 */
-    --ash-gray: 92 112 96;
-    --warm-gray: 58 78 62;
-    --ink-black: var(--forest-ink);
-    --soot: var(--charcoal-ink);
-    --sky-wash: var(--sage-mist);
-    --cyan-signal: var(--forest-ink);
-    --cyan-edge: var(--forest-shadow);
+    /* ---- 语义层：组件只认这一组 ---- */
+    --canvas: var(--bg);
+    --surface: var(--panel);
+    --surface-subtle: var(--line-soft);
+    --surface-muted: var(--raised);
+    --surface-raised: var(--raised);
+    --sidebar: var(--panel);
+    --ink-muted: var(--muted);
+    --ink-faint: var(--faint);
 
-    --parchment: var(--cream-paper);
-    --lake-blue: var(--forest-ink);
-    --periwinkle-mist: var(--slate-hush);
-    --sky-blue: var(--slate-hush);
-    --mint: var(--mint-veil);
-    --coral: var(--sage-mist);
-    --gold: var(--sage-mist);
-    --crimson: var(--forest-shadow);
-    --off-black: var(--forest-ink);
-    --ink-black-rgb: var(--forest-ink);
-    --graphite: var(--warm-gray);
-    --smoke: var(--ash-gray);
-    --ash: var(--sage-mist);
-    /* 状态语义留在植物色域内：绿 → 橄榄 → 森林暗部，冷调用 slate。
-       最高危险级别不靠新色相，而靠 Forest Ink 实底反白（见 STATUS_CLASSES）。 */
-    --success: 0.323 0.078 149;
-    --warning: 0.485 0.084 128;
-    --danger: 0.261 0.066 151;
-    --info: 0.477 0.030 223;
-    --neutral: 0.244 0 0;
-    --review: var(--warning);
-    --on-accent: 0.995 0.003 95;
-    --overlay: 0.26 0.045 150;
+    /* accent = 墨色：高频状态色，不消耗强调色 */
+    --accent: var(--ink);
+    /* accent-soft = 琥珀浅底：当前导航项与强调底 */
+    --accent-soft: var(--amber-soft);
+    /* action = 琥珀橙：全站唯一彩色 */
+    --action: var(--amber);
+    --action-deep: 158 63 8;
 
-    /* 表面层叠：keylime 页底 → cream 卡片 → mint 表头 → sage 强调 → slate 冷对照 */
-    --canvas: var(--keylime-wash);
-    --surface: var(--cream-paper);
-    --surface-subtle: 247 252 246;
-    --surface-muted: var(--mint-veil);
-    --surface-raised: var(--cream-paper);
-    --line: var(--border-mist);
-    --ink: var(--forest-ink);
-    --ink-muted: var(--warm-gray);
-    --ink-faint: var(--ash-gray);
-    --accent: var(--forest-ink);
-    --accent-soft: var(--sage-mist);
-    --paper: var(--cream-paper);
-    --card-mint: var(--mint-veil);
-    --blush: var(--keylime-wash);
-    --sea-foam: var(--mint-veil);
-    --mint-mist: var(--mint-veil);
-    --deep-teal: var(--forest-shadow);
-    --pine: var(--forest-ink);
-    --sage: var(--sage-mist);
-    --lake: var(--forest-ink);
-    --forest: var(--forest-ink);
-    --navy: var(--forest-ink);
-    --rose: var(--warm-gray);
-    --charcoal: var(--charcoal-ink);
-    --illustration-ink: var(--forest-ink);
-    --density-card-pad: 1.75rem;
-    --density-card-header-pad: 1.15rem;
-    --density-row-height: 56px;
+    /* ---- 状态语义（RGB 三元组，与 tailwind.config 的 rgb() 包装对应） ---- */
+    --success: var(--pos);
+    --warning: var(--warn);
+    --danger: var(--neg);
+    --info: var(--muted);
+    --neutral: var(--faint);
+    --review: var(--warn);
+    --on-accent: var(--accent-ink);
+    --overlay: 27 24 21;
 
-    /* 侧栏是独立的一层：浅色下是鼠尾草面板，深色下要沉下去而不是亮起来，
-       所以不能直接复用 --sage（它在暗部仍是浅色前景值）。 */
-    --sidebar: var(--sage-mist);
+    /* ---- 旧命名别名：重新落到新调色板，保证散落类名不失效 ---- */
+    --slate-dark: var(--ink);
+    --slate-mid: var(--muted);
+    --ivory-medium: var(--bg);
+    --ivory-light: var(--panel);
+    --cloud-medium: var(--faint);
+    --cloud-dark: var(--muted);
+    --stone: var(--line);
+    --oat-warm: var(--raised);
+    --manilla: var(--amber-soft);
+    --clay: var(--amber);
+    --clay-deep: var(--action-deep);
+    --stone-canvas: var(--bg);
+    --pure-white: var(--panel);
+    --stone-border: var(--line);
+    --stone-muted: var(--muted);
+    --ash-gray: var(--faint);
+    --warm-gray: var(--muted);
+    --ink-black: var(--ink);
+    --soot: var(--ink);
+    --sky-wash: var(--amber-soft);
+    --cyan-signal: var(--amber);
+    --cyan-edge: var(--line);
+    --parchment: var(--panel);
+    --lake-blue: var(--ink);
+    --periwinkle-mist: var(--raised);
+    --sky-blue: var(--raised);
+    --mint: var(--amber-soft);
+    --coral: var(--amber-soft);
+    --gold: var(--s2);
+    --crimson: var(--neg);
+    --off-black: var(--ink);
+    --ink-black-rgb: var(--ink);
+    --graphite: var(--muted);
+    --smoke: var(--faint);
+    --ash: var(--faint);
+    --paper: var(--panel);
+    --card-mint: var(--amber-soft);
+    --blush: var(--line-soft);
+    --sea-foam: var(--raised);
+    --mint-mist: var(--raised);
+    --deep-teal: var(--ink);
+    --pine: var(--ink);
+    --sage: var(--raised);
+    --lake: var(--ink);
+    --forest: var(--ink);
+    --navy: var(--ink);
+    --rose: var(--muted);
+    --charcoal: var(--ink);
+    --illustration-ink: var(--ink);
 
-    /* 表格生命周期底色 */
-    --row-grace: var(--keylime-wash);
-    --row-redemption: var(--mint-veil);
-    --row-delete: var(--sage-mist);
-    --row-hold: var(--slate-hush);
+    /* ---- 间距与密度（规范：面板内边距 20px、卡片间距 14px） ---- */
+    --density-card-pad: 1.25rem;
+    --density-card-header-pad: 1.25rem;
+    --density-row-height: 40px;
+
+    /* ---- 动效（规范：统一缓动，快 .16s / 慢 .34s） ---- */
+    --ease: cubic-bezier(.22, .7, .2, 1);
+    --dur-fast: .16s;
+    --dur-slow: .34s;
+
+    /* 表格生命周期底色：极淡的状态染色，靠明度而不是新色相。 */
+    --row-grace: 251 243 233;
+    --row-redemption: var(--amber-soft);
+    --row-delete: 250 231 227;
+    --row-hold: var(--line-soft);
   }
 
-  /* 深色模式规范里没有定义，这里按同一套语言往暗部推：
-     极深森林作画布，奶油纸作墨，鼠尾草作强调色。 */
+  /* ================= 深色主题（默认） =================
+     炭黑 × 琥珀橙 —— 规范给的就是这一套，亮色是它的可切换镜像。
+     只需重定义原生 token：语义层与别名都是 var() 引用，会自动跟随。
+     这是这套 token 架构真正的收益点。 */
   .dark {
-    --canvas: 13 31 18;
-    --surface: 21 41 26;
-    --surface-subtle: 25 47 30;
-    --surface-muted: 32 56 38;
-    --surface-raised: 24 45 29;
-    --line: 255 254 252 / 0.14;
-    --ink: var(--cream-paper);
-    --ink-muted: 186 209 190;
-    --ink-faint: 141 168 146;
-    --accent: var(--sage-mist);
-    --accent-soft: 42 74 49;
-    --paper: 13 31 18;
-    --card-mint: 42 74 49;
-    --blush: 32 56 38;
-    --sea-foam: 32 56 38;
-    --mint-mist: 42 74 49;
-    --deep-teal: var(--sage-mist);
-    --pine: var(--cream-paper);
-    --sage: var(--sage-mist);
-    --lake: var(--sage-mist);
-    --forest: var(--sage-mist);
-    --navy: var(--cream-paper);
-    --rose: 186 209 190;
-    --charcoal: var(--cream-paper);
-    --illustration-ink: var(--cream-paper);
-    --stone-muted: 58 88 64;
-    /* 冷色与青柠别名在暗部要一起下沉，否则会在深底上炸出高亮块。 */
-    --periwinkle-mist: 56 84 94;
-    --sky-blue: 56 84 94;
-    --sky-wash: 42 74 49;
-    --keylime-wash: 30 54 36;
-    --mint-veil: 38 66 44;
-    --slate-hush: 56 84 94;
-    --cyan-signal: var(--sage-mist);
-    --cyan-edge: var(--sage-mist);
-    --success: 0.855 0.062 150;
-    --warning: 0.870 0.070 128;
-    --danger: 0.930 0.030 95;
-    --info: 0.825 0.032 223;
-    --neutral: 0.870 0.010 150;
-    --on-accent: 0.255 0.060 150;
-    --overlay: 0.16 0.035 150;
-    --review: var(--warning);
+    --bg: 13 11 10;            /* #0d0b0a 页面底 */
+    --panel: 22 19 17;         /* #161311 面板 */
+    --raised: 33 28 24;        /* #211c18 悬停 / 抬升面 */
+    --ink: 242 236 228;        /* #f2ece4 主文字 */
+    --muted: 155 144 134;      /* #9b9086 次要文字 */
+    --faint: 106 98 91;        /* #6a625b 弱提示文字 */
+    --line: 42 35 30;          /* #2a231e 发丝线 */
+    --line-soft: 29 24 21;     /* #1d1815 更浅的分隔线 */
+    --amber: 255 122 26;       /* #ff7a1a 琥珀橙强调色 */
+    --accent-ink: 24 10 2;     /* #180a02 强调色上的文字 */
+    --amber-soft: 43 22 8;     /* #2b1608 强调色浅底（当前导航项背景） */
+    --pos: 63 201 141;         /* #3fc98d */
+    --neg: 255 106 90;         /* #ff6a5a */
+    --warn: 255 180 67;        /* #ffb443 */
+    --s1: 255 122 26;          /* #ff7a1a */
+    --s2: 255 180 67;          /* #ffb443 */
+    --s3: 184 115 74;          /* #b8734a */
+    --s4: 63 201 141;          /* #3fc98d */
+    --s5: 255 106 90;          /* #ff6a5a */
+    --fx-bg: 13 11 10;
+    --fx-1: 147 61 5;          /* #933d05 */
+    --fx-2: 58 28 8;           /* #3a1c08 */
+    --fx-3: 92 42 6;           /* #5c2a06 */
 
-    --sidebar: 24 45 29;
+    /* 按压态在暗底上要更亮，加深会糊成一团。 */
+    --action-deep: 255 148 71;
+    /* 遮罩压到近黑，否则模态背景会显得发灰。 */
+    --overlay: 6 5 4;
 
-    --row-grace: 30 54 36;
-    --row-redemption: 38 66 44;
-    --row-delete: 51 84 57;
-    --row-hold: 34 56 64;
+    /* 行状态染色在暗部单独校准，保持「能看出来但不抢眼」。 */
+    --row-grace: 32 27 22;
+    --row-redemption: 48 30 14;
+    --row-delete: 48 24 21;
+    --row-hold: var(--line-soft);
   }
 
   html,
@@ -217,8 +228,13 @@
   body {
     @apply text-ink font-sans antialiased;
     background: rgb(var(--canvas));
+    /* 规范：正文基准 14px / 行高 1.55 */
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.55;
+    font-weight: 450;
+    letter-spacing: -0.005em;
+    /* Geist 的字形替代集：cv11 让单层 a 变双层、ss01 收紧标点 */
+    font-feature-settings: "cv11", "ss01";
     overflow-x: clip;
   }
 
@@ -227,7 +243,7 @@
   }
 
   ::selection {
-    background: rgb(var(--accent-soft));
+    background: rgb(var(--amber) / 0.25);
     color: rgb(var(--ink));
   }
 
@@ -238,91 +254,277 @@
     font: inherit;
   }
 
+  /* 规范：统一 2px 强调色 outline，offset 1px */
   button:focus-visible,
   a:focus-visible,
   input:focus-visible,
   select:focus-visible,
-  textarea:focus-visible {
-    outline: 2px solid rgb(var(--accent));
-    outline-offset: 3px;
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid rgb(var(--action));
+    outline-offset: 1px;
   }
 
-  /* 衬线标题一律 300 字重 —— 加粗会破坏这套“低声编辑腔”。 */
+  /* 标题走 sans —— 这套语言没有衬线角色。
+     规范：h1 16px/560、h2 13–14px/550，字距 -0.015em。 */
   h1,
   h2,
   h3,
   h4 {
-    font-family: var(--font-roobert);
-    font-weight: 300;
-    letter-spacing: -0.01em;
+    font-family: var(--font-sans);
+    letter-spacing: -0.015em;
+  }
+
+  h1 {
+    font-size: 16px;
+    font-weight: 560;
+    line-height: 1.35;
+  }
+
+  h2 {
+    font-size: 14px;
+    font-weight: 550;
+    line-height: 1.4;
+  }
+
+  h3,
+  h4 {
+    font-size: 13px;
+    font-weight: 550;
+    line-height: 1.4;
+  }
+
+  /* 铁律二：数字即仪表。一切等宽字体的位置都开 tabular-nums + 带斜杠的零，
+     让成列的数字上下对齐 —— 这是「读起来像仪表盘」的全部秘密。 */
+  .font-mono,
+  .mono,
+  .tabular,
+  code,
+  kbd,
+  pre,
+  samp,
+  th,
+  td,
+  input[type="number"],
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "zero", "cv11", "ss01";
+  }
+
+  /* Firefox 的滚动条。WebKit 那套在文件末尾的全局区定义 ——
+     @layer 之外的规则优先级更高，写在这里会被压掉。 */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--line)) transparent;
+  }
+
+  /* 正文里的链接带下划线；导航、按钮、面包屑这些 chrome 元素在下面显式豁免。 */
+  main a[href] {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: rgb(var(--line));
+  }
+
+  main a[href]:hover {
+    text-decoration-color: rgb(var(--action));
+  }
+
+  main a[href].btn,
+  main a[href].sidebar-link,
+  main a[href].no-underline,
+  main a[href][role="button"],
+  .breadcrumb a[href],
+  .settings-sidebar a[href] {
+    text-decoration: none;
+  }
+
+  /* 规范：尊重 prefers-reduced-motion —— 全部动画降为即时 */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 @layer components {
-  /* 全系统零阴影：深度只靠色块层叠。 */
+  /* 铁律一：发丝线，不要投影。面板半透明 + 背板模糊，让底层氛围光从面板后面透出来。 */
   .card {
-    @apply min-w-0 rounded-card border border-line bg-surface;
+    @apply min-w-0 rounded-card border border-line;
+    background: rgb(var(--panel) / 0.82);
+    backdrop-filter: blur(12px) saturate(1.05);
+    -webkit-backdrop-filter: blur(12px) saturate(1.05);
   }
 
+
+  /* 规范：12.5px / 500 字重 / 细线描边 / 圆角 4px / padding 5x11px；
+     悬停底色微变；按下 translateY(0.5px)。 */
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-button
-      border border-line bg-transparent px-4 py-2 text-[12px] font-normal text-ink
-      transition-[background-color,border-color,color] duration-150
-      hover:border-ink hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45;
+    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-button
+      border border-line bg-transparent text-ink
+      disabled:cursor-not-allowed disabled:opacity-45;
+    padding: 5px 11px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: -0.005em;
+    transition: background-color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+      transform var(--dur-fast) var(--ease);
+  }
+
+  .btn:hover:not(:disabled) {
+    background: rgb(var(--raised));
+    border-color: rgb(var(--muted) / 0.55);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translateY(0.5px);
+  }
+
+  /* 主操作按钮 —— 规范允许强调色出现的三处之一：琥珀橙实底 + accent-ink 文字。 */
+  .btn-primary {
+    @apply border-transparent;
+    background: rgb(var(--action));
+    color: rgb(var(--accent-ink));
+    font-weight: 520;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: rgb(var(--action-deep));
+    border-color: transparent;
+  }
+
+  /* 次级动作：抬升面 + 墨字，不消耗强调色。 */
+  .btn-secondary {
+    @apply border-transparent text-ink;
+    background: rgb(var(--raised));
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: rgb(var(--line));
+    border-color: transparent;
+  }
+
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-ink-muted;
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: rgb(var(--raised));
+    border-color: transparent;
+    color: rgb(var(--ink));
+  }
+
+  /* 破坏性动作：描边式负色，只在 hover 时填底 —— 危险不该常态高亮。 */
+  .btn-danger {
+    color: rgb(var(--neg));
+    border-color: rgb(var(--neg) / 0.45);
+    background: transparent;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: rgb(var(--neg) / 0.12);
+    border-color: rgb(var(--neg));
+    color: rgb(var(--neg));
   }
 
   .workspace-header {
     @apply border-0 bg-transparent px-0 pb-8 pt-1;
   }
 
+  /* 规范：页面标题 h1 = 16px / 560 / 字距 -0.015em。
+     这是仪表盘的尺度，不是营销页 —— 标题不该抢走数据的位置。 */
   .workspace-header h1,
   .workspace-header > div > h1 {
-    @apply mt-3;
+    @apply mt-2;
     color: rgb(var(--ink));
-    font-family: var(--font-roobert);
-    font-size: clamp(2.5rem, 4.5vw, 3.5rem) !important;
-    font-weight: 300 !important;
-    line-height: 1.2 !important;
-    letter-spacing: -0.03em;
+    font-family: var(--font-sans);
+    font-size: 16px !important;
+    font-weight: 560 !important;
+    line-height: 1.35 !important;
+    letter-spacing: -0.015em;
   }
 
-  /* Eyebrow：全系统唯一的大写字距处理。 */
+  /* 页面导语：13px 次要墨色，一条规则覆盖所有页面头部说明段落。 */
+  .workspace-header p {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.55;
+    letter-spacing: -0.005em;
+    color: rgb(var(--ink-muted));
+  }
+
+  /* Eyebrow：10.5px / 500 / 大写 / 字距 +0.09em / 浅灰。
+     规范特别强调：绝不用粗体 —— 这种标签承载了大部分的「讲究感」。 */
   .workspace-kicker {
-    @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em];
-    color: rgb(var(--accent));
-    font-family: var(--font-inter);
+    @apply inline-flex items-center gap-2 uppercase;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    color: rgb(var(--ink-faint));
   }
 
   .workspace-kicker::before {
     content: "";
-    width: 0.4rem;
-    height: 0.4rem;
-    border-radius: 999px;
-    background: rgb(var(--accent));
+    width: 4px;
+    height: 4px;
+    border-radius: 99px;
+    background: rgb(var(--action));
+  }
+
+  /* 编辑正文：规范要求 body 用衬线 20px。页面导语、说明段落走这一档，
+     表格与控件仍是 sans —— 规范本身就把 UI chrome 划给 sans。 */
+  /* 这套语言没有衬线角色，导语与正文都落回 sans 的 13–14px 档。 */
+  .editorial-lede {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.55;
+    color: rgb(var(--ink-muted));
+  }
+
+  .prose-serif {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
   }
 
   .editorial-title {
-    font-family: var(--font-roobert);
-    font-weight: 300;
-    letter-spacing: -0.02em;
+    font-family: var(--font-sans);
+    font-weight: 550;
+    letter-spacing: -0.015em;
     color: rgb(var(--ink));
   }
 
   .page-shell h1,
   .page-shell h2,
   .page-shell h3 {
-    font-family: var(--font-roobert);
-    font-weight: 300;
-    letter-spacing: -0.02em;
+    font-family: var(--font-sans);
+    letter-spacing: -0.015em;
   }
 
+  /* Eyebrow 同款：10.5px / 500（不加粗）/ 大写 / +0.09em / 浅灰。 */
   .section-label {
-    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted;
-    font-family: var(--font-inter);
+    @apply uppercase text-ink-faint;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.09em;
   }
 
   .flat-panel {
-    @apply rounded-card border border-line bg-surface;
+    @apply rounded-card border border-line;
+    background: rgb(var(--panel) / 0.82);
+    backdrop-filter: blur(12px) saturate(1.05);
+    -webkit-backdrop-filter: blur(12px) saturate(1.05);
   }
 
   .surface-blush,
@@ -330,56 +532,234 @@
     background: rgb(var(--surface-muted));
   }
 
+  /* 导航项：13px / 450，4px 圆角。 */
   .sidebar-link {
-    @apply relative flex items-center gap-3 rounded-nav px-3 py-2.5 text-[13px] text-ink-muted transition-colors;
+    @apply relative flex items-center gap-2.5 rounded-nav px-2.5 py-2 text-ink-muted;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 450;
+    transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
   }
 
   .sidebar-link::before {
     content: "";
     position: absolute;
-    left: -1rem;
-    top: 0.5rem;
-    bottom: 0.5rem;
+    left: 0;
+    top: 50%;
+    height: 0;
     width: 2px;
-    border-radius: 999px;
+    border-radius: 99px;
     background: transparent;
+    transform: translateY(-50%);
+    transition: height var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
   }
 
   .sidebar-link:hover {
-    background: rgb(var(--surface-muted));
+    background: rgb(var(--raised));
     color: rgb(var(--ink));
   }
 
+  /* 当前导航项 —— 规范允许强调色出现的三处之一：
+     琥珀浅底 + 琥珀文字 + 左侧 2px 琥珀条，字重加到 520。 */
   .sidebar-link-active {
     background: rgb(var(--accent-soft));
-    color: rgb(var(--ink));
-    font-weight: 600;
+    color: rgb(var(--action));
+    font-weight: 520;
   }
 
   .sidebar-link-active::before {
-    background: rgb(var(--accent));
+    height: 60%;
+    background: rgb(var(--action));
   }
 
   .sidebar-link-active:hover {
     background: rgb(var(--accent-soft));
+    color: rgb(var(--action));
   }
 
+  /* 品牌字标：sans 550，收紧字距。 */
   .brand-wordmark {
-    font-family: var(--font-roobert);
-    font-size: 1.375rem;
-    font-weight: 300;
-    letter-spacing: -0.02em;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 550;
+    letter-spacing: -0.015em;
     color: rgb(var(--ink));
   }
 
+  /* 页脚：这套系统靠发丝线分层，页脚只需一条顶线 + 弱化文字。 */
+  .footer-inversion {
+    background: transparent;
+    color: rgb(var(--ink-muted));
+    border-top: 1px solid rgb(var(--line));
+  }
+
+  .footer-inversion .footer-meta {
+    color: rgb(var(--ink-faint));
+  }
+
+  /* 状态标签：等宽 10.5px / 500 / 1px 同色描边 / opacity .9。 */
+  .tag,
   .review-badge {
-    @apply inline-flex items-center rounded-tag border border-warning/20 bg-warning/12 px-2.5 py-0.5 text-[10px] font-normal uppercase leading-4 tracking-[0.02em] text-warning;
+    @apply inline-flex items-center rounded-tag px-2 py-0.5 uppercase;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.9;
+  }
+
+  .review-badge {
+    border: 1px solid rgb(var(--warning) / 0.45);
+    background: rgb(var(--warning) / 0.12);
+    color: rgb(var(--warning));
   }
 
   .review-dot {
-    @apply inline-flex h-2.5 w-2.5 shrink-0 rounded-full;
-    border: 2px solid oklch(var(--warning));
-    background: oklch(var(--warning) / 0.18);
+    @apply inline-flex h-2 w-2 shrink-0;
+    border-radius: 99px;
+    border: 0;
+    background: rgb(var(--warning));
+  }
+
+  /* 实时状态点：6px 圆点，2.2s 呼吸脉冲。颜色由调用方的 bg-* 决定，
+     只有「活着」的状态才呼吸 —— 离线的东西不该有心跳。 */
+  .live-dot {
+    @apply inline-flex shrink-0;
+    width: 6px;
+    height: 6px;
+    border-radius: 99px;
+    animation: breathe 2.2s cubic-bezier(.22, .7, .2, 1) infinite;
+  }
+
+  /* 静态状态点：同尺寸不呼吸。 */
+  .state-dot {
+    @apply inline-flex shrink-0;
+    width: 6px;
+    height: 6px;
+    border-radius: 99px;
+  }
+
+  /* 筛选 chip：圆角 99px 药丸；选中时强调色文字 + 强调色描边 + 浅底。 */
+  .chip {
+    @apply inline-flex select-none items-center gap-1.5 border border-line bg-transparent text-ink-muted;
+    border-radius: 99px;
+    padding: 3px 10px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    transition: background-color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  }
+
+  .chip:hover {
+    color: rgb(var(--ink));
+    border-color: rgb(var(--muted) / 0.55);
+  }
+
+  .chip-active {
+    color: rgb(var(--action));
+    border-color: rgb(var(--action) / 0.55);
+    background: rgb(var(--accent-soft));
+  }
+
+  /* 分段控件：滑动的药丸是绝对定位的独立元素 —— 切换时「滑动」而不是「闪烁」。 */
+  .segmented {
+    @apply relative inline-flex items-center border border-line;
+    border-radius: 99px;
+    background: rgb(var(--raised) / 0.6);
+    padding: 2px;
+  }
+
+  .segmented-thumb {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    border-radius: 99px;
+    background: rgb(var(--panel));
+    border: 1px solid rgb(var(--line));
+    transition: transform var(--dur-slow) var(--ease), width var(--dur-slow) var(--ease);
+    pointer-events: none;
+  }
+
+  .segmented-option {
+    @apply relative z-10 inline-flex items-center justify-center whitespace-nowrap text-ink-muted;
+    border-radius: 99px;
+    padding: 4px 10px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  .segmented-option:hover {
+    color: rgb(var(--ink));
+  }
+
+  .segmented-option[aria-pressed="true"] {
+    color: rgb(var(--ink));
+    font-weight: 520;
+  }
+
+  /* 入场：透明度 + 上移 6px，按 28ms 阶梯延迟依次到达。 */
+  .enter-stagger > * {
+    animation: enter-up var(--dur-slow) var(--ease) both;
+  }
+
+  .enter-stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .enter-stagger > *:nth-child(2) { animation-delay: 28ms; }
+  .enter-stagger > *:nth-child(3) { animation-delay: 56ms; }
+  .enter-stagger > *:nth-child(4) { animation-delay: 84ms; }
+  .enter-stagger > *:nth-child(5) { animation-delay: 112ms; }
+  .enter-stagger > *:nth-child(6) { animation-delay: 140ms; }
+  .enter-stagger > *:nth-child(7) { animation-delay: 168ms; }
+  .enter-stagger > *:nth-child(8) { animation-delay: 196ms; }
+
+  /* 表头：sticky、10.5px 大写灰字、字距 +0.07em。 */
+  .data-table-refined thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: rgb(var(--raised));
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: rgb(var(--ink-faint));
+    border-bottom: 1px solid rgb(var(--line));
+    white-space: nowrap;
+  }
+
+  /* 排序箭头平时隐藏，激活时显示强调色。 */
+  .data-table-refined thead th .sort-arrow {
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease);
+  }
+
+  .data-table-refined thead th:hover .sort-arrow {
+    opacity: 0.45;
+  }
+
+  .data-table-refined thead th[aria-sort] .sort-arrow,
+  .data-table-refined thead th .sort-arrow.is-active {
+    opacity: 1;
+    color: rgb(var(--action));
+  }
+
+  /* 数字列右对齐 —— 「数字即仪表」的前提。 */
+  .data-table-refined td.num,
+  .data-table-refined th.num,
+  .data-table-refined [data-numeric] {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 表格单元格：12.5px 控件档。 */
+  .data-table-refined tbody td {
+    font-size: 12.5px;
   }
 
   .data-table-refined tbody tr {
@@ -397,11 +777,11 @@
   }
 
   .data-table-refined tbody tr:hover {
-    background: rgb(var(--accent-soft) / 0.24);
+    background: rgb(var(--raised) / 0.7);
   }
 
-  /* 生命周期底色按调色板层叠推进：keylime（最轻）→ mint → sage（最重），
-     hold 用 slate 这一唯一冷色跳出绿色序列。徽章仍是主信号。 */
+  /* 生命周期底色按纸张色阶推进：manilla 淡 → manilla → 陶土 wash（最紧急），
+     hold 落在燕麦色上。徽章仍是主信号。 */
   .data-table-refined tbody tr.domain-row-danger,
   .domain-row-danger {
     background: rgb(var(--row-delete));
@@ -452,29 +832,16 @@
     outline: none;
   }
 
-  .btn-primary {
-    @apply border-transparent bg-accent text-on-accent hover:border-transparent hover:bg-accent;
-  }
-
-  .btn-secondary {
-    @apply border-accent bg-accent text-on-accent hover:border-accent hover:bg-accent;
-  }
-
-  .btn-ghost {
-    @apply border-line bg-transparent text-ink hover:border-ink hover:bg-transparent;
-  }
-
-  .btn-danger {
-    @apply border-danger bg-danger text-on-accent hover:border-danger hover:bg-danger;
-  }
-
   .input {
-    @apply w-full rounded-[6px] border border-stone-muted bg-surface px-3 py-2 text-[13px]
-      text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:opacity-60;
+    @apply w-full rounded-[8px] border border-cloud-dark bg-surface px-3 py-2 text-[13px]
+      text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:opacity-60;
+    font-family: var(--font-sans);
   }
 
+  /* 表单标签是 chrome，走 sans；mono 按规范只留给技术片段。 */
   .label {
-    @apply mb-1.5 block font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-ink-muted;
+    @apply mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.09em] text-ink-muted;
+    font-family: var(--font-sans);
   }
 
   .table-scroll {
@@ -500,8 +867,8 @@
   }
 
   .table-top-scroll {
-    @apply h-3 w-full overflow-x-auto rounded-button border border-line bg-surface-muted;
-    scrollbar-color: oklch(var(--neutral) / 0.5) transparent;
+    @apply h-3 w-full overflow-x-auto rounded-[8px] border border-line bg-surface-muted;
+    scrollbar-color: rgb(var(--cloud-dark)) transparent;
   }
 
   /* 用发丝线而不是投影标出吸附列的边界 —— 这套系统里没有阴影。 */
@@ -510,23 +877,29 @@
   }
 
   .mono {
-    @apply font-mono text-[12px];
+    @apply font-mono;
+    font-size: 12.5px;
   }
 
+  /* 铁律二：成列的数字必须上下对齐。 */
   .tabular {
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "zero";
   }
 
   .page-shell {
-    max-width: 1200px;
+    max-width: 1280px;
   }
 
   .breadcrumb {
     @apply mb-5 flex min-w-0 items-center gap-2 overflow-x-auto whitespace-nowrap text-[11px] text-ink-faint;
+    font-family: var(--font-sans);
   }
 
   .breadcrumb a {
-    @apply rounded px-1 py-0.5 hover:bg-surface-muted hover:text-ink;
+    @apply px-1 py-0.5 hover:bg-surface-muted hover:text-ink;
+    border-radius: 0;
   }
 
   .settings-sidebar {
@@ -540,16 +913,20 @@
 
   .settings-sidebar a[aria-current="true"]::before {
     content: "";
-    @apply absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-accent;
+    @apply absolute left-0 top-0 bottom-0 w-0.5 bg-accent;
+    border-radius: 0;
   }
 
-  /* 概览统计带是页面上最重的一块，用鼠尾草面板把它压住。 */
+  /* 概览统计带：卡片语言（24px 圆角、发丝线、零阴影）。 */
+  /* 大容器 10px 圆角 + 半透明背板，氛围光从后面透上来。 */
   .overview-stats-band {
     position: relative;
     overflow: hidden;
     border: 1px solid rgb(var(--line));
-    border-radius: 14px;
-    background: rgb(var(--surface));
+    border-radius: 10px;
+    background: rgb(var(--panel) / 0.82);
+    backdrop-filter: blur(12px) saturate(1.05);
+    -webkit-backdrop-filter: blur(12px) saturate(1.05);
   }
 
   .overview-stat-tile {
@@ -577,12 +954,9 @@
     .overview-stat-tile:nth-last-child(-n + 4) { border-bottom: 0; }
   }
 
-  .design-wash {
-    display: none;
-  }
 }
 
-/* Existing semantic utility classes are intentionally quieted so the new palette stays monochrome. */
+/* 残留的 Tailwind 调色板类被静音，保证不会有冷灰/蓝/绿漏进这套暖色系统。 */
 [class~="text-emerald-600"],
 [class~="text-emerald-700"],
 [class~="text-emerald-800"],
@@ -627,7 +1001,20 @@
 [class~="border-rose-200"],
 [class~="border-orange-200"],
 [class~="border-cyan-200"] {
-  border-color: rgb(var(--stone-muted)) !important;
+  border-color: rgb(var(--stone)) !important;
+}
+
+/* 规范动效：入场 = 透明度 + 上移 6px；实时状态点 = 2.2s 呼吸。
+   这两个 keyframes 必须在 CSS 里显式定义 —— tailwind.config 的 keyframes
+   只在对应的 animate-* 工具类被用到时才会输出，而我们用的是原生 animation。 */
+@keyframes enter-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.86); }
 }
 
 @keyframes skeleton-pulse {
@@ -638,15 +1025,15 @@
 .skeleton {
   min-height: 0.75rem;
   background: rgb(var(--surface-muted));
-  animation: skeleton-pulse 1.1s ease-in-out infinite alternate;
+  animation: skeleton-pulse 1.1s var(--ease) infinite alternate;
 }
 
 @keyframes status-row-highlight {
-  0% { background-color: rgb(var(--sky-wash) / 0.75); }
+  0% { background-color: rgb(var(--manilla) / 0.85); }
   100% { background-color: transparent; }
 }
 
-.status-change-highlight { animation: status-row-highlight 800ms ease-out both; }
+.status-change-highlight { animation: status-row-highlight 800ms var(--ease) both; }
 
 @keyframes toast-enter {
   from { opacity: 0; transform: translateY(0.5rem) scale(0.98); }
@@ -658,8 +1045,8 @@
   to { opacity: 0; transform: translateY(0.35rem) scale(0.98); }
 }
 
-.toast-enter { animation: toast-enter 180ms ease-out both; }
-.toast-leave { animation: toast-leave 320ms ease-in both; }
+.toast-enter { animation: toast-enter var(--dur-fast) var(--ease) both; }
+.toast-leave { animation: toast-leave var(--dur-slow) var(--ease) both; }
 
 .raw-code {
   display: grid;
@@ -668,7 +1055,7 @@
   max-height: 60vh;
   border: 1px solid rgb(var(--line));
   border-radius: 6px;
-  background: rgb(var(--surface-muted));
+  background: rgb(var(--surface-subtle));
   font-family: var(--font-mono);
   font-size: 0.75rem;
   line-height: 1.6;
@@ -695,7 +1082,9 @@
   .skeleton,
   .toast-enter,
   .toast-leave,
-  .status-change-highlight {
+  .status-change-highlight,
+  .live-dot,
+  .enter-stagger > * {
     animation: none;
   }
 
@@ -709,29 +1098,30 @@
 
 @media (min-width: 1024px) {
   .page-shell {
-    width: min(100%, 1200px);
+    width: min(100%, 1280px);
     margin-inline: auto;
   }
 }
 
 @media (min-width: 1440px) {
   .page-shell {
-    width: min(100%, 1320px);
-    max-width: 1320px;
+    width: min(100%, 1280px);
+    max-width: 1280px;
   }
 }
 
 @media (prefers-contrast: more) {
+  /* 高对比度模式：把发丝线提到 muted 一档，两级次要文字都往主墨色靠。 */
   :root {
-    --line: 95 91 87;
-    --ink-muted: 64 59 55;
-    --ink-faint: 84 78 73;
+    --line: 109 103 95;
+    --ink-muted: 27 24 21;
+    --ink-faint: 82 77 71;
   }
 
   .dark {
-    --line: 255 255 255 / 0.42;
-    --ink-muted: 246 244 242;
-    --ink-faint: 224 220 216;
+    --line: 106 98 91;
+    --ink-muted: 242 236 228;
+    --ink-faint: 200 192 182;
   }
 
   .btn,
@@ -770,14 +1160,14 @@
 }
 
 html[data-density="compact"] {
-  --density-card-pad: 1.15rem;
-  --density-card-header-pad: 0.8rem;
+  --density-card-pad: 1.5rem;
+  --density-card-header-pad: 1rem;
   --density-row-height: 44px;
 }
 
 html[data-density="dense"] {
-  --density-card-pad: 0.9rem;
-  --density-card-header-pad: 0.65rem;
+  --density-card-pad: 1.15rem;
+  --density-card-header-pad: 0.75rem;
   --density-row-height: 36px;
 }
 
@@ -791,11 +1181,17 @@ html[data-density="dense"] .density-card-header {
   padding-block: var(--density-card-header-pad);
 }
 
+/* 规范：10px、圆头、滑块色 = 发丝线色。 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb {
-  background: rgb(var(--stone-muted));
-  border-radius: 6px;
-  border: 3px solid transparent;
+  background: rgb(var(--line));
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted) / 0.55);
   background-clip: content-box;
 }
 ::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }

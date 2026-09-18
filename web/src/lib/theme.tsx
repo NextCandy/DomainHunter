@@ -11,10 +11,11 @@ interface ThemeContextValue {
   resolved: "light" | "dark";
 }
 
+// 深色是这套设计系统的默认主题（炭黑 × 琥珀橙），亮色是可切换的镜像。
 const ThemeContext = createContext<ThemeContextValue>({
-  mode: "light",
+  mode: "dark",
   setMode: () => {},
-  resolved: "light",
+  resolved: "dark",
 });
 
 export function useTheme() {
@@ -26,9 +27,9 @@ function readStored(): ThemeMode {
     const value = localStorage.getItem(STORAGE_KEY);
     if (value === "light" || value === "dark" || value === "system") return value;
   } catch {
-    /* localStorage 不可用时退回跟随系统 */
+    /* localStorage 不可用时退回默认主题 */
   }
-  return "light";
+  return "dark";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
