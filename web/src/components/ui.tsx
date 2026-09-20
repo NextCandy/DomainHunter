@@ -253,6 +253,41 @@ function TransferLockMark() {
   );
 }
 
+/**
+ * 状态转移：两个 status pill 加一个箭头。
+ *
+ * 一条"变化记录"只显示新状态，等于没说发生了什么——registered → grace
+ * 和 unknown → grace 是完全不同的两件事。没有旧状态时（域名的第一条观测）
+ * 退化成单个 pill，不要凭空造一个"未知"出来。
+ */
+export function FromToStatus({
+  from,
+  to,
+  eppStatuses,
+  className,
+}: {
+  from?: DomainStatus | null;
+  to: DomainStatus;
+  eppStatuses?: string[] | null;
+  className?: string;
+}) {
+  if (!from || from === to) {
+    return <StatusBadge status={to} eppStatuses={eppStatuses} className={className} />;
+  }
+  return (
+    <span className={cx("inline-flex items-center gap-1", className)}>
+      <StatusBadge status={from} className="opacity-60" />
+      <span aria-hidden="true" className="text-[11px] text-ink-faint">
+        →
+      </span>
+      <StatusBadge status={to} eppStatuses={eppStatuses} />
+      <span className="sr-only">
+        从 {STATUS_LABELS[from] ?? from} 变为 {STATUS_LABELS[to] ?? to}
+      </span>
+    </span>
+  );
+}
+
 export function Pill({
   children,
   className,
@@ -648,12 +683,29 @@ export interface SparklineSeries {
   color: string;
 }
 
-export function Sparkline({ series, labels, className }: { series: SparklineSeries[]; labels?: string[]; className?: string }) {
+export function Sparkline({
+  series,
+  labels,
+  className,
+  hiddenLabels,
+  onToggleLabel,
+}: {
+  series: SparklineSeries[];
+  labels?: string[];
+  className?: string;
+  /** 被隐藏的系列标签；传了就把图例变成可点的开关。 */
+  hiddenLabels?: Set<string>;
+  onToggleLabel?: (label: string) => void;
+}) {
   const width = 320;
   const height = 92;
   const padding = 8;
-  const count = Math.max(2, ...series.map((item) => item.values.length));
-  const max = Math.max(1, ...series.flatMap((item) => item.values));
+  // 三条量级差很远的线画在一起时，小的那条会被压成贴底的直线。
+  // 关掉大的那条，Y 轴会跟着重算，小的立刻看得见。
+  const drawn = hiddenLabels && hiddenLabels.size > 0 ? series.filter((item) => !hiddenLabels.has(item.label)) : series;
+  const active = drawn.length > 0 ? drawn : series;
+  const count = Math.max(2, ...active.map((item) => item.values.length));
+  const max = Math.max(1, ...active.flatMap((item) => item.values));
 
   const makePath = (values: number[]) =>
     values
@@ -677,7 +729,7 @@ export function Sparkline({ series, labels, className }: { series: SparklineSeri
           const y = padding + ratio * (height - padding * 2);
           return <path key={ratio} d={`M ${padding} ${y} H ${width - padding}`} stroke="rgb(var(--line))" strokeDasharray="2 4" />;
         })}
-        {series.map((item) => (
+        {active.map((item) => (
           <path
             key={item.label}
             d={makePath(item.values)}
@@ -693,9 +745,9 @@ export function Sparkline({ series, labels, className }: { series: SparklineSeri
           return (
             <g key={index}>
               <line x1={x} y1={padding} x2={x} y2={height - padding} stroke="transparent" strokeWidth="20">
-                <title>{`${labels?.[index] ?? `第 ${index + 1} 天`} · ${series.map((item) => `${item.label} ${item.values[index] ?? 0}`).join(" · ")}`}</title>
+                <title>{`${labels?.[index] ?? `第 ${index + 1} 天`} · ${active.map((item) => `${item.label} ${item.values[index] ?? 0}`).join(" · ")}`}</title>
               </line>
-              {series.map((item) => {
+              {active.map((item) => {
                 const value = item.values[index] ?? 0;
                 const y = height - padding - (value / max) * (height - padding * 2);
                 return <circle key={item.label} cx={x} cy={y} r="2.5" fill={item.color}><title>{`${labels?.[index] ?? ""} · ${item.label} ${value}`}</title></circle>;
@@ -706,12 +758,38 @@ export function Sparkline({ series, labels, className }: { series: SparklineSeri
       </svg>
       <div className="mt-1 flex justify-between text-[10px] text-ink-faint"><span>{max}</span><span>Y 轴：次数</span><span>0</span></div>
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
-        {series.map((item) => (
-          <span key={item.label} className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: item.color }} aria-hidden="true" />
-            {item.label}
-          </span>
-        ))}
+        {series.map((item) => {
+          const off = Boolean(hiddenLabels?.has(item.label));
+          const content = (
+            <>
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: off ? "rgb(var(--line))" : item.color }}
+                aria-hidden="true"
+              />
+              {item.label}
+            </>
+          );
+          if (!onToggleLabel) {
+            return (
+              <span key={item.label} className="inline-flex items-center gap-1">
+                {content}
+              </span>
+            );
+          }
+          return (
+            <button
+              key={item.label}
+              type="button"
+              className={cx("inline-flex min-h-6 items-center gap-1 hover:text-ink", off && "text-ink-faint line-through")}
+              onClick={() => onToggleLabel(item.label)}
+              aria-pressed={!off}
+              title={off ? `显示「${item.label}」` : `隐藏「${item.label}」`}
+            >
+              {content}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

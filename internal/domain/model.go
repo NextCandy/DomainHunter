@@ -114,6 +114,10 @@ type Observation struct {
 	Confidence   Confidence `json:"confidence"`
 	ObservedAt   time.Time  `json:"observed_at"`
 	Changed      bool       `json:"changed"`
+	// OldStatus 是同一域名上一次观测的状态，**不入库**，只由"最近变化"这类
+	// 查询顺带查出来填充。一条变化记录光有新状态说不清发生了什么，
+	// 前端要画的是 registered → grace 这样的转移。
+	OldStatus Status `json:"old_status,omitempty"`
 }
 
 // Attempt 单个 Provider 的一次查询尝试（对应 query_attempts 表）

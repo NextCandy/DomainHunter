@@ -274,6 +274,7 @@ func parseListFilter(r *http.Request) service.ListFilter {
 		Registrars: splitCSV(q.Get("registrars")),
 		Provider:   strings.TrimSpace(q.Get("provider")),
 		Tag:        strings.TrimSpace(q.Get("tag")),
+		ExpiryDay:  strings.TrimSpace(q.Get("expiry")),
 		Favorite:   q.Get("favorite") == "true" || q.Get("favorite") == "1",
 		Review:     q.Get("review") == "true" || q.Get("review") == "1",
 		Sort:       strings.TrimSpace(q.Get("sort")),

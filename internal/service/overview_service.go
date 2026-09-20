@@ -38,6 +38,9 @@ type Overview struct {
 	StatusCounts    map[domain.Status]int  `json:"status_counts"`
 	RecentChanges   []OverviewItem         `json:"recent_changes"`
 	UpcomingExpiry  []OverviewItem         `json:"upcoming_expiry"`
+	// ExpiryCalendar 是未来 60 天里每一天的到期域名数（键为 YYYY-MM-DD 本地日期）。
+	// UpcomingExpiry 只留 10 条给列表用，画日历要的是全量的按日计数。
+	ExpiryCalendar  map[string]int         `json:"expiry_calendar"`
 	RecentAvailable []OverviewItem         `json:"recent_available"`
 	QueryFailures   []OverviewItem         `json:"query_failures"`
 	Providers       []query.ProviderHealth `json:"providers"`
@@ -57,6 +60,10 @@ type OverviewTrendPoint struct {
 	HighScore    int                   `json:"high_score"`
 	Changes      int                   `json:"changes"`
 	StatusCounts map[domain.Status]int `json:"status_counts"`
+	// DomainCounts 是当天处于各状态的**去重域名数**（存量），
+	// StatusCounts 则是观测次数（活动量）。概览顶部统计块的 7 天变化必须用
+	// 前者：用观测次数会算出"总域名 561，7 天 ↓1132"这种比总量还大的差值。
+	DomainCounts map[domain.Status]int `json:"domain_counts"`
 }
 
 // OverviewTrend 是 /api/v2/overview/trend 的稳定响应契约。
@@ -117,9 +124,10 @@ func (s *OverviewService) Build(ctx context.Context) (*Overview, error) {
 	}
 
 	overview := &Overview{
-		Total:        total,
-		StatusCounts: counts,
-		Monitor:      s.monitor.Stats(ctx, s.domainSvc),
+		Total:          total,
+		StatusCounts:   counts,
+		ExpiryCalendar: make(map[string]int),
+		Monitor:        s.monitor.Stats(ctx, s.domainSvc),
 	}
 
 	// 保证所有状态都有键，前端不需要处理缺失
@@ -158,6 +166,7 @@ func (s *OverviewService) Build(ctx context.Context) (*Overview, error) {
 			overview.UpcomingExpiry = append(overview.UpcomingExpiry, OverviewItem{
 				Domain: res.Name, Status: res.Status, Registrar: res.Registrar, ExpiryAt: res.ExpiryDate, Review: res.Review,
 			})
+			overview.ExpiryCalendar[res.ExpiryDate.Local().Format("2006-01-02")]++
 		}
 		if res.Status == domain.StatusAvailable {
 			checked := res.LastChecked
@@ -200,6 +209,7 @@ func (s *OverviewService) Build(ctx context.Context) (*Overview, error) {
 			item := OverviewItem{
 				Domain:     change.Domain,
 				Status:     change.Status,
+				OldStatus:  change.OldStatus,
 				Registrar:  change.Registrar,
 				Provider:   change.Provider,
 				ObservedAt: &observed,
@@ -260,9 +270,11 @@ func (s *OverviewService) Trend(ctx context.Context, days int) (*OverviewTrend, 
 		points[i] = OverviewTrendPoint{
 			Day:          day,
 			StatusCounts: make(map[domain.Status]int, len(domain.AllStatuses())),
+			DomainCounts: make(map[domain.Status]int, len(domain.AllStatuses())),
 		}
 		for _, status := range domain.AllStatuses() {
 			points[i].StatusCounts[status] = 0
+			points[i].DomainCounts[status] = 0
 		}
 		byDay[day] = &points[i]
 	}
@@ -279,6 +291,7 @@ func (s *OverviewService) Trend(ctx context.Context, days int) (*OverviewTrend, 
 		point.Changes += maxInt(count.Changed)
 		point.HighScore += maxInt(count.HighConfidence)
 		point.StatusCounts[count.Status] += count.Count
+		point.DomainCounts[count.Status] += count.Domains
 		if count.Status == domain.StatusAvailable {
 			point.Available += count.Count
 		}

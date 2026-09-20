@@ -11,10 +11,11 @@ import {
   Pill,
   Skeleton,
   Sparkline,
-  StatusBadge,
+  FromToStatus,
   useIsMobile,
   cx,
 } from "../components/ui";
+import { ExpiryCalendar } from "../components/ExpiryHeat";
 import {
   STATUS_LABELS,
   STATUS_ORDER,
@@ -89,6 +90,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
   if (error) return <ErrorNotice message={error} onRetry={reload} />;
   if (!data) return null;
 
+  const expiryTotal = Object.values(data.expiry_calendar ?? {}).reduce((sum, count) => sum + count, 0);
   const monitorRunning = Boolean(data.monitor?.["is_running"]);
   const workers = Number(data.monitor?.["worker_count"] ?? 0);
   const queued =
@@ -102,13 +104,31 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
         <div>
           <span className="workspace-kicker">DOMAIN WORKSPACE</span>
           <h1 className="editorial-title mt-2">今日工作台</h1>
-          <p className="text-[12px] text-ink-muted">
-            共 {data.total} 个域名 · 调度器
-            <span className={cx("ml-1", monitorRunning ? "text-accent" : "text-ink-muted")}>
+          {/* 调度器停了、或者队列在堆积，是"现在就得管"的事，给它一个醒目的胶囊；
+              一切正常时保持低调，不要天天用红色喊。 */}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-ink-muted">
+            <span>共 {data.total} 个域名</span>
+            <span
+              className={cx(
+                "inline-flex items-center gap-1.5 rounded-tag border px-2 py-0.5",
+                !monitorRunning
+                  ? "border-danger/45 bg-danger/12 text-danger"
+                  : queued > 0
+                    ? "border-warn/45 bg-warn/12 text-warn"
+                    : "border-line text-ink-muted",
+              )}
+              title={monitorRunning ? `调度器运行中，${workers} 个 worker，队列 ${queued}` : "调度器已停止"}
+            >
+              <span
+                className={cx("h-1.5 w-1.5 rounded-full", monitorRunning ? "bg-success" : "bg-danger")}
+                aria-hidden="true"
+              />
               {monitorRunning ? "运行中" : "已停止"}
+              <span className="tabular opacity-80">
+                · {workers} worker · 队列 {queued}
+              </span>
             </span>
-            （{workers} worker，队列 {queued}）
-          </p>
+          </div>
         </div>
         <button type="button" className="btn btn-secondary" onClick={reload}>
           刷新
@@ -117,7 +137,17 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
 
       <div className="overview-stats-band">
         <div className="relative grid grid-cols-2 gap-0 md:grid-cols-4">
-          <StatTile label="总域名" value={data.total} tone="ink" sparkline={trendPoints.map((point) => point.total)} sparkColor={TREND_COLORS.total} />
+          {/* 总量的 7 天曲线用"当天被观测到的去重域名数"求和，而不是观测次数——
+              后者一天能到几千，会让统计块显示出比总量还大的变化。 */}
+          <StatTile
+            label="总域名"
+            value={data.total}
+            tone="ink"
+            sparkline={trendPoints.map((point) =>
+              Object.values(point.domain_counts ?? {}).reduce((sum, count) => sum + count, 0),
+            )}
+            sparkColor={TREND_COLORS.total}
+          />
           {STATUS_ORDER.filter((status) =>
             ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
               status,
@@ -131,7 +161,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
               label={STATUS_LABELS[status]}
               value={data.status_counts?.[status] ?? 0}
               tone={status === "available" ? "accent" : "ink"}
-              sparkline={trendPoints.map((point) => status === "available" ? point.available : point.status_counts?.[status] ?? 0)}
+              sparkline={trendPoints.map((point) => point.domain_counts?.[status] ?? 0)}
               sparkColor={status === "available" ? TREND_COLORS.available : TREND_COLORS.total}
             />
           ))}
@@ -144,13 +174,29 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
 
       <ProviderAlert providers={data.providers} />
 
-      {/* 手机首屏要留给"今天该干什么"：趋势图先折起来，想看再展开。 */}
+      {/* 中区：左边"过去七天发生了什么"，右边"未来三十天要发生什么"。
+          手机首屏要留给行动卡，两块都先折起来。 */}
       {isMobile ? (
-        <CollapsibleCard title="最近 7 天趋势" count={1} collapsedLabel="趋势图" forceCollapse>
-          <TrendCard points={trendPoints} usingFallback={usingFallback} bare />
-        </CollapsibleCard>
+        <>
+          <CollapsibleCard title="最近 7 天趋势" count={1} collapsedLabel="趋势图" forceCollapse>
+            <TrendCard points={trendPoints} usingFallback={usingFallback} bare />
+          </CollapsibleCard>
+          <CollapsibleCard
+            title="未来 30 天到期"
+            count={1}
+            collapsedLabel={expiryTotal > 0 ? `${expiryTotal} 个` : "无"}
+            forceCollapse
+          >
+            <ExpiryCalendar counts={data.expiry_calendar ?? {}} />
+          </CollapsibleCard>
+        </>
       ) : (
-        <TrendCard points={trendPoints} usingFallback={usingFallback} />
+        <div className="grid gap-4 xl:grid-cols-2">
+          <TrendCard points={trendPoints} usingFallback={usingFallback} />
+          <Card title="未来 30 天到期">
+            <ExpiryCalendar counts={data.expiry_calendar ?? {}} />
+          </Card>
+        </div>
       )}
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -161,7 +207,9 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
             empty="暂无状态变化"
             render={(item) => (
               <>
-                <StatusBadge status={item.status} />
+                {/* 只显示新状态等于没说发生了什么：registered → grace 和
+                    unknown → grace 是两回事。 */}
+                <FromToStatus from={item.old_status} to={item.status} />
                 {item.message && <Pill>{item.message}</Pill>}
                 <span className="text-[12px] text-ink-faint">{formatRelative(item.observed_at)}</span>
               </>
@@ -169,35 +217,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
           />
         </CollapsibleCard>
 
-      <CollapsibleCard
-        title="即将到期（60 天内）"
-        count={data.upcoming_expiry?.length ?? 0}
-        emptyLabel="60 天内无到期"
-        forceCollapse={isMobile}
-        bodyClassName="p-0"
-      >
-          <RenewalSummary items={data.upcoming_expiry} />
-          <ItemList
-            items={data.upcoming_expiry}
-            empty="60 天内没有到期的域名"
-            render={(item) => {
-              const days = daysUntil(item.expiry_at);
-              return (
-                <>
-                  <span className="tabular text-[12px] text-ink-muted">{formatDate(item.expiry_at)}</span>
-                  <span
-                    className={cx(
-                      "tabular text-[12px]",
-                      days !== null && days <= 7 ? "text-ink" : "text-ink-faint",
-                    )}
-                  >
-                    {days !== null ? `${days} 天` : "—"}
-                  </span>
-                </>
-              );
-            }}
-          />
-        </CollapsibleCard>
+      <UpcomingExpirySection items={data.upcoming_expiry} forceCollapse={isMobile} />
 
         <CollapsibleCard title="最近可注册" count={data.recent_available?.length ?? 0} forceCollapse={isMobile} bodyClassName="p-0">
           <ItemList
@@ -242,32 +262,108 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
         {!data.providers || data.providers.length === 0 ? (
           <EmptyState title="暂无查询源数据" />
         ) : (
-          <ul className="divide-y divide-line">
-            {data.providers.map((provider) => (
-              <li
-                key={provider.provider}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
-              >
-                <span className={cx("h-2 w-2 shrink-0 rounded-full", HEALTH_DOT[provider.state])} />
-                <span className="w-[92px] text-[13px] font-medium">
+          /* 十个源里常年有九个是"0 错误 / 0 请求"，铺成十行大表全是空格子。
+             缩成一排 chip：有流量的显示 P95，没流量的只说"暂无数据"，
+             真正出问题的由顶部 ProviderAlert 单独喊。 */
+          <div className="flex flex-wrap gap-2 p-4">
+            {data.providers.map((provider) => {
+              const busy = provider.requests > 0;
+              return (
+                <span
+                  key={provider.provider}
+                  className={cx(
+                    "inline-flex items-center gap-1.5 rounded-tag border px-2.5 py-1 text-[11px]",
+                    provider.state === "offline" || (provider.error_rate ?? 0) > 0.2
+                      ? "border-danger/45 text-danger"
+                      : busy
+                        ? "border-line text-ink"
+                        : "border-line text-ink-faint",
+                  )}
+                  title={`${providerLabel(provider.provider)} · ${HEALTH_LABELS[provider.state]} · ${provider.errors} 错误 / ${provider.requests} 请求 · 平均 ${formatLatency(provider.avg_latency_ms)}`}
+                >
+                  <span className={cx("h-1.5 w-1.5 shrink-0 rounded-full", HEALTH_DOT[provider.state])} aria-hidden="true" />
                   {providerLabel(provider.provider)}
+                  <span className="tabular opacity-70">
+                    {busy ? formatLatency(provider.avg_latency_ms) : HEALTH_LABELS[provider.state]}
+                  </span>
                 </span>
-                <span className="w-[64px] text-[12px] text-ink-muted">
-                  {HEALTH_LABELS[provider.state]}
-                </span>
-                <span className="tabular text-[12px] text-ink-faint">
-                  {provider.errors} 错误 / {provider.requests} 请求
-                  {provider.error_rate != null && ` · ${(provider.error_rate * 100).toFixed(1)}%`}
-                </span>
-                <span className="tabular ml-auto text-[12px] text-ink-faint">
-                  平均 {formatLatency(provider.avg_latency_ms)}
-                </span>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
         )}
       </CollapsibleCard>
     </div>
+  );
+}
+
+/**
+ * 即将到期分区。默认只看未来 7 天——和主行动条的"续费风险"同一个口径，
+ * 两处看到的数字对得上；想看更远再切 30 / 60。
+ */
+function UpcomingExpirySection({
+  items,
+  forceCollapse,
+}: {
+  items: OverviewItem[] | null;
+  forceCollapse?: boolean;
+}) {
+  const [horizon, setHorizon] = useState<number>(7);
+  const filtered = (items ?? []).filter((item) => {
+    const days = daysUntil(item.expiry_at);
+    return days !== null && days >= 0 && days <= horizon;
+  });
+
+  const tabs = (
+    <div className="flex gap-0.5" role="tablist" aria-label="到期时间范围">
+      {[7, 30, 60].map((value) => (
+        <button
+          key={value}
+          type="button"
+          role="tab"
+          aria-selected={horizon === value}
+          className={cx(
+            "min-h-8 rounded-button px-2 text-[11px] transition-colors",
+            horizon === value ? "bg-accent text-on-accent" : "text-ink-muted hover:text-ink",
+          )}
+          onClick={() => setHorizon(value)}
+        >
+          {value} 天
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <CollapsibleCard
+      title="即将到期"
+      count={filtered.length}
+      action={tabs}
+      emptyLabel={`${horizon} 天内无到期`}
+      forceCollapse={forceCollapse}
+      bodyClassName="p-0"
+    >
+      <RenewalSummary items={filtered} />
+      <ItemList
+        items={filtered}
+        empty={`${horizon} 天内没有到期的域名`}
+        render={(item) => {
+          const days = daysUntil(item.expiry_at);
+          return (
+            <>
+              <span className="tabular text-[12px] text-ink-muted">{formatDate(item.expiry_at)}</span>
+              <span
+                className={cx(
+                  "tabular text-[12px]",
+                  days !== null && days <= 7 ? "text-ink" : "text-ink-faint",
+                )}
+              >
+                {days !== null ? `${days} 天` : "—"}
+              </span>
+            </>
+          );
+        }}
+      />
+    </CollapsibleCard>
   );
 }
 
@@ -322,12 +418,25 @@ function TrendCard({
 
   // 全零时画出来是一条贴着底的直线加一套空坐标轴，占掉整屏高度却什么都没说。
   const isEmpty = series.every((item) => item.values.every((value) => value === 0));
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+  const toggleSeries = (label: string) =>
+    setHiddenSeries((current) => {
+      const next = new Set(current);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
 
   const body = isEmpty ? (
     <p className="text-[12px] text-ink-faint">近 7 天没有状态变化，下一次状态改变后会在这里形成趋势。</p>
   ) : (
     <>
-      <Sparkline series={series} labels={points.map((point) => formatTrendDay(point.day))} />
+      <Sparkline
+        series={series}
+        labels={points.map((point) => formatTrendDay(point.day))}
+        hiddenLabels={hiddenSeries}
+        onToggleLabel={toggleSeries}
+      />
       <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
         <span>{formatTrendDay(points[0]?.day)}</span>
         <span>{formatTrendDay(points[points.length - 1]?.day)}</span>
@@ -453,6 +562,7 @@ function normalizeTrend(payload: unknown): OverviewTrendPoint[] {
         high_score: readNumber(value.high_score, value.highScore, value.high, value.score_80_plus),
         changes: readNumber(value.changes, value.status_changes, value.change_count),
         status_counts: normalizeStatusCounts(value.status_counts),
+        domain_counts: normalizeStatusCounts(value.domain_counts),
       };
     })
     .filter((point): point is OverviewTrendPoint => point !== null)
@@ -495,7 +605,7 @@ function buildFallbackTrend(data: Overview): OverviewTrendPoint[] {
   const points: OverviewTrendPoint[] = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(today);
     date.setDate(today.getDate() - 6 + index);
-    return { day: localDayKey(date), total: 0, available: 0, high_score: 0, changes: 0, status_counts: {} };
+    return { day: localDayKey(date), total: 0, available: 0, high_score: 0, changes: 0, status_counts: {}, domain_counts: {} };
   });
   const byDay = new Map(points.map((point) => [point.day, point]));
 

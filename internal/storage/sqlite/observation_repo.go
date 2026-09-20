@@ -128,9 +128,23 @@ func (r *ObservationRepo) ListRecentChanges(ctx context.Context, limit int) ([]d
 	if limit <= 0 || limit > 200 {
 		limit = 20
 	}
+	// 顺带查出同一域名上一次观测的状态：前端要画 registered → grace 这样的转移，
+	// 光有新状态说不清发生了什么。关联子查询走 idx_observations_domain，
+	// 每行一次索引定位，limit 之内开销可忽略。
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT `+observationColumns+` FROM domain_observations
-		 WHERE changed = 1 ORDER BY observed_at DESC, id DESC LIMIT ?`, limit)
+		`SELECT `+observationColumns+`,
+		       COALESCE((
+			       SELECT previous.status
+			       FROM domain_observations AS previous
+			       WHERE lower(previous.domain) = lower(current.domain)
+			         AND (previous.observed_at < current.observed_at OR
+			              (previous.observed_at = current.observed_at AND previous.id < current.id))
+			       ORDER BY previous.observed_at DESC, previous.id DESC
+			       LIMIT 1
+		       ), '') AS old_status
+		 FROM domain_observations AS current
+		 WHERE current.changed = 1
+		 ORDER BY current.observed_at DESC, current.id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -138,10 +152,11 @@ func (r *ObservationRepo) ListRecentChanges(ctx context.Context, limit int) ([]d
 
 	var out []domain.Observation
 	for rows.Next() {
-		obs, err := scanObservation(rows)
+		obs, oldStatus, err := scanObservationWithOldStatus(rows, true)
 		if err != nil {
 			return nil, err
 		}
+		obs.OldStatus = domain.Status(oldStatus)
 		out = append(out, obs)
 	}
 	return out, rows.Err()
@@ -157,6 +172,7 @@ func (r *ObservationRepo) DailyStatusCounts(ctx context.Context, fromDay, toDay 
 		SELECT substr(observed_at, 1, 10) AS day,
 		       status,
 		       COUNT(*) AS total,
+		       COUNT(DISTINCT lower(domain)) AS domains,
 		       SUM(CASE WHEN changed = 1 THEN 1 ELSE 0 END) AS changes,
 		       SUM(CASE WHEN lower(COALESCE(confidence, '')) = 'high' THEN 1 ELSE 0 END) AS high_confidence
 		FROM domain_observations
@@ -171,7 +187,7 @@ func (r *ObservationRepo) DailyStatusCounts(ctx context.Context, fromDay, toDay 
 	var out []repository.DailyStatusCount
 	for rows.Next() {
 		var item repository.DailyStatusCount
-		if err := rows.Scan(&item.Day, &item.Status, &item.Count, &item.Changed, &item.HighConfidence); err != nil {
+		if err := rows.Scan(&item.Day, &item.Status, &item.Count, &item.Domains, &item.Changed, &item.HighConfidence); err != nil {
 			return nil, err
 		}
 		out = append(out, item)

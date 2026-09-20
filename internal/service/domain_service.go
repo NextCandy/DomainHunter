@@ -31,7 +31,10 @@ type ListFilter struct {
 	Registrars []string
 	Provider   string
 	Tag        string
-	Favorite   bool
+	// ExpiryDay 只保留在这一天到期的域名，格式 YYYY-MM-DD（按本地日历）。
+	// 概览的到期热力日历点某一格时跳到列表页就用它。
+	ExpiryDay string
+	Favorite  bool
 	// Review 只保留「查询事实或证据需要复核」的域名。
 	// 这与状态筛选是两个维度：需复核的域名状态可以是 registered / pending_delete
 	// 等任意值，所以概览的「需要复核」不能用 statuses 去筛。
@@ -266,6 +269,7 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 	registrarFilter := strings.ToLower(strings.TrimSpace(filter.Registrar))
 	tldFilter := strings.ToLower(strings.Trim(strings.TrimSpace(filter.TLD), "."))
 	tagFilter := strings.ToLower(strings.TrimSpace(filter.Tag))
+	expiryDay := strings.TrimSpace(filter.ExpiryDay)
 	tldSet := normalizedSet(filter.TLDs, func(v string) string {
 		return strings.ToLower(strings.Trim(strings.TrimSpace(v), "."))
 	})
@@ -302,6 +306,12 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 		}
 		if filter.Provider != "" && item.QueryMethod != filter.Provider {
 			continue
+		}
+		// 到期日按本地日历比对，与前端日历格子上显示的日期一致。
+		if expiryDay != "" {
+			if item.ExpiryDate == nil || item.ExpiryDate.Local().Format("2006-01-02") != expiryDay {
+				continue
+			}
 		}
 		if filter.Favorite && !item.Favorite {
 			continue

@@ -94,9 +94,13 @@ type ObservationRepository interface {
 // DailyStatusCount 是某个自然日内单个状态的观测计数。
 // Day 使用 YYYY-MM-DD，按应用保存观测时采用的本地日历计算。
 type DailyStatusCount struct {
-	Day            string
-	Status         domain.Status
-	Count          int
+	Day    string
+	Status domain.Status
+	// Count 是观测次数：同一个域名一天被查多次就计多次，反映的是活动量。
+	Count int
+	// Domains 是去重后的域名数，才是"当天有多少域名处于这个状态"的存量语义。
+	// 概览顶部的统计块要用它算变化，用 Count 会得出比总量还大的差值。
+	Domains        int
 	Changed        int
 	HighConfidence int
 }

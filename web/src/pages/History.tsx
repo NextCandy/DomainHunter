@@ -5,7 +5,7 @@ import type { Attempt, DomainListResult, Observation } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { SearchableMultiSelect } from "../components/SearchableMultiSelect";
 import type { SelectOption } from "../components/SearchableMultiSelect";
-import { Card, EmptyState, ErrorNotice, Pill, Skeleton, Spinner, StatusBadge } from "../components/ui";
+import { Card, EmptyState, ErrorNotice, FromToStatus, Pill, Skeleton, Spinner, StatusBadge } from "../components/ui";
 import { CONFIDENCE_LABELS, formatDateTime, formatLatency, providerLabel } from "../lib/format";
 
 export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) {
@@ -138,7 +138,8 @@ function ObservationTable({
                 )}
               </td>
               <td className="px-4 py-2">
-                <StatusBadge status={item.status} />
+                {/* 变化记录只显示新状态等于没说发生了什么。 */}
+                <FromToStatus from={item.old_status} to={item.status} />
               </td>
               <td className="whitespace-nowrap px-4 py-2 text-ink-muted">
                 {providerLabel(item.provider)}

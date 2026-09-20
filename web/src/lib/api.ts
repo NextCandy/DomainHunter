@@ -475,6 +475,8 @@ export interface Observation {
   id: number;
   domain: string;
   status: DomainStatus;
+  /** 同一域名上一次观测的状态；后端只在"最近变化"类查询里填充。 */
+  old_status?: DomainStatus;
   registrar: string;
   registered_at: string | null;
   updated_at: string | null;
@@ -519,6 +521,8 @@ export interface ProviderHealth {
 export interface OverviewItem {
   domain: string;
   status: DomainStatus;
+  /** 同一域名上一次观测的状态，用于画 registered → grace 这样的转移。 */
+  old_status?: DomainStatus;
   registrar?: string;
   expiry_at?: string;
   provider?: string;
@@ -532,6 +536,8 @@ export interface Overview {
   status_counts: Record<string, number>;
   recent_changes: OverviewItem[] | null;
   upcoming_expiry: OverviewItem[] | null;
+  /** 未来 60 天每天的到期域名数，键为 YYYY-MM-DD 本地日期。 */
+  expiry_calendar?: Record<string, number> | null;
   recent_available: OverviewItem[] | null;
   query_failures: OverviewItem[] | null;
   providers: ProviderHealth[] | null;
@@ -551,7 +557,10 @@ export interface OverviewTrendPoint {
   available: number;
   high_score: number;
   changes: number;
+  /** 当天各状态的观测次数（活动量）。 */
   status_counts?: Record<string, number>;
+  /** 当天各状态的去重域名数（存量）。统计块的变化量必须用它。 */
+  domain_counts?: Record<string, number>;
 }
 
 export interface SessionInfo {
