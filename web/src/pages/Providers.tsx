@@ -25,6 +25,7 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [chain, setChain] = useState<string[]>(DEFAULT_CHAIN);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const toast = useToast();
   const currentPolicy = policyText ?? (data?.policy ? JSON.stringify(data.policy, null, 2) : "");
   const providers = useMemo(() => [...(data?.providers ?? [])].sort((a, b) => STATE_ORDER[a.state] - STATE_ORDER[b.state]), [data]);
@@ -57,15 +58,28 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
     finally { setTesting(null); }
   }
 
+  function applyChain(nextChain: string[]) {
+    setChain(nextChain);
+    const next = JSON.stringify({ default: { providers: nextChain } }, null, 2);
+    setPolicyText(next);
+    void savePolicy(next);
+  }
+
   function moveProvider(index: number, direction: -1 | 1) {
     const target = index + direction;
     if (target < 0 || target >= chain.length) return;
     const nextChain = [...chain];
     [nextChain[index], nextChain[target]] = [nextChain[target], nextChain[index]];
-    setChain(nextChain);
-    const next = JSON.stringify({ default: { providers: nextChain } }, null, 2);
-    setPolicyText(next);
-    void savePolicy(next);
+    applyChain(nextChain);
+  }
+
+  // 拖拽是调顺序最直接的方式；箭头保留给不支持 pointer 拖放的环境和键盘用户。
+  function reorderProvider(from: number, to: number) {
+    if (from === to || from < 0 || to < 0 || from >= chain.length || to >= chain.length) return;
+    const nextChain = [...chain];
+    const [moved] = nextChain.splice(from, 1);
+    nextChain.splice(to, 0, moved);
+    applyChain(nextChain);
   }
 
   return (
@@ -78,12 +92,20 @@ export function ProvidersPage({ onUnauthorized }: { onUnauthorized: () => void }
       {loading && !data && <div className="space-y-3" aria-label="查询源加载中"><Skeleton className="h-28 w-full rounded-card" /><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-52 rounded-card" />)}</div></div>}
       {data && <>
         <QuerySourceAlert providers={providers} />
-        <Card title="查询链路" action={<Pill>拖动替代：使用箭头安全调整</Pill>}>
+        <Card title="查询链路" action={<Pill>拖动卡片排序，或用箭头</Pill>}>
           <ol className="flex min-w-0 gap-2 overflow-x-auto pb-2">
             {chain.map((name, index) => {
               const health = byName.get(name);
-              return <li key={name} className="flex shrink-0 items-center gap-2">
-                <div className={cx("min-w-[150px] rounded-card border border-l-4 bg-surface px-3 py-2", STATE_EDGE[health?.state ?? "unknown"])}>
+              return <li
+                  key={name}
+                  className={cx("flex shrink-0 items-center gap-2", dragIndex === index && "opacity-50")}
+                  draggable={!saving}
+                  onDragStart={(event) => { setDragIndex(index); event.dataTransfer.effectAllowed = "move"; }}
+                  onDragEnd={() => setDragIndex(null)}
+                  onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
+                  onDrop={(event) => { event.preventDefault(); if (dragIndex !== null) reorderProvider(dragIndex, index); setDragIndex(null); }}
+                >
+                <div className={cx("min-w-[150px] cursor-grab rounded-card border border-l-4 bg-surface px-3 py-2 active:cursor-grabbing", STATE_EDGE[health?.state ?? "unknown"])}>
                   <div className="flex items-center gap-2"><span className={cx(STATE_CLASS[health?.state ?? "unknown"])} /><strong className="text-[12px]">{providerLabel(name)}</strong></div>
                 <div className="mt-2 flex gap-1"><button type="button" className="btn h-7 w-7 px-0" disabled={index === 0 || saving} onClick={() => moveProvider(index, -1)} aria-label={`${providerLabel(name)}前移`}>←</button><button type="button" className="btn h-7 w-7 px-0" disabled={index === chain.length - 1 || saving} onClick={() => moveProvider(index, 1)} aria-label={`${providerLabel(name)}后移`}>→</button></div>
                 </div>{index < chain.length - 1 && <span className="text-ink-faint" aria-hidden="true">→</span>}
