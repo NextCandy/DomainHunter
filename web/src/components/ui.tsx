@@ -145,6 +145,65 @@ export function Card({
   );
 }
 
+/**
+ * 计数为 0 时折叠成一行的卡片（需求里的 EmptyIfZero）。
+ *
+ * 概览页原来四个空列表各撑一个 150px 的空状态插画，"立即行动 0 / 抢注窗口 0 /
+ * 最近可注册（空）/ 查询失败（空）"合起来吃掉首屏 40%——而这四个 0 恰恰是
+ * 「今天没事发生」的意思，最不需要版面。有数时是正常卡片，没数时只留一行，
+ * 想确认仍可展开。
+ */
+export function CollapsibleCard({
+  title,
+  count,
+  action,
+  emptyLabel = "暂无",
+  children,
+  bodyClassName,
+  className,
+}: {
+  title: ReactNode;
+  count: number;
+  action?: ReactNode;
+  emptyLabel?: string;
+  children: ReactNode;
+  bodyClassName?: string;
+  className?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const bodyId = useId();
+
+  if (count > 0) {
+    return (
+      <Card title={title} action={action} bodyClassName={bodyClassName} className={className}>
+        {children}
+      </Card>
+    );
+  }
+
+  return (
+    <section className={cx("card min-w-0", className)}>
+      <header className="density-card-header flex min-w-0 items-center justify-between gap-3 px-6 py-3">
+        <h2 className="min-w-0 truncate text-[13px] text-ink-muted">{title}</h2>
+        <button
+          type="button"
+          className="shrink-0 text-[11px] text-ink-faint hover:text-accent"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+        >
+          {emptyLabel} · {expanded ? "收起" : "展开"}
+        </button>
+      </header>
+      {expanded && (
+        <div id={bodyId} className={cx("density-card-body min-w-0 border-t border-line p-6", bodyClassName)}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function StatusBadge({
   status,
   eppStatuses,

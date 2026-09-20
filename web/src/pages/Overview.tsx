@@ -5,6 +5,7 @@ import type { Overview, OverviewItem, OverviewTrendPoint, ProviderHealth } from 
 import { useAsync } from "../lib/useAsync";
 import {
   Card,
+  CollapsibleCard,
   EmptyState,
   ErrorNotice,
   Pill,
@@ -141,7 +142,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
       <TrendCard points={trendPoints} usingFallback={usingFallback} />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title="最近状态变化" bodyClassName="p-0">
+        <CollapsibleCard title="最近状态变化" count={data.recent_changes?.length ?? 0} bodyClassName="p-0">
           <ItemList
             items={data.recent_changes}
             empty="暂无状态变化"
@@ -153,9 +154,14 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
               </>
             )}
           />
-        </Card>
+        </CollapsibleCard>
 
-      <Card title="即将到期（60 天内）" bodyClassName="p-0">
+      <CollapsibleCard
+        title="即将到期（60 天内）"
+        count={data.upcoming_expiry?.length ?? 0}
+        emptyLabel="60 天内无到期"
+        bodyClassName="p-0"
+      >
           <RenewalSummary items={data.upcoming_expiry} />
           <ItemList
             items={data.upcoming_expiry}
@@ -177,9 +183,9 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
               );
             }}
           />
-        </Card>
+        </CollapsibleCard>
 
-        <Card title="最近可注册" bodyClassName="p-0">
+        <CollapsibleCard title="最近可注册" count={data.recent_available?.length ?? 0} bodyClassName="p-0">
           <ItemList
             items={data.recent_available}
             empty="当前没有可注册的域名"
@@ -190,9 +196,9 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
               </>
             )}
           />
-        </Card>
+        </CollapsibleCard>
 
-        <Card title="查询失败" bodyClassName="p-0">
+        <CollapsibleCard title="查询失败" count={data.query_failures?.length ?? 0} bodyClassName="p-0">
           <ItemList
             items={data.query_failures}
             empty="没有查询失败的域名"
@@ -202,7 +208,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
               </span>
             )}
           />
-        </Card>
+        </CollapsibleCard>
       </div>
 
       <Card
@@ -292,6 +298,9 @@ function TrendCard({
         },
       ];
 
+  // 全零时画出来是一条贴着底的直线加一套空坐标轴，占掉整屏高度却什么都没说。
+  const isEmpty = series.every((item) => item.values.every((value) => value === 0));
+
   return (
     <Card
       title="最近 7 天趋势"
@@ -300,32 +309,96 @@ function TrendCard({
           {usingFallback ? "摘要降级" : "实时数据"}
         </Pill>
       }
+      bodyClassName={isEmpty ? "py-4" : undefined}
     >
-      {series.every((item) => item.values.every((value) => value === 0)) ? (
-        <EmptyState title="近 7 天无状态变化" hint="下一次状态改变后会在这里形成趋势" />
+      {isEmpty ? (
+        <p className="text-[12px] text-ink-faint">
+          近 7 天没有状态变化，下一次状态改变后会在这里形成趋势。
+        </p>
       ) : (
-        <Sparkline series={series} labels={points.map((point) => formatTrendDay(point.day))} />
+        <>
+          <Sparkline series={series} labels={points.map((point) => formatTrendDay(point.day))} />
+          <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
+            <span>{formatTrendDay(points[0]?.day)}</span>
+            <span>{formatTrendDay(points[points.length - 1]?.day)}</span>
+          </div>
+        </>
       )}
-      <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
-        <span>{formatTrendDay(points[0]?.day)}</span>
-        <span>{formatTrendDay(points[points.length - 1]?.day)}</span>
-      </div>
     </Card>
   );
 }
 
+/**
+ * 主行动条。只有"今天确实有事"的项目才配得上一张卡：
+ * 计数为 0 的折进底下一行摘要，省下的版面让有数的卡真正放大。
+ *
+ * 原先四张卡靠 sage/mint/keylime/slate 四种底色分层，但炭黑×琥珀橙改版后
+ * card-mint 和 accent-soft 都指向 amber-soft（同一个颜色），分层早已失效。
+ * 这里改回这套设计语言本来的做法：统一发丝线卡面，层级交给数字本身，
+ * 唯一的彩色只留给"可注册"——这是全系统唯一需要立刻动手的信号。
+ */
 function ActionQueue({ counts }: { counts: Overview["action_counts"] }) {
   const items = [
-    { label: "立即行动", count: counts.available, hint: "高可信可注册结果", href: "/domains?status=available", tone: "text-accent" },
-    { label: "抢注窗口", count: counts.drop_window, hint: "高可信掉落流程", href: "/watchlist", tone: "text-ink" },
-    { label: "续费风险", count: counts.renewal_risk, hint: "未来 7 天内到期", href: "/domains?sort=expiry", tone: "text-ink" },
+    { label: "立即行动", count: counts.available, hint: "高可信可注册结果", href: "/domains?statuses=available", accent: true },
+    { label: "抢注窗口", count: counts.drop_window, hint: "高可信掉落流程", href: "/watchlist", accent: false },
+    { label: "续费风险", count: counts.renewal_risk, hint: "未来 7 天内到期", href: "/domains?sort=expiry", accent: false },
     // 复核是「证据维度」，不能用状态筛选去凑：需复核的域名状态多是 registered /
     // pending_delete，用 statuses=error,unknown,skipped 会筛出 0 条。
-    { label: "需要复核", count: counts.review, hint: "查询事实或证据异常", href: "/domains?review=1", tone: "text-review" },
+    { label: "需要复核", count: counts.review, hint: "查询事实或证据异常", href: "/domains?review=1", accent: false },
   ];
-  // 四张卡靠色块深浅区分，不靠彩色描边 —— 按 sage → mint → keylime → slate 的顺序层叠。
-  const surfaces = ["bg-accent-soft", "bg-card-mint", "bg-blush", "bg-periwinkle-mist"];
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map((item, index) => <Link key={item.label} to={item.href} className={cx("action-queue-item card block min-h-[134px] border-transparent px-6 py-5 transition-colors hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7", surfaces[index])}><div className="flex items-start justify-between gap-4"><span className="text-[13px] font-semibold text-ink">{item.label}</span><span className="tabular font-mono text-[24px] font-medium leading-none text-ink">{item.count}</span></div><p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p><span className="mt-3 block text-[11px] font-medium text-ink">打开工作区 →</span></Link>)}</div>;
+  const active = items.filter((item) => item.count > 0);
+  const idle = items.filter((item) => item.count === 0);
+
+  // 卡片数量少时让每张吃满宽度，而不是留三个空格子。
+  const columns =
+    active.length === 1
+      ? "grid-cols-1"
+      : active.length === 2
+        ? "sm:grid-cols-2"
+        : active.length === 3
+          ? "sm:grid-cols-2 xl:grid-cols-3"
+          : "sm:grid-cols-2 xl:grid-cols-4";
+
+  return (
+    <div className="space-y-3">
+      {active.length > 0 && (
+        <div className={cx("grid gap-3", columns)}>
+          {active.map((item) => (
+            <Link
+              key={item.label}
+              to={item.href}
+              className="action-queue-item card block min-h-[134px] px-6 py-5 transition-colors hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-[13px] font-semibold text-ink">{item.label}</span>
+                <span
+                  className={cx(
+                    "tabular font-mono text-[32px] font-medium leading-none",
+                    item.accent ? "text-action" : "text-ink",
+                  )}
+                >
+                  {item.count}
+                </span>
+              </div>
+              <p className="mt-4 text-[11px] text-ink-muted">{item.hint}</p>
+              <span className="mt-3 block text-[11px] font-medium text-ink">打开工作区 →</span>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {idle.length > 0 && (
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-faint">
+          {active.length === 0 && <span className="text-ink-muted">今天没有待办：</span>}
+          {idle.map((item) => (
+            <Link key={item.label} to={item.href} className="hover:text-accent hover:underline" title={item.hint}>
+              {item.label} <span className="tabular">0</span>
+            </Link>
+          ))}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function ProviderAlert({ providers }: { providers: ProviderHealth[] | null }) {
