@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { ApiError } from "../lib/api";
 import type { Attempt, DomainInfo, DomainStatus, Observation } from "../lib/api";
@@ -15,7 +16,9 @@ import {
 } from "./ui";
 import {
   CONFIDENCE_LABELS,
+  formatDate,
   formatDateTime,
+  formatExpiryRelative,
   formatLatency,
   formatRelative,
   providerLabel,
@@ -61,6 +64,7 @@ export function DomainDrawer({
   onUnauthorized,
   domains,
   onNavigate,
+  variant = "drawer",
 }: {
   domain: string | null;
   onClose: () => void;
@@ -68,6 +72,11 @@ export function DomainDrawer({
   onUnauthorized: () => void;
   domains?: string[];
   onNavigate?: (domain: string) => void;
+  /**
+   * "drawer" 是默认形态；"page" 去掉抽屉外壳，用同一份内容铺满
+   * /domains/:name 这个可分享的深链页面——同一个组件，两种容器。
+   */
+  variant?: "drawer" | "page";
 }) {
   const [detail, setDetail] = useState<DetailResponse | null>(null);
   const [error, setError] = useState("");
@@ -159,26 +168,30 @@ export function DomainDrawer({
   const info = detail?.info;
   const navigation = useMemo(() => {
     const index = domain && domains ? domains.indexOf(domain) : -1;
-    return { previous: index > 0 ? domains?.[index - 1] : undefined, next: index >= 0 && index < (domains?.length ?? 0) - 1 ? domains?.[index + 1] : undefined };
+    return {
+      previous: index > 0 ? domains?.[index - 1] : undefined,
+      next: index >= 0 && index < (domains?.length ?? 0) - 1 ? domains?.[index + 1] : undefined,
+      // 翻了半天不知道翻到哪了，补一个"第几 / 共几"。
+      position: index >= 0 ? index + 1 : 0,
+      total: domains?.length ?? 0,
+    };
   }, [domain, domains]);
 
-  return (
-    <Drawer
-      open={Boolean(domain)}
-      onClose={onClose}
-      title={<span className="mono text-[14px]">{domain}</span>}
-      subtitle={
-        info && (
-          <span className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={info.status} eppStatuses={info.epp_statuses} />
-            {info.confidence && <Pill>可信度 {CONFIDENCE_LABELS[info.confidence] ?? info.confidence}</Pill>}
-            {info.review?.required && <span className="review-badge">数据需复核</span>}
-            <Pill>{providerLabel(info.query_method)}</Pill>
-            {info.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
-          </span>
-        )
-      }
-    >
+  const heading = <span className="mono text-[14px]">{domain}</span>;
+  const meta = (
+    info && (
+      <span className="flex flex-wrap items-center gap-2">
+        <StatusBadge status={info.status} eppStatuses={info.epp_statuses} />
+        {info.confidence && <Pill>可信度 {CONFIDENCE_LABELS[info.confidence] ?? info.confidence}</Pill>}
+        {info.review?.required && <span className="review-badge">数据需复核</span>}
+        <Pill>{providerLabel(info.query_method)}</Pill>
+        {info.cached && <Pill title="本次结果来自查询缓存">cached: true</Pill>}
+      </span>
+    )
+  );
+
+  const body = (
+    <>
       {loading && !detail && <DrawerSkeleton />}
       {loading && detail && (
         <div className="mb-3 flex items-center gap-2 text-[12px] text-ink-muted">
@@ -192,6 +205,11 @@ export function DomainDrawer({
           {(navigation.previous || navigation.next) && (
             <div className="mb-3 flex items-center justify-between gap-2">
               <button type="button" className="btn min-h-10" disabled={!navigation.previous} onClick={() => navigation.previous && onNavigate?.(navigation.previous)}>← 上一条</button>
+              {navigation.total > 0 && (
+                <span className="tabular text-[12px] text-ink-faint">
+                  {navigation.position} / {navigation.total}
+                </span>
+              )}
               <button type="button" className="btn min-h-10" disabled={!navigation.next} onClick={() => navigation.next && onNavigate?.(navigation.next)}>下一条 →</button>
             </div>
           )}
@@ -203,6 +221,12 @@ export function DomainDrawer({
               {info.favorite ? "取消收藏" : "加入观察列表"}
             </button>
             {info.status === "available" && <RegistrarLookupMenu domain={info.name} />}
+            {/* 抽屉分享不出去。全屏页是同一个组件、同一份内容，只是换了容器。 */}
+            {variant === "drawer" && (
+              <Link to={`/domains/${encodeURIComponent(info.name)}`} className="btn h-8" title="在新页打开，链接可分享">
+                在新页打开 <span aria-hidden="true">↗</span>
+              </Link>
+            )}
           </div>
 
           <nav className="mb-3 flex gap-1 border-b border-line">
@@ -239,6 +263,26 @@ export function DomainDrawer({
           {tab === "raw" && <RawTab info={info} />}
         </>
       )}
+    </>
+  );
+
+  if (variant === "page") {
+    return (
+      <div className="space-y-4">
+        <header className="workspace-header">
+          <span className="workspace-kicker">DOMAIN DETAIL</span>
+          {/* 全屏页上域名是主角，给它比抽屉里更大的字号。 */}
+          <h1 className="mono mt-1 break-all text-[24px]">{domain}</h1>
+          <div className="mt-2">{meta}</div>
+        </header>
+        <div className="card p-6">{body}</div>
+      </div>
+    );
+  }
+
+  return (
+    <Drawer open={Boolean(domain)} onClose={onClose} title={heading} subtitle={meta}>
+      {body}
     </Drawer>
   );
 }
@@ -250,6 +294,16 @@ function Field({ label, children, align = "right" }: { label: string; children: 
       <span className={cx("min-w-0 break-words text-[13px]", align === "right" ? "text-right" : "text-left")}>{children}</span>
     </div>
   );
+}
+
+/** 注册至今的年数，用于把 1997-02-14 这种日期翻译成「已注册 29 年」。 */
+function registeredForLabel(value?: string | null): string {
+  if (!value) return "";
+  const start = new Date(value);
+  if (Number.isNaN(start.getTime())) return "";
+  const years = (Date.now() - start.getTime()) / (365.2425 * 86_400_000);
+  if (years < 1) return `${Math.max(1, Math.round(years * 12))} 个月`;
+  return `${Math.floor(years)} 年`;
 }
 
 function OverviewTab({ info, onUnauthorized, onToggleNotify, onCompleted }: { info: DomainInfo; onUnauthorized: () => void; onToggleNotify: () => void; onCompleted: () => void }) {
@@ -270,13 +324,45 @@ function OverviewTab({ info, onUnauthorized, onToggleNotify, onCompleted }: { in
           <p className="mt-0.5 text-ink-muted">{info.review.explanation ?? "请先查看查询证据并重新检查；这不是新的域名生命周期状态。"}</p>
         </div>
       )}
+      {/* 到期与提醒原来挤在定义列表最末尾，是这一页最该先看到的事实之一。
+          单独提成一块，配一个真正能点的按钮。 */}
+      <section className="rounded-card border border-line p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[12px] text-ink-muted">到期时间</p>
+            <p className="mt-1 text-[18px] text-ink" title={formatDateTime(info.expiry_date)}>
+              {formatExpiryRelative(info.expiry_date)}
+            </p>
+            <p className="tabular mt-0.5 text-[11px] text-ink-faint">{formatDate(info.expiry_date)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[12px] text-ink-muted">到期与状态提醒</p>
+            <button type="button" className="btn mt-1.5 min-h-10" onClick={() => void onToggleNotify()}>
+              {info.notify === false ? "恢复提醒" : "忽略此域名"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* 关键事实排成 2×N 网格：一列长长的定义列表得上下扫，
+          两列并排一眼能对比"注册了多久 / 还剩多久"。 */}
       <section className="rounded-card border border-line px-4">
         <h3 className="border-b border-line py-3 text-[13px] font-medium">关键事实</h3>
+        <div className="grid gap-x-6 sm:grid-cols-2">
       {info.cached && <Field label="缓存">cached: true</Field>}
-      <Field label="到期时间">{formatDateTime(info.expiry_date)}</Field>
       <Field label="注册商">{info.registrar || "—"}</Field>
-      <Field label="注册时间">{formatDateTime(info.created_date)}</Field>
-      <Field label="更新时间">{formatDateTime(info.updated_date)}</Field>
+      <Field label="注册时间" >
+        {formatDate(info.created_date)}
+        {/* 1997 年注册的域名和去年注册的完全是两种资产，把年数直接算出来。 */}
+        {registeredForLabel(info.created_date) && (
+          <span className="ml-1 text-[12px] text-ink-faint">（{registeredForLabel(info.created_date)}）</span>
+        )}
+      </Field>
+      <Field label="更新时间">{formatDate(info.updated_date)}</Field>
+      <Field label="最后查询">{formatRelative(info.last_checked)}</Field>
+      <Field label="下次查询">{formatRelative(info.next_check_at)}</Field>
+      <Field label="加入时间">{formatDate(info.added_at)}</Field>
+        </div>
       <Field label="名称服务器" align="left">
         {info.name_servers && info.name_servers.length > 0 ? (
           <span className="mono block whitespace-pre-line text-left">{info.name_servers.join("\n")}</span>
@@ -293,20 +379,6 @@ function OverviewTab({ info, onUnauthorized, onToggleNotify, onCompleted }: { in
           </span>
         </Field>
       )}
-      <Field label="最后查询">
-        {formatDateTime(info.last_checked)}
-        <span className="ml-1 text-[12px] text-ink-faint">({formatRelative(info.last_checked)})</span>
-      </Field>
-      <Field label="下次查询">
-        {formatDateTime(info.next_check_at)}
-        <span className="ml-1 text-[12px] text-ink-faint">({formatRelative(info.next_check_at)})</span>
-      </Field>
-      <Field label="到期与状态提醒">
-        <button type="button" className="btn h-8 px-2 text-[11px]" onClick={() => void onToggleNotify()}>
-          {info.notify === false ? "恢复提醒" : "忽略此域名"}
-        </button>
-      </Field>
-      <Field label="加入时间">{formatDateTime(info.added_at)}</Field>
       {info.error_message && (
         <Field label="备注">
           <span className="text-ink-muted">{info.error_message}</span>

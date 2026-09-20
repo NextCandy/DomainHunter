@@ -7,6 +7,7 @@ import { Spinner, ToastProvider } from "./components/ui";
 import { LoginPage } from "./pages/Login";
 import { OverviewPage } from "./pages/Overview";
 import { DomainsPage } from "./pages/Domains";
+import { DomainDetailPage } from "./pages/DomainDetail";
 import { WatchlistPage } from "./pages/Watchlist";
 import { HistoryPage } from "./pages/History";
 import { ProvidersPage } from "./pages/Providers";
@@ -123,6 +124,8 @@ export default function App() {
         >
           <Route path="/" element={<OverviewPage onUnauthorized={handleUnauthorized} />} />
           <Route path="/domains" element={<DomainsPage onUnauthorized={handleUnauthorized} />} />
+          {/* 详情的可分享深链，和抽屉共用同一个组件。 */}
+          <Route path="/domains/:name" element={<DomainDetailPage onUnauthorized={handleUnauthorized} />} />
           <Route path="/watchlist" element={<WatchlistPage onUnauthorized={handleUnauthorized} />} />
           <Route path="/history" element={<HistoryPage onUnauthorized={handleUnauthorized} />} />
           <Route path="/providers" element={<ProvidersPage onUnauthorized={handleUnauthorized} />} />
