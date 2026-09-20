@@ -2,7 +2,8 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { ApiError } from "../lib/api";
-import type { Attempt, DomainInfo, DomainStatus, Observation } from "../lib/api";
+import type { Attempt, DomainInfo, DomainListResult, DomainStatus, Observation } from "../lib/api";
+import { useAsync } from "../lib/useAsync";
 import {
   Drawer,
   EmptyState,
@@ -10,6 +11,7 @@ import {
   Pill,
   Skeleton,
   Spinner,
+  FromToStatus,
   StatusBadge,
   cx,
   useToast,
@@ -221,6 +223,16 @@ export function DomainDrawer({
               {info.favorite ? "取消收藏" : "加入观察列表"}
             </button>
             {info.status === "available" && <RegistrarLookupMenu domain={info.name} />}
+            {/* 这个域名以前是干什么的——存档站是最快的答案，外链标明是站外。 */}
+            <a
+              className="btn h-8"
+              href={`https://web.archive.org/web/*/${encodeURIComponent(info.name)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="在 Wayback Machine 查看历史快照（外部站点）"
+            >
+              Wayback <span aria-hidden="true">↗</span>
+            </a>
             {/* 抽屉分享不出去。全屏页是同一个组件、同一份内容，只是换了容器。 */}
             {variant === "drawer" && (
               <Link to={`/domains/${encodeURIComponent(info.name)}`} className="btn h-8" title="在新页打开，链接可分享">
@@ -386,8 +398,49 @@ function OverviewTab({ info, onUnauthorized, onToggleNotify, onCompleted }: { in
       )}
       </section>
       <DomainValuationPanel domain={info.name} onUnauthorized={onUnauthorized} onCompleted={onCompleted} compact />
+      <SimilarDomains info={info} onUnauthorized={onUnauthorized} />
       <ConsistencyTable info={info} />
     </div>
+  );
+}
+
+/**
+ * 同名不同后缀的域名。
+ *
+ * 判断一个 SLD 值不值，很大程度看它在别的后缀下是什么情况——
+ * digitalgarden.com 旁边如果 .net 也在清单里且是可注册，那是完全不同的决策。
+ * 数据直接用列表接口按 SLD 搜，不新造 API。
+ */
+function SimilarDomains({ info, onUnauthorized }: { info: DomainInfo; onUnauthorized: () => void }) {
+  const sld = info.name.split(".")[0] ?? "";
+  const { data } = useAsync<DomainListResult>(
+    () => api.get<DomainListResult>(`/api/v2/domains?search=${encodeURIComponent(sld)}&limit=50`),
+    [sld],
+    onUnauthorized,
+  );
+
+  const siblings = (data?.domains ?? []).filter(
+    (item) => item.name !== info.name && (item.name.split(".")[0] ?? "") === sld,
+  );
+  if (siblings.length === 0) return null;
+
+  return (
+    <section className="rounded-card border border-line p-4">
+      <h3 className="text-[13px] font-medium">同名其它后缀（{siblings.length}）</h3>
+      <ul className="mt-2 flex flex-wrap gap-2">
+        {siblings.map((item) => (
+          <li key={item.name}>
+            <Link
+              to={`/domains/${encodeURIComponent(item.name)}`}
+              className="inline-flex items-center gap-1.5 rounded-tag border border-line px-2 py-1 text-[11px] hover:border-accent"
+            >
+              <span className="mono">{item.name}</span>
+              <StatusBadge status={item.status} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -515,28 +568,71 @@ function TimelineTab({ history }: { history: Observation[] | null }) {
       </div>
 
       <ol className="relative space-y-3 border-l border-line pl-4">
-        {history.map((item) => (
-          <li key={item.id} className="relative">
-            <span
-              className={cx(
-                "absolute -left-[21px] top-1.5 h-2 w-2 rounded-full",
-                item.changed ? "bg-accent" : "bg-line",
+        {history.map((item, index) => {
+          // history 是倒序（新→旧），所以"上一次观测"在数组里的下一个位置。
+          const previous = history[index + 1];
+          const changes = previous ? diffObservation(previous, item) : [];
+          return (
+            <li key={item.id} className="relative">
+              <span
+                className={cx(
+                  "absolute -left-[21px] top-1.5 h-2 w-2 rounded-full",
+                  item.changed ? "bg-accent" : "bg-line",
+                )}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <FromToStatus from={previous?.status} to={item.status} />
+                {item.changed && <Pill className="text-accent">状态变化</Pill>}
+                <span className="text-[12px] text-ink-faint">{formatDateTime(item.observed_at)}</span>
+              </div>
+              <p className="mt-0.5 text-[12px] text-ink-muted">
+                来源 {providerLabel(item.provider)}
+              </p>
+              {/* 字段级 diff：状态没变但到期日被续了一年，同样是重要信息。 */}
+              {changes.length > 0 && (
+                <ul className="mt-1.5 space-y-1 rounded-md border border-warn/35 bg-warn/8 px-2.5 py-1.5">
+                  {changes.map((change) => (
+                    <li key={change.label} className="text-[11px] leading-4">
+                      <span className="text-ink-muted">{change.label}</span>{" "}
+                      <span className="text-ink-faint line-through">{change.from}</span>{" "}
+                      <span aria-hidden="true">→</span>{" "}
+                      <span className="text-ink">{change.to}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={item.status} />
-              {item.changed && <Pill className="text-accent">状态变化</Pill>}
-              <span className="text-[12px] text-ink-faint">{formatDateTime(item.observed_at)}</span>
-            </div>
-            <p className="mt-0.5 text-[12px] text-ink-muted">
-              来源 {providerLabel(item.provider)}
-              {item.registrar ? ` · ${item.registrar}` : ""}
-            </p>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
+}
+
+/**
+ * 相邻两次观测之间的字段变化。
+ *
+ * 只比 observation 表里真实存了的三个字段：注册商、到期日、名称服务器。
+ * EPP 状态没有随观测入库（只在当前快照 DomainInfo 上），所以这里不做 EPP 的
+ * diff——宁可少一项，也不能拿当前值冒充历史值。
+ * TODO: 若要支持 EPP / DNSSEC 的历史 diff，需要 domain_observations 增列
+ * epp_statuses 并在 Save 时一起写入。
+ */
+function diffObservation(from: Observation, to: Observation): Array<{ label: string; from: string; to: string }> {
+  const out: Array<{ label: string; from: string; to: string }> = [];
+  const day = (value?: string | null) => (value ? formatDate(value) : "—");
+  const ns = (value?: string[] | null) => (value && value.length > 0 ? [...value].sort().join(", ") : "—");
+
+  if ((from.registrar || "") !== (to.registrar || "")) {
+    out.push({ label: "注册商", from: from.registrar || "—", to: to.registrar || "—" });
+  }
+  if (day(from.expiry_at) !== day(to.expiry_at)) {
+    out.push({ label: "到期日", from: day(from.expiry_at), to: day(to.expiry_at) });
+  }
+  if (ns(from.name_servers) !== ns(to.name_servers)) {
+    out.push({ label: "名称服务器", from: ns(from.name_servers), to: ns(to.name_servers) });
+  }
+  return out;
 }
 
 function RawTab({ info }: { info: DomainInfo }) {

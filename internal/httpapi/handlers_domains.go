@@ -34,7 +34,7 @@ func (s *Server) handleDomains(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.deps.Domains.List(r.Context(), parseListFilter(r))
+	result, err := s.deps.Domains.List(r.Context(), s.listFilterFromRequest(r))
 	if err != nil {
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -45,7 +45,7 @@ func (s *Server) handleDomains(w http.ResponseWriter, r *http.Request) {
 // handleDomainsV2 新版域名列表，支持更多筛选与排序
 func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("sort") == "ai_score" && r.URL.Query().Get("filter") == "" && r.URL.Query().Get("view_id") == "" {
-		filter := parseListFilter(r)
+		filter := s.listFilterFromRequest(r)
 		filter.Page, filter.Limit, filter.Sort = 1, 2000, ""
 		result, err := s.deps.Domains.List(r.Context(), filter)
 		if err != nil {
@@ -109,7 +109,7 @@ func (s *Server) handleDomainsV2(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, r, http.StatusOK, s.newDomainListPage(result.Domains, result.Total, result.TotalFiltered, result.Page, result.Limit, result.TotalPages, result.HasNext, result.HasPrev, result.DataStatus))
 		return
 	}
-	result, err := s.deps.Domains.List(r.Context(), parseListFilter(r))
+	result, err := s.deps.Domains.List(r.Context(), s.listFilterFromRequest(r))
 	if err != nil {
 		s.writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -275,6 +275,7 @@ func parseListFilter(r *http.Request) service.ListFilter {
 		Provider:   strings.TrimSpace(q.Get("provider")),
 		Tag:        strings.TrimSpace(q.Get("tag")),
 		ExpiryDay:  strings.TrimSpace(q.Get("expiry")),
+		AIState:    normalizeAIState(q.Get("ai")),
 		Favorite:   q.Get("favorite") == "true" || q.Get("favorite") == "1",
 		Review:     q.Get("review") == "true" || q.Get("review") == "1",
 		Sort:       strings.TrimSpace(q.Get("sort")),
@@ -289,6 +290,81 @@ func parseListFilter(r *http.Request) service.ListFilter {
 		filter.Limit = v
 	}
 	return filter
+}
+
+// listFilterFromRequest 在纯解析之上补一层：按 AI 维度筛选时才去查已估价集合。
+// parseListFilter 保持无依赖，方便单测直接构造。
+func (s *Server) listFilterFromRequest(r *http.Request) service.ListFilter {
+	filter := parseListFilter(r)
+	if filter.AIState != "" {
+		filter.ValuedDomains = s.valuedDomainSet()
+	}
+	return filter
+}
+
+// handleAIValuationSummary 返回"多少域名已经有 AI 估价"。
+//
+// 概览的投资组合摘要只要两个数字，为此拉 2000 条域名列表不划算；
+// 这里只读 domains 的名字列并与估价集合求交，不触发任何模型调用。
+func (s *Server) handleAIValuationSummary(w http.ResponseWriter, r *http.Request) {
+	valued := s.valuedDomainSet()
+	total, matched := 0, 0
+	if s.deps.DB != nil {
+		rows, err := s.deps.DB.QueryContext(r.Context(), `SELECT name FROM domains`)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var name string
+				if rows.Scan(&name) != nil {
+					continue
+				}
+				total++
+				// 估价表里可能留着已从清单删掉的域名，所以以 domains 为准求交集，
+				// 否则"已估价"会比"总数"还大。
+				if _, ok := valued[strings.ToLower(name)]; ok {
+					matched++
+				}
+			}
+		}
+	}
+	s.writeJSON(w, r, http.StatusOK, map[string]any{
+		"total":    total,
+		"valued":   matched,
+		"unvalued": total - matched,
+	})
+}
+
+// normalizeAIState 只认 none / has，其它一律忽略，避免拼错的参数静默改变结果。
+func normalizeAIState(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "none":
+		return "none"
+	case "has", "scored":
+		return "has"
+	default:
+		return ""
+	}
+}
+
+// valuedDomainSet 返回已经有 AI 估价记录的域名集合（小写）。
+// 只有真的按 AI 维度筛选时才查，平时不给列表接口加这一次全表扫描。
+func (s *Server) valuedDomainSet() map[string]struct{} {
+	out := map[string]struct{}{}
+	if s.deps.DB == nil {
+		return out
+	}
+	rows, err := s.deps.DB.QueryContext(context.Background(), `SELECT DISTINCT lower(domain) FROM ai_domain_valuations_v2`)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if rows.Scan(&name) == nil {
+			out[name] = struct{}{}
+		}
+	}
+	return out
 }
 
 func splitCSV(raw string) []string {

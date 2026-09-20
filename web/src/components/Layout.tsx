@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useSearchParams } from "react-router-dom";
+import { api } from "../lib/api";
 import { useTheme } from "../lib/theme";
 import type { ThemeMode } from "../lib/theme";
 import { Logo } from "./Logo";
@@ -87,6 +88,26 @@ export function Layout({
   });
   const [appearanceOpen, setAppearanceOpen] = useState(false);
 
+  // 站内未读数。侧栏与底栏都要用，放在壳层拉一次；
+  // 失败就当 0，导航不该因为一个计数接口挂掉而出错。
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void api
+      .getOptional<{ notifications: Array<{ read_at?: string | null }> | null }>("/api/v2/notifications")
+      .then((payload) => {
+        if (!active) return;
+        setUnread((payload?.notifications ?? []).filter((item) => !item.read_at).length);
+      })
+      .catch(() => {
+        if (active) setUnread(0);
+      });
+    return () => {
+      active = false;
+    };
+    // 切到通知页再切走时重新计数，读过的消息不该一直顶着红点。
+  }, [location.pathname]);
+
   const toggleSidebar = useCallback((collapsed: boolean) => {
     setSidebarCollapsed(collapsed);
     try {
@@ -149,7 +170,12 @@ export function Layout({
             {!sidebarCollapsed && <p className="section-label mb-2 px-2.5">WORKSPACE</p>}
             <nav className="enter-stagger space-y-0.5" aria-label="主导航">
               {NAV.map((item) => (
-                <NavItem key={item.to} item={item} iconOnly={sidebarCollapsed} />
+                <NavItem
+                  key={item.to}
+                  item={item}
+                  iconOnly={sidebarCollapsed}
+                  badge={item.to === "/notifications" ? unread : undefined}
+                />
               ))}
             </nav>
           </div>
@@ -275,8 +301,21 @@ export function Layout({
                   aria-label={t(MOBILE_LABEL_KEYS[item.to], item.label)}
                   title={t(MOBILE_LABEL_KEYS[item.to], item.label)}
                 >
-                  <NavIcon name={item.icon} />
-                  <span>{t(MOBILE_LABEL_KEYS[item.to], item.label)}</span>
+                  <span className="relative">
+                    <NavIcon name={item.icon} />
+                    {item.to === "/notifications" && unread > 0 && (
+                      <span
+                        className="absolute -right-1.5 -top-1 h-1.5 w-1.5 rounded-full bg-action"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </span>
+                  <span>
+                    {t(MOBILE_LABEL_KEYS[item.to], item.label)}
+                    {item.to === "/notifications" && unread > 0 && (
+                      <span className="sr-only">，{unread} 条未读</span>
+                    )}
+                  </span>
                 </NavLink>
               ))}
             </div>
@@ -366,7 +405,7 @@ function SegmentedControl({ label, value, options, onChange }: { label: string; 
   );
 }
 
-function NavItem({ item, onClick, iconOnly }: { item: (typeof NAV)[number]; onClick?: () => void; iconOnly?: boolean }) {
+function NavItem({ item, onClick, iconOnly, badge }: { item: (typeof NAV)[number]; onClick?: () => void; iconOnly?: boolean; badge?: number }) {
   const { t } = useLocale();
   const label = t(NAV_LABEL_KEYS[item.to], item.label);
   return (
@@ -374,7 +413,7 @@ function NavItem({ item, onClick, iconOnly }: { item: (typeof NAV)[number]; onCl
       to={item.to}
       end={"end" in item ? item.end : undefined}
       onClick={onClick}
-      className={({ isActive }) => cx("sidebar-link", iconOnly && "justify-center px-0", isActive && "sidebar-link-active")}
+      className={({ isActive }) => cx("sidebar-link relative", iconOnly && "justify-center px-0", isActive && "sidebar-link-active")}
       // 折叠成图标条后，名称也得靠 title 才说得清，不能只留 detail。
       title={iconOnly ? `${label} · ${item.detail}` : item.detail}
       aria-label={iconOnly ? label : undefined}
@@ -382,6 +421,18 @@ function NavItem({ item, onClick, iconOnly }: { item: (typeof NAV)[number]; onCl
       <NavIcon name={item.icon} />
       {/* 198px 的侧栏装不下副标题，detail 只留在 title 提示里。 */}
       {!iconOnly && <span className="min-w-0 flex-1 truncate">{label}</span>}
+      {/* 有未读就得看得见，否则站内消息等于没有。折叠成图标条时贴在角上。 */}
+      {badge !== undefined && badge > 0 && (
+        <span
+          className={cx(
+            "tabular rounded-full bg-action px-1.5 text-[10px] font-medium leading-4 text-amber-ink",
+            iconOnly && "absolute right-1 top-1",
+          )}
+          aria-label={`${badge} 条未读`}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </NavLink>
   );
 }

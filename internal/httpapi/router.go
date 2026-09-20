@@ -130,6 +130,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PUT /api/v2/ai/settings", s.withAuthScope("write", s.handleAISettings))
 	mux.HandleFunc("PATCH /api/v2/ai/settings", s.withAuthScope("write", s.handleAISettings))
 	mux.HandleFunc("GET /api/v2/ai/providers", s.withAuthScope("read", s.handleAIProviders))
+	mux.HandleFunc("GET /api/v2/ai/valuation-summary", s.withAuthScope("read", s.handleAIValuationSummary))
 	mux.HandleFunc("POST /api/v2/ai/providers", s.withAuthScope("write", s.handleAIProviders))
 	mux.HandleFunc("DELETE /api/v2/ai/providers/{id}", s.withAuthScope("write", s.handleAIProviders))
 	mux.HandleFunc("GET /api/v2/ai/models", s.withAuthScope("read", s.handleAIModels))

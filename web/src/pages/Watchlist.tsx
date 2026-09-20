@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import type { DomainInfo, DomainListResult, DomainStatus } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { DomainDrawer } from "../components/DomainDrawer";
+import { BulkActionPreviewDialog } from "../components/BulkActionPreviewDialog";
 import {
   Card,
   DomainName,
@@ -73,6 +74,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
   const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
   const [inspected, setInspected] = useState<string | null>(null);
+  const [bulkValuation, setBulkValuation] = useState(false);
   const toast = useToast();
 
   const { data, error, loading, reload } = useAsync<DomainListResult>(
@@ -104,6 +106,7 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
 
   // 选中卡片的完整记录；items 刷新后自动跟上，不会指向一条陈旧的快照。
   const inspectedItem = items.find((item) => item.name === inspected) ?? null;
+  const graceDomains = items.filter((item) => item.status === "grace").map((item) => item.name);
   const counts = useMemo(() => {
     const map = new Map<string, number>();
     items.forEach((item) => map.set(item.status, (map.get(item.status) ?? 0) + 1));
@@ -144,9 +147,18 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
             只显示处于掉落流程中的域名，按抢注紧迫度排序。全量清单在「域名」页。
           </p>
         </div>
-        <button type="button" className="btn h-8" onClick={reload}>
-          刷新
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {/* 宽限期是"还有时间决定要不要抢"的一段，正是值得先估个价的对象。
+              走 bulk-actions 的 preview → 确认，不静默连发 N 个请求。 */}
+          {graceDomains.length > 0 && (
+            <button type="button" className="btn h-8" onClick={() => setBulkValuation(true)}>
+              为宽限期 {graceDomains.length} 个域名估价
+            </button>
+          )}
+          <button type="button" className="btn h-8" onClick={reload}>
+            刷新
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -295,6 +307,16 @@ export function WatchlistPage({ onUnauthorized }: { onUnauthorized: () => void }
           </ul>
         </>
       )}
+
+      <BulkActionPreviewDialog
+        open={bulkValuation}
+        domains={graceDomains}
+        onClose={() => setBulkValuation(false)}
+        onDone={() => {
+          setBulkValuation(false);
+          reload();
+        }}
+      />
 
       <DomainDrawer
         domain={openDomain}

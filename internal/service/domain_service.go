@@ -34,7 +34,12 @@ type ListFilter struct {
 	// ExpiryDay 只保留在这一天到期的域名，格式 YYYY-MM-DD（按本地日历）。
 	// 概览的到期热力日历点某一格时跳到列表页就用它。
 	ExpiryDay string
-	Favorite  bool
+	// AIState 按有无 AI 估价筛选："none" 只留没估过的，"has" 只留估过的。
+	// 估价存在独立的 ai_domain_valuations_v2 表里、由 httpapi 层附加到列表项上，
+	// service 层看不到，所以已估价的域名集合要由调用方通过 ValuedDomains 传进来。
+	AIState       string
+	ValuedDomains map[string]struct{}
+	Favorite      bool
 	// Review 只保留「查询事实或证据需要复核」的域名。
 	// 这与状态筛选是两个维度：需复核的域名状态可以是 registered / pending_delete
 	// 等任意值，所以概览的「需要复核」不能用 statuses 去筛。
@@ -306,6 +311,12 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 		}
 		if filter.Provider != "" && item.QueryMethod != filter.Provider {
 			continue
+		}
+		if filter.AIState != "" {
+			_, valued := filter.ValuedDomains[strings.ToLower(item.Name)]
+			if (filter.AIState == "none" && valued) || (filter.AIState == "has" && !valued) {
+				continue
+			}
 		}
 		// 到期日按本地日历比对，与前端日历格子上显示的日期一致。
 		if expiryDay != "" {

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
-import type { Overview, OverviewItem, OverviewTrendPoint, ProviderHealth } from "../lib/api";
+import { api, downloadBlob } from "../lib/api";
+import type { DomainListResult, Overview, OverviewItem, OverviewTrendPoint, ProviderHealth } from "../lib/api";
+import { buildExpiryICS } from "../lib/ics";
 import { useAsync } from "../lib/useAsync";
 import {
   Card,
@@ -11,8 +12,10 @@ import {
   Pill,
   Skeleton,
   Sparkline,
+  Spinner,
   FromToStatus,
   useIsMobile,
+  useToast,
   cx,
 } from "../components/ui";
 import { ExpiryCalendar } from "../components/ExpiryHeat";
@@ -174,6 +177,8 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
 
       <ProviderAlert providers={data.providers} />
 
+      <PortfolioSummary onUnauthorized={onUnauthorized} />
+
       {/* 中区：左边"过去七天发生了什么"，右边"未来三十天要发生什么"。
           手机首屏要留给行动卡，两块都先折起来。 */}
       {isMobile ? (
@@ -188,12 +193,18 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
             forceCollapse
           >
             <ExpiryCalendar counts={data.expiry_calendar ?? {}} />
+            <div className="mt-3">
+              <ExportExpiryButton onUnauthorized={onUnauthorized} />
+            </div>
           </CollapsibleCard>
         </>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           <TrendCard points={trendPoints} usingFallback={usingFallback} />
-          <Card title="未来 30 天到期">
+          <Card
+            title="未来 30 天到期"
+            action={<ExportExpiryButton onUnauthorized={onUnauthorized} />}
+          >
             <ExpiryCalendar counts={data.expiry_calendar ?? {}} />
           </Card>
         </div>
@@ -364,6 +375,76 @@ function UpcomingExpirySection({
         }}
       />
     </CollapsibleCard>
+  );
+}
+
+/**
+ * 投资组合摘要：多少域名已经有 AI 估价，多少还没有。
+ *
+ * 只读已经持久化的估价记录，绝不为了凑这一行去触发批量模型调用。
+ * 「未估价」可点，直接跳到列表页按 ai=none 过滤出来。
+ *
+ * TODO: 人民币区间合计还没做——金额存在 ai_domain_valuations_v2 的
+ * price_evaluation_cny 里，要合计需要一个新的聚合端点
+ * （建议 GET /api/v2/ai/valuation-summary 一并返回 price_low_sum /
+ * price_high_sum）。与其显示一个来路不明的数字，不如先不显示。
+ */
+function PortfolioSummary({ onUnauthorized }: { onUnauthorized: () => void }) {
+  const { data } = useAsync<{ total: number; valued: number; unvalued: number }>(
+    () => api.get("/api/v2/ai/valuation-summary"),
+    [],
+    onUnauthorized,
+  );
+  if (!data || data.total === 0) return null;
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-muted">
+      <span>
+        已估价 <span className="tabular text-ink">{data.valued}</span>
+      </span>
+      {data.unvalued > 0 && (
+        <Link to="/domains?ai=none" className="hover:text-accent hover:underline">
+          未估价 <span className="tabular">{data.unvalued}</span> →
+        </Link>
+      )}
+      <span className="text-ink-faint">估价仅供研究参考，不参与可注册结论</span>
+    </p>
+  );
+}
+
+/**
+ * 导出未来 60 天的到期为 .ics。
+ *
+ * 点击时才去拉域名清单：概览本身不需要这份数据，为一个偶尔用一次的按钮
+ * 常驻多一个请求不值当。生成完全在本地，不经过任何第三方。
+ */
+function ExportExpiryButton({ onUnauthorized }: { onUnauthorized: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  async function exportICS() {
+    setBusy(true);
+    try {
+      const result = await api.get<DomainListResult>("/api/v2/domains?limit=2000");
+      const ics = buildExpiryICS(result.domains ?? [], { days: 60 });
+      if (!ics) {
+        toast("未来 60 天没有域名到期，无需导出", "info");
+        return;
+      }
+      downloadBlob(new Blob([ics], { type: "text/calendar;charset=utf-8" }), "domainhunter-expiry.ics");
+      toast("到期日历已导出", "success");
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("会话")) onUnauthorized();
+      toast(err instanceof Error ? err.message : "导出失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button type="button" className="btn h-8 text-[12px]" onClick={() => void exportICS()} disabled={busy}>
+      {busy && <Spinner />}导出 .ics
+    </button>
   );
 }
 
