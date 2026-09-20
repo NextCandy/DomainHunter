@@ -34,10 +34,10 @@ type OverviewActionCounts struct {
 
 // Overview 概览页数据
 type Overview struct {
-	Total           int                    `json:"total"`
-	StatusCounts    map[domain.Status]int  `json:"status_counts"`
-	RecentChanges   []OverviewItem         `json:"recent_changes"`
-	UpcomingExpiry  []OverviewItem         `json:"upcoming_expiry"`
+	Total          int                   `json:"total"`
+	StatusCounts   map[domain.Status]int `json:"status_counts"`
+	RecentChanges  []OverviewItem        `json:"recent_changes"`
+	UpcomingExpiry []OverviewItem        `json:"upcoming_expiry"`
 	// ExpiryCalendar 是未来 60 天里每一天的到期域名数（键为 YYYY-MM-DD 本地日期）。
 	// UpcomingExpiry 只留 10 条给列表用，画日历要的是全量的按日计数。
 	ExpiryCalendar  map[string]int         `json:"expiry_calendar"`
