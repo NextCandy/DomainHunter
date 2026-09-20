@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { useTheme } from "../lib/theme";
 import type { ThemeMode } from "../lib/theme";
@@ -40,6 +40,8 @@ const MOBILE_NAV = [
   { to: "/more", label: "更多", icon: "more" },
 ] as const;
 
+const SIDEBAR_COLLAPSE_KEY = "dh-sidebar-collapsed";
+
 const MOBILE_MORE = NAV.filter((item) => ["/history", "/providers", "/automation", "/settings"].includes(item.to));
 
 const NAV_LABEL_KEYS: Record<string, string> = {
@@ -76,6 +78,23 @@ export function Layout({
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+
+  const toggleSidebar = useCallback((collapsed: boolean) => {
+    setSidebarCollapsed(collapsed);
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSE_KEY, collapsed ? "1" : "0");
+    } catch {
+      /* 存不下就只在本次会话生效 */
+    }
+  }, []);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -113,32 +132,87 @@ export function Layout({
       <AuroraBackground />
       <div className="flex min-h-full min-w-0 flex-col lg:flex-row">
         {/* 侧栏：198px、sticky 全高，80% 不透明 + 背板模糊。深度只来自发丝线。 */}
-        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-nav lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-sidebar/80 lg:px-3.5 lg:py-5 lg:backdrop-blur-chrome">
-          <BrandBlock />
+        <aside
+          className={cx(
+            "hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-sidebar/80 lg:py-5 lg:backdrop-blur-chrome",
+            sidebarCollapsed ? "lg:w-[68px] lg:px-2" : "lg:w-nav lg:px-3.5",
+          )}
+        >
+          {sidebarCollapsed ? (
+            <div className="flex justify-center" title={`DomainHunter ${version} · domain intelligence`}>
+              <Logo className="h-6 w-6 shrink-0 text-ink" />
+            </div>
+          ) : (
+            <BrandBlock />
+          )}
           <div className="mt-8">
-            <p className="section-label mb-2 px-2.5">WORKSPACE</p>
+            {!sidebarCollapsed && <p className="section-label mb-2 px-2.5">WORKSPACE</p>}
             <nav className="enter-stagger space-y-0.5" aria-label="主导航">
               {NAV.map((item) => (
-                <NavItem key={item.to} item={item} />
+                <NavItem key={item.to} item={item} iconOnly={sidebarCollapsed} />
               ))}
             </nav>
           </div>
 
-          <div className="mt-auto space-y-3 pt-6">
-            <div className="rounded-card border border-line bg-raised/50 p-3">
-              <p className="section-label">SESSION</p>
-              <p className="mt-1.5 truncate text-[13px] text-ink">{username}</p>
-              <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint">DomainHunter {version}</p>
-            </div>
-            <button type="button" className="btn btn-ghost w-full" onClick={onLogout}>退出登录</button>
+          <div className="mt-auto space-y-2 pt-6">
+            {sidebarCollapsed ? (
+              <button
+                type="button"
+                className="btn btn-ghost h-9 w-full px-0"
+                onClick={onLogout}
+                aria-label="退出登录"
+                title={`${username} · DomainHunter ${version} · 退出登录`}
+              >
+                ⏻
+              </button>
+            ) : (
+              <>
+                <div className="rounded-card border border-line bg-raised/50 p-3">
+                  <p className="section-label">SESSION</p>
+                  <p className="mt-1.5 truncate text-[13px] text-ink">{username}</p>
+                  <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint">DomainHunter {version}</p>
+                </div>
+                <button type="button" className="btn btn-ghost w-full" onClick={onLogout}>退出登录</button>
+              </>
+            )}
+            {/* 不用侧栏名称的人可以把它收成图标条，把 130px 还给表格。 */}
+            <button
+              type="button"
+              className="w-full rounded-md py-1 text-[11px] text-ink-faint hover:text-accent"
+              onClick={() => toggleSidebar(!sidebarCollapsed)}
+              aria-label={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}
+              title={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}
+            >
+              {sidebarCollapsed ? "»" : "« 折叠侧栏"}
+            </button>
           </div>
         </aside>
 
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 hidden min-h-14 items-center justify-end gap-3 border-b border-line bg-canvas/80 px-6 backdrop-blur-chrome lg:flex">
-            <SegmentedControl label="主题" value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />
-            <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={changeDensity} />
-            <SegmentedControl label={t("common.language")} value={locale} options={[{ value: "zh-CN", label: "中文" }, { value: "en-US", label: "EN" }]} onChange={(value) => setLocale(value as "zh-CN" | "en-US")} />
+            {/* 主题 / 密度 / 语言原来是三组常驻 toggle，横着占掉小半条顶栏，
+                而它们一天也调不了一次。收进一个「外观」popover。 */}
+            <div className="relative">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setAppearanceOpen((value) => !value)}
+                aria-expanded={appearanceOpen}
+                aria-haspopup="dialog"
+              >
+                外观 <span aria-hidden="true">⌄</span>
+              </button>
+              {appearanceOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setAppearanceOpen(false)} role="presentation" />
+                  <div className="absolute right-0 top-11 z-40 w-[248px] space-y-3 rounded-card border border-line bg-surface-raised p-3 shadow-lg">
+                    <SegmentedControl label="主题" value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />
+                    <SegmentedControl label="密度" value={density} options={DENSITY_OPTIONS} onChange={changeDensity} />
+                    <SegmentedControl label={t("common.language")} value={locale} options={[{ value: "zh-CN", label: "中文" }, { value: "en-US", label: "EN" }]} onChange={(value) => setLocale(value as "zh-CN" | "en-US")} />
+                  </div>
+                </>
+              )}
+            </div>
             <button type="button" className="btn btn-ghost" onClick={() => setCommandOpen(true)} aria-label={t("common.command")} title="Command palette (⌘/Ctrl K)"><kbd className="font-mono text-[10.5px]">⌘K</kbd></button>
           </header>
           <header className="sticky top-0 z-30 border-b border-line bg-canvas/80 backdrop-blur-chrome lg:hidden">
@@ -224,7 +298,7 @@ export function Layout({
           {shortcutsOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <button type="button" className="absolute inset-0 bg-overlay/40" onClick={() => setShortcutsOpen(false)} aria-label="关闭快捷键帮助" />
-              <section className="card relative w-full max-w-md p-5" role="dialog" aria-modal="true" aria-label="快捷键帮助"><div className="flex items-center justify-between"><h2>快捷键</h2><button type="button" className="btn h-9 w-9 px-0" onClick={() => setShortcutsOpen(false)}>×</button></div><dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-[13px]"><dt><kbd>/</kbd></dt><dd>聚焦域名搜索</dd><dt><kbd>j / k</kbd></dt><dd>列表上下选行</dd><dt><kbd>Enter</kbd></dt><dd>打开选中域名详情</dd><dt><kbd>r</kbd></dt><dd>刷新当前数据</dd><dt><kbd>?</kbd></dt><dd>打开本帮助</dd></dl></section>
+              <section className="card relative w-full max-w-md p-5" role="dialog" aria-modal="true" aria-label="快捷键帮助"><div className="flex items-center justify-between"><h2>快捷键</h2><button type="button" className="btn h-9 w-9 px-0" onClick={() => setShortcutsOpen(false)}>×</button></div><dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-[13px]"><dt><kbd>⌘K</kbd></dt><dd>命令面板</dd><dt><kbd>/</kbd></dt><dd>聚焦域名搜索</dd><dt><kbd>j / k</kbd></dt><dd>列表上下选行</dd><dt><kbd>Enter</kbd></dt><dd>打开选中域名详情</dd><dt><kbd>g</kbd> 然后 <kbd>o/d/w/h/p/s</kbd></dt><dd>跳到 概览 / 域名 / 抢注 / 历史 / 查询源 / 设置</dd><dt><kbd>n</kbd></dt><dd>添加域名</dd><dt><kbd>x</kbd></dt><dd>清空当前选择</dd><dt><kbd>r</kbd></dt><dd>刷新当前数据</dd><dt><kbd>?</kbd></dt><dd>打开本帮助</dd></dl></section>
             </div>
           )}
 
@@ -292,7 +366,7 @@ function SegmentedControl({ label, value, options, onChange }: { label: string; 
   );
 }
 
-function NavItem({ item, onClick }: { item: (typeof NAV)[number]; onClick?: () => void }) {
+function NavItem({ item, onClick, iconOnly }: { item: (typeof NAV)[number]; onClick?: () => void; iconOnly?: boolean }) {
   const { t } = useLocale();
   const label = t(NAV_LABEL_KEYS[item.to], item.label);
   return (
@@ -300,12 +374,14 @@ function NavItem({ item, onClick }: { item: (typeof NAV)[number]; onClick?: () =
       to={item.to}
       end={"end" in item ? item.end : undefined}
       onClick={onClick}
-      className={({ isActive }) => cx("sidebar-link", isActive && "sidebar-link-active")}
-      title={item.detail}
+      className={({ isActive }) => cx("sidebar-link", iconOnly && "justify-center px-0", isActive && "sidebar-link-active")}
+      // 折叠成图标条后，名称也得靠 title 才说得清，不能只留 detail。
+      title={iconOnly ? `${label} · ${item.detail}` : item.detail}
+      aria-label={iconOnly ? label : undefined}
     >
       <NavIcon name={item.icon} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
       {/* 198px 的侧栏装不下副标题，detail 只留在 title 提示里。 */}
+      {!iconOnly && <span className="min-w-0 flex-1 truncate">{label}</span>}
     </NavLink>
   );
 }
