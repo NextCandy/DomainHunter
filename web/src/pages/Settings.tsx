@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, UnauthorizedError } from "../lib/api";
 import type { ApiToken, SettingsV2 } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
@@ -54,11 +54,18 @@ export function SettingsPage({
             <SettingsNav href="#security" label="安全" />
           </nav>
         </aside>
-        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-          <section id="monitoring" className="scroll-mt-24"><MonitorCard settings={data} onSaved={reload} /></section>
-          <section id="retention" className="scroll-mt-24"><HistoryCard settings={data} onSaved={reload} /></section>
-          <section id="account" className="scroll-mt-24"><AccountCard settings={data} onChanged={onCredentialsChanged} /></section>
-          <section id="api-token" className="scroll-mt-24"><TokenManagementCard onUnauthorized={onUnauthorized} /></section>
+        {/* 按列分组而不是按行填充：原来 grid 顺序填格子，账户卡会和旁边那张矮卡
+            共用一行，被拉成一条窄栏，用户名 / 密码 / 安全说明全挤在里面。
+            现在左列放"系统怎么跑"，右列放"谁能进来"，每列各自纵向堆叠。 */}
+        <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2">
+          <div className="min-w-0 space-y-4">
+            <section id="monitoring" className="scroll-mt-24"><MonitorCard settings={data} onSaved={reload} /></section>
+            <section id="retention" className="scroll-mt-24"><HistoryCard settings={data} onSaved={reload} /></section>
+          </div>
+          <div className="min-w-0 space-y-4">
+            <section id="account" className="scroll-mt-24"><AccountCard settings={data} onChanged={onCredentialsChanged} /></section>
+            <section id="api-token" className="scroll-mt-24"><TokenManagementCard onUnauthorized={onUnauthorized} /></section>
+          </div>
           <section id="maintenance" className="scroll-mt-24 xl:col-span-2"><MaintenanceCard settings={data} onSaved={reload} /></section>
         </div>
       </div>
@@ -225,7 +232,19 @@ function AccountCard({ settings, onChanged }: { settings: SettingsV2; onChanged:
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
+  // 从侧栏"安全"锚点进来时直接展开，否则点了导航却什么都没看到。
+  const [securityOpen, setSecurityOpen] = useState(
+    () => typeof window !== "undefined" && window.location.hash === "#security",
+  );
   const toast = useToast();
+
+  useEffect(() => {
+    const onHash = () => {
+      if (window.location.hash === "#security") setSecurityOpen(true);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   async function saveUsername() {
     setBusy(true);
@@ -306,19 +325,36 @@ function AccountCard({ settings, onChanged }: { settings: SettingsV2; onChanged:
         </div>
       </div>
 
-      <div id="security" className="mt-4 scroll-mt-24 space-y-1 border-t border-line pt-3 text-[12px] text-ink-muted">
-        <div className="flex items-center gap-2">
-          Cookie Secure <Pill>{settings.security.cookie_secure}</Pill>
-          SameSite <Pill>{settings.security.cookie_same_site}</Pill>
-        </div>
-        <div className="flex items-center gap-2">
-          CSRF 防护 <Pill>{settings.security.csrf_enabled ? "已启用" : "已关闭"}</Pill>
-          CORS <Pill>{(settings.security.cors_origins ?? []).join(", ") || "仅同源"}</Pill>
-        </div>
-        <p className="text-ink-faint">
-          这几项属于部署级配置，可用 DOMAINHUNTER_COOKIE_SECURE / _COOKIE_SAMESITE /
-          _CORS_ORIGINS / _CSRF_ENABLED 环境变量覆盖。
-        </p>
+      {/* Cookie / CSRF / CORS 是只读的部署级信息，改它们要动环境变量重启容器，
+          不是"在这一页能做的事"。默认收起，把版面让给真正能改的用户名和密码；
+          侧栏点"安全"跳过来时自动展开。 */}
+      <div id="security" className="mt-4 scroll-mt-24 border-t border-line pt-3">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 text-left text-[12px] text-ink-muted hover:text-ink"
+          onClick={() => setSecurityOpen((value) => !value)}
+          aria-expanded={securityOpen}
+          aria-controls="security-details"
+        >
+          <span>部署级配置（Cookie / CSRF / CORS）</span>
+          <span aria-hidden="true" className="text-ink-faint">{securityOpen ? "收起" : "展开"}</span>
+        </button>
+        {securityOpen && (
+          <div id="security-details" className="mt-3 space-y-1 text-[12px] text-ink-muted">
+            <div className="flex flex-wrap items-center gap-2">
+              Cookie Secure <Pill>{settings.security.cookie_secure}</Pill>
+              SameSite <Pill>{settings.security.cookie_same_site}</Pill>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              CSRF 防护 <Pill>{settings.security.csrf_enabled ? "已启用" : "已关闭"}</Pill>
+              CORS <Pill>{(settings.security.cors_origins ?? []).join(", ") || "仅同源"}</Pill>
+            </div>
+            <p className="text-ink-faint">
+              这几项属于部署级配置，可用 DOMAINHUNTER_COOKIE_SECURE / _COOKIE_SAMESITE /
+              _CORS_ORIGINS / _CSRF_ENABLED 环境变量覆盖。
+            </p>
+          </div>
+        )}
       </div>
     </Card>
   );
