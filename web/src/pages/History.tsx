@@ -89,7 +89,7 @@ export function HistoryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-9 w-full" />)}
           </div>
         ) : !data?.observations || data.observations.length === 0 ? (
-          <EmptyState title="暂无状态变化记录" hint="域名状态发生变化后会自动记录在这里" />
+          <EmptyState title="全局还没有任何状态变化" hint="任何域名的状态发生变化后都会自动记录在这里；想看单个域名的完整历史请用上方的域名选择器" />
         ) : (
           <ObservationTable observations={data.observations} onPick={pickDomain} />
         )}
@@ -211,22 +211,39 @@ function DomainHistory({
     );
   }
 
+  // 同一次观测里若多个源给出不同结论，就是"多源冲突"——这正是这一页要回答的问题，
+  // 不能让人自己逐行比对。
+  const conflicting = new Set<number>();
+  const byObservation = new Map<number, Set<string>>();
+  for (const attempt of attempts) {
+    if (!attempt.success) continue;
+    const set = byObservation.get(attempt.observation_id) ?? new Set<string>();
+    set.add(attempt.status);
+    byObservation.set(attempt.observation_id, set);
+  }
+  byObservation.forEach((statuses, id) => {
+    if (statuses.size > 1) conflicting.add(id);
+  });
+
   return (
-    <div className="divide-y divide-line">
-      <section className="p-4">
+    <div className="grid gap-px bg-line lg:grid-cols-2">
+      <section className="bg-surface p-4">
         <h3 className="mb-2 flex items-center gap-2 text-[12px] font-medium text-ink-muted">
           状态时间线 <Pill>{history.length} 条</Pill>
         </h3>
         {history.length === 0 ? (
-          <EmptyState title="该域名还没有观测记录" />
+          <EmptyState title="这个域名还没查过" hint="它还没有产生任何观测记录；执行一次检查后这里就会有状态流" />
         ) : (
           <ObservationTable observations={history} />
         )}
       </section>
 
-      <section className="p-4">
-        <h3 className="mb-2 flex items-center gap-2 text-[12px] font-medium text-ink-muted">
+      <section className="bg-surface p-4">
+        <h3 className="mb-2 flex flex-wrap items-center gap-2 text-[12px] font-medium text-ink-muted">
           查询源历史 <Pill>{attempts.length} 条</Pill>
+          {conflicting.size > 0 && (
+            <Pill className="border-warn/45 text-warn">{conflicting.size} 次观测存在多源冲突</Pill>
+          )}
         </h3>
         {attempts.length === 0 ? (
           <EmptyState title="该域名还没有查询尝试记录" />
@@ -243,7 +260,11 @@ function DomainHistory({
               </thead>
               <tbody className="divide-y divide-line text-[13px]">
                 {attempts.map((attempt) => (
-                  <tr key={attempt.id}>
+                  <tr
+                    key={attempt.id}
+                    className={conflicting.has(attempt.observation_id) ? "bg-warn/8" : undefined}
+                    title={conflicting.has(attempt.observation_id) ? "这次观测里各查询源结论不一致" : undefined}
+                  >
                     <td className="tabular whitespace-nowrap px-4 py-2 text-ink-muted">
                       {formatDateTime(attempt.queried_at)}
                     </td>

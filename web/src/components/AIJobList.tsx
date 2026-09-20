@@ -1,7 +1,21 @@
+import { Link } from "react-router-dom";
 import type { AIJob } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 
 export function AIJobList({ jobs }: { jobs: AIJob[] }) {
+  // 队列空的时候，进度条、token 估算、表头全都是没有内容的框。
+  // 缩成一行，并直接给出"那去哪儿加任务"的答案。
+  if (jobs.length === 0) {
+    return (
+      <section className="card flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+        <span className="text-[12px] text-ink-muted">AI Job 队列 · 暂无任务</span>
+        <Link to="/domains?statuses=grace" className="text-[12px] text-accent hover:underline">
+          为宽限期域名估价 →
+        </Link>
+      </section>
+    );
+  }
+
   const completed = jobs.filter((job) => job.status === "succeeded" || job.status === "failed").length;
   const percent = jobs.length ? Math.round((completed / jobs.length) * 100) : 0;
   const pending = jobs.filter((job) => job.status === "queued" || job.status === "running" || job.status === "deferred").length;
