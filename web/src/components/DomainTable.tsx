@@ -9,7 +9,37 @@ import {
   useDensity,
   useStatusChangeHighlights,
 } from "./ui";
-import { formatDate, formatDateTime, formatRelative, providerLabel } from "../lib/format";
+import { formatDate, formatDateTime, formatExpiryRelative, formatRelative, providerLabel } from "../lib/format";
+import { isMajorRegistrar, registrarShortName } from "../lib/registrar";
+import { ExpiryHeatBar } from "./ExpiryHeat";
+
+/**
+ * AI 质量分的 0–100 环。
+ *
+ * 一列裸数字要逐个读才知道高低；环让人扫一眼就看出满不满。
+ * 颜色只分两档——80 分以上用 action（这是唯一值得单独看一眼的信号），
+ * 其余用墨色，避免把评分做成一道彩虹。
+ */
+function ScoreRing({ value }: { value: number }) {
+  const radius = 6;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = Math.max(0, Math.min(100, value)) / 100;
+  return (
+    <svg className="h-4 w-4 shrink-0 -rotate-90" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r={radius} fill="none" stroke="rgb(var(--line))" strokeWidth="2" />
+      <circle
+        cx="8"
+        cy="8"
+        r={radius}
+        fill="none"
+        stroke={value >= 80 ? "rgb(var(--action))" : "rgb(var(--ink))"}
+        strokeWidth="2"
+        strokeDasharray={`${(circumference * ratio).toFixed(2)} ${circumference.toFixed(2)}`}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export type DomainColumn =
   | "status"
@@ -229,14 +259,46 @@ function DesktopTable({
           </div>
         </td>
       )}
-      {visibleColumns.has("registrar") && <td className="truncate px-3 py-2 text-ink-muted" title={item.registrar}>{item.registrar || "—"}</td>}
-      {visibleColumns.has("expiry") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-muted">{formatDate(item.expiry_date)}</td>}
+      {visibleColumns.has("registrar") && (
+        <td className="px-3 py-2 text-ink-muted">
+          <span className="flex min-w-0 items-center gap-1.5" title={item.registrar || undefined}>
+            {/* 主力注册商给一个色点，扫一列就能认出"这几家是我的大头"。 */}
+            {isMajorRegistrar(item.registrar) && (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+            )}
+            <span className="truncate">{registrarShortName(item.registrar) || "—"}</span>
+          </span>
+        </td>
+      )}
+      {visibleColumns.has("expiry") && (
+        <td className="whitespace-nowrap px-3 py-2 text-ink-muted">
+          <span className="flex items-center gap-1.5" title={formatDate(item.expiry_date)}>
+            <ExpiryHeatBar expiry={item.expiry_date} />
+            <span className="tabular">{formatExpiryRelative(item.expiry_date)}</span>
+          </span>
+        </td>
+      )}
       {visibleColumns.has("provider") && <td className="truncate whitespace-nowrap px-3 py-2 text-ink-muted" title={providerLabel(item.query_method)}>{providerLabel(item.query_method)}</td>}
       {/* 评分用「重量」而不是色相分档：高分墨色加粗，低分退到弱墨。陶土只留给行动信号。 */}
-      {visibleColumns.has("ai_score") && <td className="tabular px-3 py-2"><span className={item.ai_quality_score == null ? "text-ink-faint" : item.ai_quality_score >= 80 ? "font-semibold text-ink" : item.ai_quality_score >= 60 ? "text-ink" : "text-ink-faint"}>{item.ai_quality_score ?? "—"}</span></td>}
+      {visibleColumns.has("ai_score") && (
+        <td className="tabular px-3 py-2">
+          {item.ai_quality_score == null ? (
+            <span className="text-ink-faint">—</span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <ScoreRing value={item.ai_quality_score} />
+              <span className={item.ai_quality_score >= 80 ? "font-semibold text-ink" : item.ai_quality_score >= 60 ? "text-ink" : "text-ink-faint"}>
+                {item.ai_quality_score}
+              </span>
+            </span>
+          )}
+        </td>
+      )}
       {visibleColumns.has("last_checked") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">{formatRelative(item.last_checked)}</td>}
       {visibleColumns.has("next_check") && <td className="tabular whitespace-nowrap px-3 py-2 text-ink-faint">{formatRelative(item.next_check_at)}</td>}
-      <td className="sticky-action-column sticky right-0 z-10 whitespace-nowrap bg-surface px-1.5 py-2 text-right group-hover:bg-surface-muted">
+      {/* 每行常驻三个图标按钮 × 50 行 = 150 个图标在抢注意力。
+          默认透明，鼠标移到行上或键盘 focus 进来才显现；位置不变，不会跳。 */}
+      <td className="sticky-action-column sticky right-0 z-10 whitespace-nowrap bg-surface px-1.5 py-2 text-right opacity-0 transition-opacity duration-fast focus-within:opacity-100 group-hover:bg-surface-muted group-hover:opacity-100">
         <button type="button" className="btn btn-ghost h-8 w-8 px-0" onClick={() => onHistory(item.name)} aria-label={`打开 ${item.name} 状态时间线`} title="状态时间线"><TimelineIcon /></button>
         <button type="button" className="btn btn-ghost h-8 w-8 px-0" onClick={() => onCheck(item.name)} disabled={busy === item.name} aria-label={`检查 ${item.name}`} title={busy === item.name ? "查询中" : "立即检查"}>{busy === item.name ? <SpinnerIcon /> : <RefreshIcon />}</button>
         {/* 规范里陶土不给图标用：静态时是中性墨色，hover 才亮出警示色。 */}
@@ -368,10 +430,11 @@ function MobileDomainCard({ item, checked, busy, highlighted, onToggle, onOpen, 
         <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-[12px]">
-        <Row label="到期" value={formatDate(item.expiry_date)} />
-        <Row label="注册商" value={item.registrar || "—"} />
-        <Row label="查询源" value={providerLabel(item.query_method)} />
-        <Row label="最后查询" value={formatRelative(item.last_checked)} />
+        {/* 手机上更没有心算 ISO 日期的余裕，相对时间为主、绝对日期进 title。 */}
+        <Row label="到期" value={formatExpiryRelative(item.expiry_date)} title={formatDate(item.expiry_date)} />
+        <Row label="注册商" value={registrarShortName(item.registrar) || "—"} title={item.registrar} />
+        <Row label="AI 评分" value={item.ai_quality_score == null ? "—" : String(item.ai_quality_score)} />
+        <Row label="最后查询" value={formatRelative(item.last_checked)} title={formatDateTime(item.last_checked)} />
       </dl>
       <div className="mt-4 flex gap-2 border-t border-line pt-3">
         <button type="button" className="btn btn-primary min-h-11 flex-1 text-[13px]" onClick={onCheck} disabled={busy}>{busy ? "查询中…" : "立即检查"}</button>
@@ -398,8 +461,10 @@ function setDragData(event: React.DragEvent, name: string, selected: Set<string>
   event.dataTransfer.setData("text/plain", names.join("\n"));
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return <div className="min-w-0"><dt className="text-ink-faint">{label}</dt><dd className="tabular mt-0.5 truncate text-ink-muted" title={value}>{value}</dd></div>;
+function Row({ label, value, title }: { label: string; value: string; title?: string }) {
+  // title 默认跟 value 一样（给被截断的长值用）；传了就用它，
+  // 这样"6 天后"能在 title 里露出真正的 2027-03-30。
+  return <div className="min-w-0"><dt className="text-ink-faint">{label}</dt><dd className="tabular mt-0.5 truncate text-ink-muted" title={title || value}>{value}</dd></div>;
 }
 
 function columnMinWidth(column: TableColumnKey): number {

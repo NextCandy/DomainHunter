@@ -135,6 +135,20 @@ export function formatRelative(value?: string | null): string {
   return formatDate(value);
 }
 
+/**
+ * 到期日的相对说法：「6 天后」「已过期 2 天」「今天」。
+ *
+ * 表格里给一串 2027-03-30 这样的 ISO 日期，等于让每个人自己心算还剩多久。
+ * 绝对日期仍然保留在 title 上，需要核对时鼠标一停就能看到。
+ */
+export function formatExpiryRelative(value?: string | null): string {
+  const days = daysUntil(value);
+  if (days === null) return "—";
+  if (days < 0) return `已过期 ${Math.abs(days)} 天`;
+  if (days === 0) return "今天";
+  return `${days} 天后`;
+}
+
 export function daysUntil(value?: string | null): number | null {
   if (isEmptyTime(value)) return null;
   const date = new Date(value as string);

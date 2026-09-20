@@ -279,7 +279,7 @@ func applyFilter(items []*domain.Info, filter ListFilter) []*domain.Info {
 
 	out := make([]*domain.Info, 0, len(items))
 	for _, item := range items {
-		if search != "" && !strings.Contains(strings.ToLower(item.Name), search) {
+		if search != "" && !matchesSearch(item, search) {
 			continue
 		}
 		if len(filter.Statuses) > 0 {
@@ -341,6 +341,28 @@ func normalizedSet(values []string, normalize func(string) string) map[string]st
 		}
 	}
 	return set
+}
+
+// matchesSearch 判断一条记录是否命中搜索词。
+//
+// 搜索框标的是"域名、注册商、标签"，所以三者都要参与匹配——只搜域名的话，
+// 想找"GoDaddy 下面那批"就只能先去筛选器里点。注册商这里匹配的是 RDAP 全名，
+// 所以 "GoDaddy" / "阿里云" 这种全名里出现过的词能直接命中；
+// 而像"西部数码"这类纯映射短名（全名是"成都西维数码科技有限公司"）匹配不到，
+// 那种情况请用注册商筛选器，它按品牌短名分组。
+func matchesSearch(item *domain.Info, search string) bool {
+	if strings.Contains(strings.ToLower(item.Name), search) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(item.Registrar), search) {
+		return true
+	}
+	for _, tag := range item.Tags {
+		if strings.Contains(strings.ToLower(tag), search) {
+			return true
+		}
+	}
+	return false
 }
 
 func containsFold(values []string, want string) bool {

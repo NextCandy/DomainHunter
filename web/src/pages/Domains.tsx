@@ -44,6 +44,7 @@ const SORT_OPTIONS = [
 
 const PAGE_SIZES = [20, 50, 100, 1000];
 const VIEW_STORAGE_KEY = "dh-domains-view-v1";
+const FOLDER_COLLAPSE_KEY = "dh-domains-folder-collapsed";
 const ALL_COLUMNS: Array<{ value: DomainColumn; label: string }> = [
   { value: "status", label: "状态" },
   { value: "registrar", label: "注册商" },
@@ -78,7 +79,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const advancedRaw = params.get("filter") ?? "";
   const columnsParam = params.get("columns") ?? "";
   const page = Number(params.get("page") ?? "1") || 1;
-  const limit = Number(params.get("limit") ?? "20") || 20;
+  // 每页 50：561 个域名分成 12 页比 29 页好翻，一屏也装得下。
+  const limit = Number(params.get("limit") ?? "50") || 50;
 
   const [searchInput, setSearchInput] = useState(search);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -92,6 +94,14 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [valuating, setValuating] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const isMobile = useIsMobile();
+  // 文件夹树折叠状态记在本地：不用文件夹的人不该每次都被它占掉 240px。
+  const [folderCollapsed, setFolderCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(FOLDER_COLLAPSE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showBulkAction, setShowBulkAction] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -290,6 +300,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     return map;
   }, [facets.data]);
   const failedCount = (statusCounts.get("error") ?? 0) + (statusCounts.get("unknown") ?? 0);
+  // 当前这一页一个评分都没有——AI 评分列全是「—」，光摆着没意义。
+  const noScores = domains.length > 0 && domains.every((item) => item.ai_quality_score == null);
   // 「失败/未知」是状态多选的一个快捷方式，而不是另一个维度——
   // 两者共用 statuses 参数，按钮的选中态就是"选中的正好是这两项"。
   const failedOnly =
@@ -328,6 +340,15 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       })).sort((left, right) => (right.count ?? 0) - (left.count ?? 0)),
     [registrarGroups],
   );
+
+  const toggleFolderPanel = useCallback((collapsed: boolean) => {
+    setFolderCollapsed(collapsed);
+    try {
+      localStorage.setItem(FOLDER_COLLAPSE_KEY, collapsed ? "1" : "0");
+    } catch {
+      /* 存不下就只在本次会话生效 */
+    }
+  }, []);
 
   const setStatusList = useCallback(
     (next: string[]) => updateParams({ statuses: next.join(","), status: "" }),
@@ -397,8 +418,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     }
   }
 
-  async function runBatchValuation() {
-    const names = Array.from(selected);
+  async function runBatchValuation(target?: string[]) {
+    const names = target ?? Array.from(selected);
     if (names.length === 0) return;
     setValuating(true);
     try {
@@ -408,7 +429,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         `已入队 ${result.queued} 个${result.cached > 0 ? `，命中已有估价 ${result.cached} 个` : ""}${result.failed > 0 ? `，失败 ${result.failed} 个` : ""}`,
         result.failed > 0 ? "info" : "success",
       );
-      setSelected(new Set());
+      if (!target) setSelected(new Set());
+      refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : "加入估价队列失败", "error");
     } finally {
@@ -493,7 +515,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         <input
           ref={searchRef}
           className={cx("input", isMobile && "min-h-11")}
-          placeholder="搜索域名…"
+          placeholder="搜索域名、注册商、标签…"
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
         />
@@ -621,15 +643,30 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         </div>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(190px,240px)_minmax(0,1fr)]">
-        {/* 文件夹树在 390 宽下会把域名列表整个挤到第二屏，收进筛选 sheet。 */}
-        {!isMobile && (
-          <FolderTree
-            selected={folderSelection}
-            onSelect={setFolderSelection}
-            onDomainDrop={moveDomainsToFolder}
-            onUnauthorized={onUnauthorized}
-          />
+      <div
+        className={cx(
+          "grid gap-4",
+          !isMobile && !folderCollapsed && "lg:grid-cols-[minmax(190px,240px)_minmax(0,1fr)]",
+        )}
+      >
+        {/* 文件夹树在 390 宽下会把域名列表整个挤到第二屏，收进筛选 sheet；
+            桌面上也可以折起来把宽度还给表格。 */}
+        {!isMobile && !folderCollapsed && (
+          <div className="min-w-0 space-y-2">
+            <FolderTree
+              selected={folderSelection}
+              onSelect={setFolderSelection}
+              onDomainDrop={moveDomainsToFolder}
+              onUnauthorized={onUnauthorized}
+            />
+            <button
+              type="button"
+              className="w-full text-left text-[11px] text-ink-faint hover:text-accent"
+              onClick={() => toggleFolderPanel(true)}
+            >
+              « 收起文件夹
+            </button>
+          </div>
         )}
         <div className="min-w-0 space-y-4">
           {isMobile ? (
@@ -678,7 +715,29 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
 
           {/* 表格工具条：排序与列显示是表格自身的属性，不该占筛选行的宽度。
               手机上排序已经在上面的工具条里，列设置也没有意义，整条隐藏。 */}
-          <div className={cx("relative flex-wrap items-center justify-end gap-2", isMobile ? "hidden" : "flex")}>
+          <div className={cx("relative flex-wrap items-center gap-2", isMobile ? "hidden" : "flex")}>
+            {folderCollapsed && (
+              <button
+                type="button"
+                className="btn min-h-9 text-[12px]"
+                onClick={() => toggleFolderPanel(false)}
+              >
+                » 文件夹
+              </button>
+            )}
+            {/* 一整页评分都是「—」时，与其让人对着空列发呆，不如给一个入队入口。
+                只入队当前这一页，避免一键把 561 个域名全丢给模型。 */}
+            {noScores && (
+              <button
+                type="button"
+                className="btn min-h-9 text-[12px]"
+                onClick={() => void runBatchValuation(domains.map((item) => item.name))}
+                disabled={valuating}
+              >
+                {valuating && <Spinner />}为这页 {domains.length} 个域名估价
+              </button>
+            )}
+            <span className="flex-1" />
             <select
               className="input h-9 w-auto min-w-[9.5rem] flex-none py-0 text-[12px]"
               aria-label="排序字段"
@@ -722,7 +781,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       {selected.size > 0 && (
         <div className="fixed inset-x-3 bottom-20 z-40 mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-2 rounded-card border border-accent/30 bg-surface-raised p-2 text-[13px] shadow-lg lg:bottom-6">
           <span className="rounded-button bg-accent px-3 py-2 text-on-accent">已选择 {selected.size} 项</span>
-          <button type="button" className="btn min-h-10 text-[12px]" onClick={runBatchValuation} disabled={valuating}>{valuating && <Spinner />}加入估价</button>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={() => void runBatchValuation()} disabled={valuating}>{valuating && <Spinner />}加入估价</button>
           <button type="button" className="btn min-h-10 text-[12px]" onClick={() => setShowBulkAction(true)}>打标签 / 移入文件夹</button>
           <button type="button" className="btn min-h-10 text-[12px]" onClick={runBatchCheck}>立即检查</button>
           <button type="button" className="btn min-h-10 text-[12px]" onClick={exportSelected}>导出 CSV</button>
@@ -806,8 +865,9 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             >
               上一页
             </button>
-            <span className="tabular">
-              {data.page} / {data.total_pages}
+            <span className="tabular" title={`第 ${data.page} 页，共 ${data.total_pages} 页`}>
+              {/* "3 / 12" 说不出你正看着第几条；"101–150 / 561" 才能。 */}
+              {(data.page - 1) * data.limit + 1}–{Math.min(data.page * data.limit, data.total_filtered)} / {data.total_filtered}
             </span>
             <button
               type="button"
