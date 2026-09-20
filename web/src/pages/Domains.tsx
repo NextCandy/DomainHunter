@@ -89,6 +89,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [showImportExport, setShowImportExport] = useState(false);
   const [folderSelection, setFolderSelection] = useState<FolderSelection>("all");
   const [retrying, setRetrying] = useState(false);
+  const [valuating, setValuating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showBulkAction, setShowBulkAction] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -372,6 +373,25 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     }
   }
 
+  async function runBatchValuation() {
+    const names = Array.from(selected);
+    if (names.length === 0) return;
+    setValuating(true);
+    try {
+      const result = await api.domains.batchValuation(names);
+      // 已有估价结果的直接命中缓存，不会重复消耗模型额度，分开报数好让人知道真排了多少。
+      toast(
+        `已入队 ${result.queued} 个${result.cached > 0 ? `，命中已有估价 ${result.cached} 个` : ""}${result.failed > 0 ? `，失败 ${result.failed} 个` : ""}`,
+        result.failed > 0 ? "info" : "success",
+      );
+      setSelected(new Set());
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "加入估价队列失败", "error");
+    } finally {
+      setValuating(false);
+    }
+  }
+
   async function runBatchRetryFailed() {
     setRetrying(true);
     try {
@@ -432,10 +452,23 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
 
   return (
     <div className="space-y-4">
-      <header className="workspace-header flex flex-wrap items-center justify-between gap-2">
-        <div>
+      {/* 第一行只回答"我在哪、我要新增什么"：标题 + 总数 + 刷新，右侧一个菜单
+          加一个主按钮。所有筛选类控件下沉到第二行，顶栏不再是四个平级按钮打架。 */}
+      <header className="workspace-header flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
           <span className="workspace-kicker">DOMAIN OPERATIONS</span>
-          <h1 className="mt-1">域名资产</h1>
+          <div className="mt-1 flex items-center gap-2">
+            <h1>域名资产</h1>
+            <button
+              type="button"
+              className="btn min-h-9 min-w-9 shrink-0 px-0"
+              onClick={refresh}
+              aria-label="刷新域名列表"
+              title="刷新域名列表"
+            >
+              <RefreshIcon />
+            </button>
+          </div>
           <p className="text-[12px] text-ink-muted">
             {folderSelection === "all" ? `共 ${data?.total ?? 0} 个域名` : `当前文件夹 ${domains.length} 个域名`}
             {folderSelection === "all" && data && data.total_filtered !== data.total
@@ -444,19 +477,13 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" className="btn min-h-11 min-w-11 px-0 sm:min-h-9 sm:min-w-9" onClick={refresh} aria-label="刷新域名列表" title="刷新域名列表">
-            <RefreshIcon />
-          </button>
-          <button type="button" className={cx("btn min-h-11 sm:min-h-9", filterChips.length > 0 && "border-accent text-accent")} onClick={() => setShowAdvanced(true)}>
-            高级筛选{filterChips.length > 0 ? `（${filterChips.length}）` : ""}
-          </button>
           <div className="relative">
-            <button type="button" className="btn min-h-11 sm:min-h-9" onClick={() => setMoreOpen((value) => !value)} aria-expanded={moreOpen}>更多 <span aria-hidden="true">⌄</span></button>
+            <button type="button" className="btn min-h-11 sm:min-h-9" onClick={() => setMoreOpen((value) => !value)} aria-expanded={moreOpen}>导入 / 导出 <span aria-hidden="true">⌄</span></button>
             {moreOpen && (
               <div className="absolute right-0 top-12 z-30 w-52 rounded-card border border-line bg-surface-raised p-2 shadow-lg sm:top-10">
-                <SavedViewMenu filter={advancedFilter} onApply={(filter) => { updateParams({ filter: JSON.stringify(filter) }); setMoreOpen(false); }} onUnauthorized={onUnauthorized} embedded />
                 <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[12px] hover:bg-surface-muted" onClick={() => { setShowImportExport(true); setMoreOpen(false); }}>导入 / 导出</button>
                 <button type="button" className="min-h-11 w-full rounded-md px-3 text-left text-[12px] hover:bg-surface-muted" onClick={() => void runBatchRetryFailed()} disabled={retrying}>{retrying && <Spinner />} 重试失败{failedCount > 0 ? `（${failedCount}）` : ""}</button>
+                <SavedViewMenu filter={advancedFilter} onApply={(filter) => { updateParams({ filter: JSON.stringify(filter) }); setMoreOpen(false); }} onUnauthorized={onUnauthorized} embedded />
               </div>
             )}
           </div>
@@ -480,119 +507,131 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           onUnauthorized={onUnauthorized}
         />
         <div className="min-w-0 space-y-4">
-          {/* 四列自适应：搜索略宽，三个筛选各占一列。排序控件另起一行，
-              否则四个按钮挤在一个等分格子里会溢出到卡片外。 */}
-          <div className="card grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
-        <form
-          className="min-w-0 sm:col-span-2 xl:col-span-1"
-          onSubmit={(event) => {
-            event.preventDefault();
-            updateParams({ search: searchInput.trim() });
-          }}
-        >
-          <input
-            ref={searchRef}
-            className="input"
-            placeholder="搜索域名…"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-        </form>
+          {/* 第二行：一条 flex-wrap 的筛选栏。搜索吃柔性宽，其余控件固定宽，
+              窄屏自然换行——原来的四列 grid 在中等宽度会把控件挤出卡片外，
+              而排序/列设置属于表格自身的属性，已经下沉到表格工具条。 */}
+          <div className="card flex flex-wrap items-center gap-2 p-3">
+            <form
+              className="min-w-[180px] flex-1"
+              onSubmit={(event) => {
+                event.preventDefault();
+                updateParams({ search: searchInput.trim() });
+              }}
+            >
+              <input
+                ref={searchRef}
+                className="input"
+                placeholder="搜索域名…"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+            </form>
 
-        <SearchableMultiSelect
-          label="全部状态"
-          searchPlaceholder="筛选状态…"
-          options={statusOptions}
-          selected={statusList}
-          onChange={setStatusList}
-        />
+            <SearchableMultiSelect
+              className="w-[9rem] shrink-0"
+              label="全部状态"
+              searchPlaceholder="筛选状态…"
+              options={statusOptions}
+              selected={statusList}
+              onChange={setStatusList}
+            />
 
-        <SearchableMultiSelect
-          label={`全部后缀（${tldOptions.length}）`}
-          searchPlaceholder="输入后缀，如 com"
-          options={tldOptions}
-          selected={tldList}
-          onChange={setTldList}
-        />
+            <SearchableMultiSelect
+              className="w-[9rem] shrink-0"
+              label={`全部后缀（${tldOptions.length}）`}
+              searchPlaceholder="输入后缀，如 com"
+              options={tldOptions}
+              selected={tldList}
+              onChange={setTldList}
+            />
 
-        <SearchableMultiSelect
-          label={`全部注册商（${registrarOptions.length}）`}
-          searchPlaceholder="输入注册商名…"
-          options={registrarOptions}
-          selected={registrarList}
-          onChange={setRegistrarList}
-        />
+            <SearchableMultiSelect
+              className="w-[11rem] shrink-0"
+              label={`全部注册商（${registrarOptions.length}）`}
+              searchPlaceholder="输入注册商名…"
+              options={registrarOptions}
+              selected={registrarList}
+              onChange={setRegistrarList}
+            />
 
-        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-4">
-          <select
-            className="input w-auto min-w-[9.5rem] flex-none"
-            aria-label="排序字段"
-            value={sort}
-            onChange={(event) => updateParams({ sort: event.target.value })}
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="btn shrink-0"
-            onClick={() => updateParams({ order: order === "asc" ? "desc" : "asc" })}
-            aria-label="切换排序方向"
-          >
-            {order === "asc" ? "↑" : "↓"}
-          </button>
-          <button
-            type="button"
-            className={cx("btn shrink-0 gap-1", favoriteOnly && "border-accent text-accent")}
-            onClick={() => updateParams({ favorite: favoriteOnly ? "" : "true" })}
-            title="只看收藏"
-            aria-label="只看收藏"
-            aria-pressed={favoriteOnly}
-          >
-            <span aria-hidden="true">★</span>
-            {/* 图标单独出现时没人知道它是筛选器，选中后补一个文字态说明当前在筛什么。 */}
-            {favoriteOnly && <span className="text-[12px]">只看收藏</span>}
-          </button>
-          <button
-            type="button"
-            className={cx("btn shrink-0 text-[12px]", failedOnly && "border-accent text-accent")}
-            onClick={() => setStatusList(failedOnly ? [] : ["error", "unknown"])}
-            aria-label={failedOnly ? "取消失败域名筛选" : "筛选失败和未知域名"}
-            title="筛选 error 和 unknown 状态"
-            aria-pressed={failedOnly}
-          >
-            失败/未知
-          </button>
-          <span className="ml-auto hidden text-[11px] text-ink-faint sm:block">高级条件支持状态、TLD、注册商、标签和 AI 质量分。</span>
-        </div>
-        {filterChips.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-4">
-            {filterChips.map((chip) => (
-              <button key={chip.key} type="button" className="chip chip-active" onClick={chip.onRemove} title={`移除${chip.label}`}>
-                {chip.label}<span aria-hidden="true">×</span>
-              </button>
-            ))}
-            <button type="button" className="min-h-8 px-2 text-[11px] text-accent hover:underline" onClick={() => setParams(new URLSearchParams(), { replace: true })}>清空全部</button>
+            <button
+              type="button"
+              className={cx("btn shrink-0 text-[12px]", failedOnly && "border-accent text-accent")}
+              onClick={() => setStatusList(failedOnly ? [] : ["error", "unknown"])}
+              aria-label={failedOnly ? "取消失败域名筛选" : "筛选失败和未知域名"}
+              title="筛选 error 和 unknown 状态"
+              aria-pressed={failedOnly}
+            >
+              失败/未知
+            </button>
+            <button
+              type="button"
+              className={cx("btn shrink-0 gap-1", favoriteOnly && "border-accent text-accent")}
+              onClick={() => updateParams({ favorite: favoriteOnly ? "" : "true" })}
+              title="只看收藏"
+              aria-label="只看收藏"
+              aria-pressed={favoriteOnly}
+            >
+              <span aria-hidden="true">★</span>
+              {/* 图标单独出现时没人知道它是筛选器，选中后补一个文字态说明当前在筛什么。 */}
+              {favoriteOnly && <span className="text-[12px]">只看收藏</span>}
+            </button>
+            <button
+              type="button"
+              className={cx("btn shrink-0 text-[12px]", advancedRaw && "border-accent text-accent")}
+              onClick={() => setShowAdvanced(true)}
+              title="高级条件支持状态、TLD、注册商、标签和 AI 质量分"
+            >
+              高级筛选
+            </button>
+
+            {filterChips.length > 0 && (
+              <div className="flex w-full flex-wrap items-center gap-2 border-t border-line pt-2">
+                {filterChips.map((chip) => (
+                  <button key={chip.key} type="button" className="chip chip-active" onClick={chip.onRemove} title={`移除${chip.label}`}>
+                    {chip.label}<span aria-hidden="true">×</span>
+                  </button>
+                ))}
+                <button type="button" className="min-h-8 px-2 text-[11px] text-accent hover:underline" onClick={() => setParams(new URLSearchParams(), { replace: true })}>清空全部</button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="relative flex justify-end">
-        <button type="button" className="btn min-h-9 text-[12px]" onClick={() => setColumnMenuOpen((value) => !value)} aria-expanded={columnMenuOpen}>列设置</button>
-        {columnMenuOpen && (
-          <div className="absolute right-0 top-10 z-20 grid w-48 gap-1 rounded-card border border-line bg-surface-raised p-2 shadow-lg">
-            {ALL_COLUMNS.map((column) => (
-              <label key={column.value} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-[12px] hover:bg-surface-muted">
-                <input type="checkbox" checked={visibleColumns.has(column.value)} onChange={() => setVisibleColumns((current) => { if (current.has(column.value) && current.size === 1) return current; const next = new Set(current); if (next.has(column.value)) next.delete(column.value); else next.add(column.value); return next; })} />
-                {column.label}
-              </label>
-            ))}
+          {/* 表格工具条：排序与列显示是表格自身的属性，不该占筛选行的宽度。 */}
+          <div className="relative flex flex-wrap items-center justify-end gap-2">
+            <select
+              className="input h-9 w-auto min-w-[9.5rem] flex-none py-0 text-[12px]"
+              aria-label="排序字段"
+              value={sort}
+              onChange={(event) => updateParams({ sort: event.target.value })}
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn min-h-9 shrink-0"
+              onClick={() => updateParams({ order: order === "asc" ? "desc" : "asc" })}
+              aria-label={order === "asc" ? "当前升序，点击改为降序" : "当前降序，点击改为升序"}
+              title={order === "asc" ? "升序" : "降序"}
+            >
+              {order === "asc" ? "↑" : "↓"}
+            </button>
+            <button type="button" className="btn min-h-9 text-[12px]" onClick={() => setColumnMenuOpen((value) => !value)} aria-expanded={columnMenuOpen}>列设置</button>
+            {columnMenuOpen && (
+              <div className="absolute right-0 top-10 z-20 grid w-48 gap-1 rounded-card border border-line bg-surface-raised p-2 shadow-lg">
+                {ALL_COLUMNS.map((column) => (
+                  <label key={column.value} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-[12px] hover:bg-surface-muted">
+                    <input type="checkbox" checked={visibleColumns.has(column.value)} onChange={() => setVisibleColumns((current) => { if (current.has(column.value) && current.size === 1) return current; const next = new Set(current); if (next.has(column.value)) next.delete(column.value); else next.add(column.value); return next; })} />
+                    {column.label}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
       {failedCount > 0 && (
         <p className="rounded-card border border-line bg-surface-muted px-4 py-3 text-[12px] text-ink-muted">
@@ -603,8 +642,9 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       {selected.size > 0 && (
         <div className="fixed inset-x-3 bottom-20 z-40 mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-2 rounded-card border border-accent/30 bg-surface-raised p-2 text-[13px] shadow-lg lg:bottom-6">
           <span className="rounded-button bg-accent px-3 py-2 text-on-accent">已选择 {selected.size} 项</span>
-          <button type="button" className="btn min-h-10 text-[12px]" onClick={runBatchCheck}>立即检查</button>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={runBatchValuation} disabled={valuating}>{valuating && <Spinner />}加入估价</button>
           <button type="button" className="btn min-h-10 text-[12px]" onClick={() => setShowBulkAction(true)}>打标签 / 移入文件夹</button>
+          <button type="button" className="btn min-h-10 text-[12px]" onClick={runBatchCheck}>立即检查</button>
           <button type="button" className="btn min-h-10 text-[12px]" onClick={exportSelected}>导出 CSV</button>
           <button type="button" className="btn min-h-10 text-[12px] text-danger" onClick={() => setPendingDelete(Array.from(selected))}>删除</button>
           <button type="button" className="btn btn-ghost min-h-10 min-w-10 px-0" onClick={() => setSelected(new Set())} aria-label="取消选择">×</button>
