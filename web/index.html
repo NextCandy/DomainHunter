@@ -16,6 +16,9 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- 只预载 sans 可变字重；等宽由数字区按需加载，不阻塞首屏。 -->
     <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/geist-latin-wght-normal.woff2" />
+    <!-- 中文可变字体 MiSans VF，自托管、按 unicode-range 分片，
+         浏览器只取页面用到的那几片，整份 4.3MB 不会一次加载。 -->
+    <link rel="stylesheet" href="/fonts/misans/MiSansVF.min.css" />
     <script>
       // 首屏前应用主题，避免闪烁。深色是默认主题。
       (function () {

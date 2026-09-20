@@ -35,11 +35,18 @@
 @layer base {
   :root {
     /* ---- 字体族 ---- */
-    /* 西文无衬线：Geist Variable（100–900 可变），回退苹方 / 微软雅黑。 */
-    --font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "PingFang SC",
-      "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-    /* 等宽：一切数字、编号、徽章。 */
-    --font-mono: "Geist Mono Variable", "SFMono-Regular", Menlo, Consolas, monospace;
+    /* 西文无衬线：Geist Variable（100–900 可变）。
+       中文：MiSans VF（150–700 可变，自托管于 /fonts/misans/）。
+       Geist 没有 CJK 字形，以前中文直接落到微软雅黑——字形偏窄、笔画带喇叭口
+       收尾，和 Geist 的几何感并排时明显不是一套东西，暗色底上还发糊。
+       MiSans 笔画平直、字面方正，是专为屏显做的现代黑体，与 Geist 同属
+       "可变字重 + 几何骨架"，混排时西文与中文的重量能对上。
+       按 unicode-range 切成 56 个分片，浏览器只下载页面真正用到的那几片。 */
+    --font-sans: "Geist Variable", "MiSans VF", -apple-system, BlinkMacSystemFont,
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    /* 等宽：一切数字、编号、徽章。中文仍走 MiSans，避免等宽里的中文跳成雅黑。 */
+    --font-mono: "Geist Mono Variable", "SFMono-Regular", Menlo, Consolas, "MiSans VF",
+      monospace;
     /* 这套语言没有衬线角色。别名保留，让散落的 font-serif / font-display 落回 sans。 */
     --font-serif: var(--font-sans);
     --font-serif-text: var(--font-sans);
