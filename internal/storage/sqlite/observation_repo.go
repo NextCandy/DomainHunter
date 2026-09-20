@@ -129,14 +129,19 @@ func (r *ObservationRepo) ListRecentChanges(ctx context.Context, limit int) ([]d
 		limit = 20
 	}
 	// 顺带查出同一域名上一次观测的状态：前端要画 registered → grace 这样的转移，
-	// 光有新状态说不清发生了什么。关联子查询走 idx_observations_domain，
-	// 每行一次索引定位，limit 之内开销可忽略。
+	// 光有新状态说不清发生了什么。
+	//
+	// 比较两侧都**不能**套 lower()：idx_observations_domain 是普通列索引，
+	// 表达式会让它失效，每行退化成全表扫描（80 行 × 几十万行 = 概览页直接超时，
+	// 这个坑 2026-08 在 p1.loadDomains 上踩过一次）。写入时 domain 已经过
+	// domain.Normalize 转小写，直接等值比较即可。
+	
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+observationColumns+`,
 		       COALESCE((
 			       SELECT previous.status
 			       FROM domain_observations AS previous
-			       WHERE lower(previous.domain) = lower(current.domain)
+			       WHERE previous.domain = current.domain
 			         AND (previous.observed_at < current.observed_at OR
 			              (previous.observed_at = current.observed_at AND previous.id < current.id))
 			       ORDER BY previous.observed_at DESC, previous.id DESC
@@ -203,7 +208,7 @@ func (r *ObservationRepo) ChangesBetween(ctx context.Context, fromDay, toDay str
 		       COALESCE((
 			       SELECT previous.status
 			       FROM domain_observations AS previous
-			       WHERE lower(previous.domain) = lower(current.domain)
+			       WHERE previous.domain = current.domain
 			         AND (previous.observed_at < current.observed_at OR
 			              (previous.observed_at = current.observed_at AND previous.id < current.id))
 			       ORDER BY previous.observed_at DESC, previous.id DESC
