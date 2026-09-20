@@ -135,7 +135,7 @@ func (r *ObservationRepo) ListRecentChanges(ctx context.Context, limit int) ([]d
 	// 表达式会让它失效，每行退化成全表扫描（80 行 × 几十万行 = 概览页直接超时，
 	// 这个坑 2026-08 在 p1.loadDomains 上踩过一次）。写入时 domain 已经过
 	// domain.Normalize 转小写，直接等值比较即可。
-	
+
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+observationColumns+`,
 		       COALESCE((
