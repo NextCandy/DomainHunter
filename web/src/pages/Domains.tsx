@@ -155,13 +155,40 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     } catch { /* localStorage 不可用时 URL 仍是事实来源 */ }
   }, [params, visibleColumns]);
 
+  // 筛选项来自全量统计，翻页不会让下拉框内容跟着变
+  const facets = useAsync<Facets>(() => api.get<Facets>("/api/v2/facets"), [], onUnauthorized);
+  const reloadFacets = facets.reload;
+
+  // 注册商全名长到能撑破列宽，列表里只放短名，全名进 title 和搜索关键词。
+  //
+  // 同一家注册商常常有多个法律实体——阿里云在库里就有三个（Alibaba Cloud
+  // (Beijing)、阿里云计算有限公司（万网）、HiChina），压成短名后在列表里看起来
+  // 是三个一模一样的"阿里云"，还没法区分选哪个。按短名合并成一个选项，选中时
+  // 把这一组全名一起发给后端：用户心里的"阿里云"本来就是这三个的总和。
+  const registrarGroups = useMemo(() => {
+    const map = new Map<string, { names: string[]; count: number }>();
+    for (const item of facets.data?.registrars ?? []) {
+      const short = registrarShortName(item.value) || item.value;
+      const entry = map.get(short) ?? { names: [], count: 0 };
+      entry.names.push(item.value);
+      entry.count += item.count;
+      map.set(short, entry);
+    }
+    return map;
+  }, [facets.data]);
+
   const query = useMemo(() => {
     const q = new URLSearchParams();
     if (search) q.set("search", search);
     // 一律用多值参数发给后端；后端对 statuses/tlds/registrars 的空值会回落到单值字段。
     if (statusList.length > 0) q.set("statuses", statusList.join(","));
     if (tldList.length > 0) q.set("tlds", tldList.join(","));
-    if (registrarList.length > 0) q.set("registrars", registrarList.join(","));
+    // 选中的是短名，后端按全名精确匹配，这里展开成该短名下的全部法律实体。
+    // 找不到分组说明来自旧链接里的全名，原样透传即可。
+    if (registrarList.length > 0) {
+      const names = registrarList.flatMap((short) => registrarGroups.get(short)?.names ?? [short]);
+      q.set("registrars", names.join(","));
+    }
     if (provider) q.set("provider", provider);
     if (sort) {
       q.set("sort", sort);
@@ -173,7 +200,7 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     q.set("page", String(page));
     q.set("limit", String(folderSelection === "all" ? limit : 2000));
     return q.toString();
-  }, [search, statusList, tldList, registrarList, provider, sort, order, page, limit, favoriteOnly, reviewOnly, advancedRaw, folderSelection]);
+  }, [search, statusList, tldList, registrarList, registrarGroups, provider, sort, order, page, limit, favoriteOnly, reviewOnly, advancedRaw, folderSelection]);
 
   const { data, error, loading, reload } = useAsync<DomainListResult>(
     () => api.get<DomainListResult>(`/api/v2/domains?${query}`),
@@ -195,10 +222,6 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       folderSelection === "root" ? item.folder_id == null : item.folder_id === folderSelection,
     );
   }, [data, folderSelection, order, sort]);
-
-  // 筛选项来自全量统计，翻页不会让下拉框内容跟着变
-  const facets = useAsync<Facets>(() => api.get<Facets>("/api/v2/facets"), [], onUnauthorized);
-  const reloadFacets = facets.reload;
 
   // 列表和筛选项要一起刷新，否则新增/删除后下拉框的数量会对不上
   const refresh = useCallback(() => {
@@ -292,17 +315,16 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     [facets.data],
   );
 
-  // 注册商全名长到能撑破列宽，列表里只放短名，全名进 title 和搜索关键词。
   const registrarOptions = useMemo<SelectOption[]>(
     () =>
-      (facets.data?.registrars ?? []).map((item) => ({
-        value: item.value,
-        label: registrarShortName(item.value) || item.value,
-        count: item.count,
-        title: item.value,
-        keywords: item.value,
-      })),
-    [facets.data],
+      Array.from(registrarGroups, ([short, entry]) => ({
+        value: short,
+        label: short,
+        count: entry.count,
+        title: entry.names.join(" · "),
+        keywords: entry.names.join(" "),
+      })).sort((left, right) => (right.count ?? 0) - (left.count ?? 0)),
+    [registrarGroups],
   );
 
   const setStatusList = useCallback(
