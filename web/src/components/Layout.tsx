@@ -158,8 +158,11 @@ export function Layout({
             </div>
             {menuOpen && (
               <div className="border-t border-line bg-surface px-4 py-3">
-                <nav className="grid grid-cols-2 gap-1" aria-label="移动端完整导航">
-                  {NAV.map((item) => <NavItem key={item.to} item={item} onClick={() => setMenuOpen(false)} />)}
+                {/* 底栏已经占着概览 / 域名 / 抢注 / 通知四个主入口，汉堡里再列一遍
+                    全部八个页面就是两套导航抢同一块空间。这里只给底栏「更多」里的
+                    次要页，加上底栏放不下的主题 / 密度 / 语言 / 退出。 */}
+                <nav className="grid grid-cols-2 gap-1" aria-label="次要页面导航">
+                  {MOBILE_MORE.map((item) => <NavItem key={item.to} item={item} onClick={() => setMenuOpen(false)} />)}
                 </nav>
                 <div className="mt-3 space-y-3 border-t border-line pt-3">
                   <SegmentedControl label={t("common.theme")} value={mode} options={THEME_OPTIONS} onChange={(value) => setMode(value as ThemeMode)} />

@@ -14,7 +14,7 @@ import { SavedViewMenu } from "../components/SavedViewMenu";
 import { BulkActionPreviewDialog } from "../components/BulkActionPreviewDialog";
 import { SearchableMultiSelect } from "../components/SearchableMultiSelect";
 import type { SelectOption } from "../components/SearchableMultiSelect";
-import { ConfirmDialog, EmptyState, ErrorNotice, Skeleton, Spinner, cx, useDensity, useToast } from "../components/ui";
+import { ConfirmDialog, EmptyState, ErrorNotice, Skeleton, Spinner, cx, useDensity, useIsMobile, useToast } from "../components/ui";
 import { STATUS_LABELS, STATUS_ORDER } from "../lib/format";
 import { registrarShortName } from "../lib/registrar";
 
@@ -90,6 +90,8 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [folderSelection, setFolderSelection] = useState<FolderSelection>("all");
   const [retrying, setRetrying] = useState(false);
   const [valuating, setValuating] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showBulkAction, setShowBulkAction] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -472,6 +474,104 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     }
   }
 
+  // 手机上七个筛选控件纵向堆起来会占掉整整一屏，桌面上它们排一行正好。
+  // 同一组控件两种排布，用同一份 JSX，靠这几个类名开关切换。
+  const selectClass = isMobile ? "w-full" : "w-[9rem] shrink-0";
+  const wideSelectClass = isMobile ? "w-full" : "w-[11rem] shrink-0";
+  const toggleClass = isMobile ? "min-h-11 flex-1" : "shrink-0";
+
+  const filterControls = (
+    <>
+      <form
+        className={isMobile ? "w-full" : "min-w-[180px] flex-1"}
+        onSubmit={(event) => {
+          event.preventDefault();
+          updateParams({ search: searchInput.trim() });
+          setFilterSheetOpen(false);
+        }}
+      >
+        <input
+          ref={searchRef}
+          className={cx("input", isMobile && "min-h-11")}
+          placeholder="搜索域名…"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+        />
+      </form>
+
+      <SearchableMultiSelect
+        className={selectClass}
+        label="全部状态"
+        searchPlaceholder="筛选状态…"
+        options={statusOptions}
+        selected={statusList}
+        onChange={setStatusList}
+      />
+
+      <SearchableMultiSelect
+        className={selectClass}
+        label={`全部后缀（${tldOptions.length}）`}
+        searchPlaceholder="输入后缀，如 com"
+        options={tldOptions}
+        selected={tldList}
+        onChange={setTldList}
+      />
+
+      <SearchableMultiSelect
+        className={wideSelectClass}
+        label={`全部注册商（${registrarOptions.length}）`}
+        searchPlaceholder="输入注册商名…"
+        options={registrarOptions}
+        selected={registrarList}
+        onChange={setRegistrarList}
+      />
+
+      <div className={isMobile ? "flex w-full gap-2" : "contents"}>
+        <button
+          type="button"
+          className={cx("btn text-[12px]", toggleClass, failedOnly && "border-accent text-accent")}
+          onClick={() => setStatusList(failedOnly ? [] : ["error", "unknown"])}
+          aria-label={failedOnly ? "取消失败域名筛选" : "筛选失败和未知域名"}
+          title="筛选 error 和 unknown 状态"
+          aria-pressed={failedOnly}
+        >
+          失败/未知
+        </button>
+        <button
+          type="button"
+          className={cx("btn gap-1", toggleClass, favoriteOnly && "border-accent text-accent")}
+          onClick={() => updateParams({ favorite: favoriteOnly ? "" : "true" })}
+          title="只看收藏"
+          aria-label="只看收藏"
+          aria-pressed={favoriteOnly}
+        >
+          <span aria-hidden="true">★</span>
+          {/* 图标单独出现时没人知道它是筛选器，选中后补一个文字态说明当前在筛什么。 */}
+          {favoriteOnly && <span className="text-[12px]">只看收藏</span>}
+        </button>
+        <button
+          type="button"
+          className={cx("btn text-[12px]", toggleClass, advancedRaw && "border-accent text-accent")}
+          onClick={() => { setShowAdvanced(true); setFilterSheetOpen(false); }}
+          title="高级条件支持状态、TLD、注册商、标签和 AI 质量分"
+        >
+          高级筛选
+        </button>
+      </div>
+    </>
+  );
+
+  const chipsRow = filterChips.length > 0 && (
+    <div className={cx("flex w-full flex-wrap items-center gap-2", !isMobile && "border-t border-line pt-2")}>
+      {filterChips.map((chip) => (
+        <button key={chip.key} type="button" className="chip chip-active" onClick={chip.onRemove} title={`移除${chip.label}`}>
+          {chip.label}<span aria-hidden="true">×</span>
+        </button>
+      ))}
+      <button type="button" className="min-h-8 px-2 text-[11px] text-accent hover:underline" onClick={() => setParams(new URLSearchParams(), { replace: true })}>清空全部</button>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       {/* 第一行只回答"我在哪、我要新增什么"：标题 + 总数 + 刷新，右侧一个菜单
@@ -522,105 +622,63 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(190px,240px)_minmax(0,1fr)]">
-        <FolderTree
-          selected={folderSelection}
-          onSelect={setFolderSelection}
-          onDomainDrop={moveDomainsToFolder}
-          onUnauthorized={onUnauthorized}
-        />
+        {/* 文件夹树在 390 宽下会把域名列表整个挤到第二屏，收进筛选 sheet。 */}
+        {!isMobile && (
+          <FolderTree
+            selected={folderSelection}
+            onSelect={setFolderSelection}
+            onDomainDrop={moveDomainsToFolder}
+            onUnauthorized={onUnauthorized}
+          />
+        )}
         <div className="min-w-0 space-y-4">
-          {/* 第二行：一条 flex-wrap 的筛选栏。搜索吃柔性宽，其余控件固定宽，
-              窄屏自然换行——原来的四列 grid 在中等宽度会把控件挤出卡片外，
-              而排序/列设置属于表格自身的属性，已经下沉到表格工具条。 */}
-          <div className="card flex flex-wrap items-center gap-2 p-3">
-            <form
-              className="min-w-[180px] flex-1"
-              onSubmit={(event) => {
-                event.preventDefault();
-                updateParams({ search: searchInput.trim() });
-              }}
-            >
-              <input
-                ref={searchRef}
-                className="input"
-                placeholder="搜索域名…"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-              />
-            </form>
-
-            <SearchableMultiSelect
-              className="w-[9rem] shrink-0"
-              label="全部状态"
-              searchPlaceholder="筛选状态…"
-              options={statusOptions}
-              selected={statusList}
-              onChange={setStatusList}
-            />
-
-            <SearchableMultiSelect
-              className="w-[9rem] shrink-0"
-              label={`全部后缀（${tldOptions.length}）`}
-              searchPlaceholder="输入后缀，如 com"
-              options={tldOptions}
-              selected={tldList}
-              onChange={setTldList}
-            />
-
-            <SearchableMultiSelect
-              className="w-[11rem] shrink-0"
-              label={`全部注册商（${registrarOptions.length}）`}
-              searchPlaceholder="输入注册商名…"
-              options={registrarOptions}
-              selected={registrarList}
-              onChange={setRegistrarList}
-            />
-
-            <button
-              type="button"
-              className={cx("btn shrink-0 text-[12px]", failedOnly && "border-accent text-accent")}
-              onClick={() => setStatusList(failedOnly ? [] : ["error", "unknown"])}
-              aria-label={failedOnly ? "取消失败域名筛选" : "筛选失败和未知域名"}
-              title="筛选 error 和 unknown 状态"
-              aria-pressed={failedOnly}
-            >
-              失败/未知
-            </button>
-            <button
-              type="button"
-              className={cx("btn shrink-0 gap-1", favoriteOnly && "border-accent text-accent")}
-              onClick={() => updateParams({ favorite: favoriteOnly ? "" : "true" })}
-              title="只看收藏"
-              aria-label="只看收藏"
-              aria-pressed={favoriteOnly}
-            >
-              <span aria-hidden="true">★</span>
-              {/* 图标单独出现时没人知道它是筛选器，选中后补一个文字态说明当前在筛什么。 */}
-              {favoriteOnly && <span className="text-[12px]">只看收藏</span>}
-            </button>
-            <button
-              type="button"
-              className={cx("btn shrink-0 text-[12px]", advancedRaw && "border-accent text-accent")}
-              onClick={() => setShowAdvanced(true)}
-              title="高级条件支持状态、TLD、注册商、标签和 AI 质量分"
-            >
-              高级筛选
-            </button>
-
-            {filterChips.length > 0 && (
-              <div className="flex w-full flex-wrap items-center gap-2 border-t border-line pt-2">
-                {filterChips.map((chip) => (
-                  <button key={chip.key} type="button" className="chip chip-active" onClick={chip.onRemove} title={`移除${chip.label}`}>
-                    {chip.label}<span aria-hidden="true">×</span>
-                  </button>
+          {isMobile ? (
+            /* 手机上把七个控件收成一个带计数的「筛选」按钮 + 排序，
+               让第一条域名出现在首屏，而不是滚过 1500px 的控件才看得到。 */
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={cx("btn min-h-11 flex-1", filterChips.length > 0 && "border-accent text-accent")}
+                onClick={() => setFilterSheetOpen(true)}
+                aria-label={filterChips.length > 0 ? `筛选，当前 ${filterChips.length} 个条件` : "筛选"}
+              >
+                筛选{filterChips.length > 0 ? `（${filterChips.length}）` : ""}
+              </button>
+              <select
+                className="input h-11 w-auto min-w-[7.5rem] shrink-0 py-0 text-[12px]"
+                aria-label="排序字段"
+                value={sort}
+                onChange={(event) => updateParams({ sort: event.target.value })}
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
-                <button type="button" className="min-h-8 px-2 text-[11px] text-accent hover:underline" onClick={() => setParams(new URLSearchParams(), { replace: true })}>清空全部</button>
-              </div>
-            )}
-          </div>
+              </select>
+              <button
+                type="button"
+                className="btn min-h-11 min-w-11 shrink-0 px-0"
+                onClick={() => updateParams({ order: order === "asc" ? "desc" : "asc" })}
+                aria-label={order === "asc" ? "当前升序，点击改为降序" : "当前降序，点击改为升序"}
+              >
+                {order === "asc" ? "↑" : "↓"}
+              </button>
+            </div>
+          ) : (
+            /* 桌面：一条 flex-wrap 的筛选栏，搜索吃柔性宽，其余控件固定宽。 */
+            <div className="card flex flex-wrap items-center gap-2 p-3">
+              {filterControls}
+              {chipsRow}
+            </div>
+          )}
 
-          {/* 表格工具条：排序与列显示是表格自身的属性，不该占筛选行的宽度。 */}
-          <div className="relative flex flex-wrap items-center justify-end gap-2">
+          {/* 手机上 chips 放在工具条下面，让人知道当前在筛什么、可以逐个摘掉。 */}
+          {isMobile && chipsRow}
+
+          {/* 表格工具条：排序与列显示是表格自身的属性，不该占筛选行的宽度。
+              手机上排序已经在上面的工具条里，列设置也没有意义，整条隐藏。 */}
+          <div className={cx("relative flex-wrap items-center justify-end gap-2", isMobile ? "hidden" : "flex")}>
             <select
               className="input h-9 w-auto min-w-[9.5rem] flex-none py-0 text-[12px]"
               aria-label="排序字段"
@@ -816,6 +874,64 @@ export function DomainsPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         onClose={() => setShowBulkAction(false)}
         onDone={() => { setSelected(new Set()); refresh(); }}
       />
+
+      {/* 移动端筛选 sheet：把整组筛选连同文件夹树一起收进来，
+          列表页首屏只留一条工具条。 */}
+      {isMobile && filterSheetOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col">
+          <div
+            className="absolute inset-0 bg-overlay/40"
+            onClick={() => setFilterSheetOpen(false)}
+            role="presentation"
+            aria-hidden="true"
+          />
+          <div
+            className="relative mt-auto flex max-h-[88dvh] flex-col rounded-t-card border border-line bg-surface-raised"
+            role="dialog"
+            aria-modal="true"
+            aria-label="筛选域名"
+          >
+            <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+              <h2 className="text-[14px] text-ink">筛选</h2>
+              <button
+                type="button"
+                className="btn btn-ghost min-h-11 min-w-11 px-0"
+                onClick={() => setFilterSheetOpen(false)}
+                aria-label="关闭筛选"
+              >
+                ×
+              </button>
+            </header>
+            <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
+              {filterControls}
+              {chipsRow}
+              <FolderTree
+                selected={folderSelection}
+                onSelect={setFolderSelection}
+                onDomainDrop={moveDomainsToFolder}
+                onUnauthorized={onUnauthorized}
+              />
+            </div>
+            <footer className="flex items-center gap-2 border-t border-line p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                className="btn min-h-11 flex-1"
+                onClick={() => setParams(new URLSearchParams(), { replace: true })}
+                disabled={filterChips.length === 0}
+              >
+                清空全部
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary min-h-11 flex-1"
+                onClick={() => setFilterSheetOpen(false)}
+              >
+                查看 {folderSelection === "all" ? (data?.total_filtered ?? 0) : domains.length} 个结果
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

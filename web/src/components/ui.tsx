@@ -158,6 +158,8 @@ export function CollapsibleCard({
   count,
   action,
   emptyLabel = "暂无",
+  collapsedLabel,
+  forceCollapse,
   children,
   bodyClassName,
   className,
@@ -166,6 +168,10 @@ export function CollapsibleCard({
   count: number;
   action?: ReactNode;
   emptyLabel?: string;
+  /** 有内容但被强制折叠时，标题右侧显示的摘要（默认 "N 项"）。 */
+  collapsedLabel?: string;
+  /** 即使有内容也先折叠——手机首屏放不下那么多区块时用。 */
+  forceCollapse?: boolean;
   children: ReactNode;
   bodyClassName?: string;
   className?: string;
@@ -173,7 +179,7 @@ export function CollapsibleCard({
   const [expanded, setExpanded] = useState(false);
   const bodyId = useId();
 
-  if (count > 0) {
+  if (count > 0 && !forceCollapse) {
     return (
       <Card title={title} action={action} bodyClassName={bodyClassName} className={className}>
         {children}
@@ -192,7 +198,7 @@ export function CollapsibleCard({
           aria-expanded={expanded}
           aria-controls={bodyId}
         >
-          {emptyLabel} · {expanded ? "收起" : "展开"}
+          {count === 0 ? emptyLabel : (collapsedLabel ?? `${count} 项`)} · {expanded ? "收起" : "展开"}
         </button>
       </header>
       {expanded && (

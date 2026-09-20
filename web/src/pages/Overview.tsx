@@ -12,6 +12,7 @@ import {
   Skeleton,
   Sparkline,
   StatusBadge,
+  useIsMobile,
   cx,
 } from "../components/ui";
 import {
@@ -52,6 +53,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
     onUnauthorized,
   );
   const [trend, setTrend] = useState<OverviewTrendPoint[] | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     let active = true;
@@ -120,7 +122,10 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
             ["available", "registered", "grace", "redemption", "pending_delete", "error", "skipped"].includes(
               status,
             ),
-          ).map((status) => (
+          )
+            // 手机首屏放不下八块统计，其中一半还是 0。只留真正有数的那几个。
+            .filter((status) => !isMobile || (data.status_counts?.[status] ?? 0) > 0)
+            .map((status) => (
             <StatTile
               key={status}
               label={STATUS_LABELS[status]}
@@ -139,12 +144,20 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
 
       <ProviderAlert providers={data.providers} />
 
-      <TrendCard points={trendPoints} usingFallback={usingFallback} />
+      {/* 手机首屏要留给"今天该干什么"：趋势图先折起来，想看再展开。 */}
+      {isMobile ? (
+        <CollapsibleCard title="最近 7 天趋势" count={1} collapsedLabel="趋势图" forceCollapse>
+          <TrendCard points={trendPoints} usingFallback={usingFallback} bare />
+        </CollapsibleCard>
+      ) : (
+        <TrendCard points={trendPoints} usingFallback={usingFallback} />
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <CollapsibleCard title="最近状态变化" count={data.recent_changes?.length ?? 0} bodyClassName="p-0">
           <ItemList
-            items={data.recent_changes}
+            // 手机上只给最近 5 条，再多就把下面的区块推到第三屏去了。
+            items={isMobile ? (data.recent_changes ?? []).slice(0, 5) : data.recent_changes}
             empty="暂无状态变化"
             render={(item) => (
               <>
@@ -160,6 +173,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
         title="即将到期（60 天内）"
         count={data.upcoming_expiry?.length ?? 0}
         emptyLabel="60 天内无到期"
+        forceCollapse={isMobile}
         bodyClassName="p-0"
       >
           <RenewalSummary items={data.upcoming_expiry} />
@@ -185,7 +199,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
           />
         </CollapsibleCard>
 
-        <CollapsibleCard title="最近可注册" count={data.recent_available?.length ?? 0} bodyClassName="p-0">
+        <CollapsibleCard title="最近可注册" count={data.recent_available?.length ?? 0} forceCollapse={isMobile} bodyClassName="p-0">
           <ItemList
             items={data.recent_available}
             empty="当前没有可注册的域名"
@@ -211,8 +225,13 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
         </CollapsibleCard>
       </div>
 
-      <Card
+      {/* 十个查询源里有九个是"暂无数据 · 0 错误 / 0 请求"，桌面上是一排细行，
+          手机上却要滚半屏。默认折起，异常源另有顶部的 ProviderAlert 会喊。 */}
+      <CollapsibleCard
         title="查询源健康状态"
+        count={data.providers?.length ?? 0}
+        collapsedLabel={`${data.providers?.length ?? 0} 个源`}
+        forceCollapse={isMobile}
         action={
           <Link to="/providers" className="text-[12px] text-accent hover:underline">
             查看详情
@@ -247,7 +266,7 @@ export function OverviewPage({ onUnauthorized }: { onUnauthorized: () => void })
             ))}
           </ul>
         )}
-      </Card>
+      </CollapsibleCard>
     </div>
   );
 }
@@ -263,9 +282,12 @@ function RenewalSummary({ items }: { items: OverviewItem[] | null }) {
 function TrendCard({
   points,
   usingFallback,
+  bare,
 }: {
   points: OverviewTrendPoint[];
   usingFallback: boolean;
+  /** 已经被外层折叠卡包住时，不要再套一层 Card。 */
+  bare?: boolean;
 }) {
   const series = usingFallback
     ? [
@@ -301,6 +323,20 @@ function TrendCard({
   // 全零时画出来是一条贴着底的直线加一套空坐标轴，占掉整屏高度却什么都没说。
   const isEmpty = series.every((item) => item.values.every((value) => value === 0));
 
+  const body = isEmpty ? (
+    <p className="text-[12px] text-ink-faint">近 7 天没有状态变化，下一次状态改变后会在这里形成趋势。</p>
+  ) : (
+    <>
+      <Sparkline series={series} labels={points.map((point) => formatTrendDay(point.day))} />
+      <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
+        <span>{formatTrendDay(points[0]?.day)}</span>
+        <span>{formatTrendDay(points[points.length - 1]?.day)}</span>
+      </div>
+    </>
+  );
+
+  if (bare) return body;
+
   return (
     <Card
       title="最近 7 天趋势"
@@ -311,19 +347,7 @@ function TrendCard({
       }
       bodyClassName={isEmpty ? "py-4" : undefined}
     >
-      {isEmpty ? (
-        <p className="text-[12px] text-ink-faint">
-          近 7 天没有状态变化，下一次状态改变后会在这里形成趋势。
-        </p>
-      ) : (
-        <>
-          <Sparkline series={series} labels={points.map((point) => formatTrendDay(point.day))} />
-          <div className="mt-2 flex justify-between text-[11px] text-ink-faint">
-            <span>{formatTrendDay(points[0]?.day)}</span>
-            <span>{formatTrendDay(points[points.length - 1]?.day)}</span>
-          </div>
-        </>
-      )}
+      {body}
     </Card>
   );
 }
