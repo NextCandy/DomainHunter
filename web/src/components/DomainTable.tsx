@@ -351,8 +351,18 @@ function MobileDomainCard({ item, checked, busy, highlighted, onToggle, onOpen, 
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <li className={cx("card domain-row p-4", domainRowTone(item.status), highlighted && "status-change-highlight")} data-status={item.status}>
-      <div className="flex min-w-0 items-center gap-2">
-        <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`选择 ${item.name}`} />
+      <div className="flex min-w-0 items-center gap-1">
+        {/* 原生 checkbox 只有 13px，手指点不中。视觉尺寸放大到 18px，
+            再用 -m-2.5 p-2.5 把点击区域撑到 44px 而不改变卡片排版。 */}
+        <label className="-m-2.5 flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center p-2.5">
+          <input
+            type="checkbox"
+            className="h-[18px] w-[18px]"
+            checked={checked}
+            onChange={onToggle}
+            aria-label={`选择 ${item.name}`}
+          />
+        </label>
         <DomainName name={item.name} favorite={item.favorite} onClick={onOpen} className="min-w-0 flex-1 text-[14px]" />
         {item.review?.required && <ReviewIndicator explanation={item.review.explanation} />}
         <StatusBadge status={item.status} eppStatuses={item.epp_statuses} />
