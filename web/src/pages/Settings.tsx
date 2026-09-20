@@ -13,6 +13,9 @@ const RAW_MODES = [
 
 const LOG_LEVELS = ["debug", "info", "warn", "error"];
 
+/** 侧栏锚点跳转时派发的事件，目标区块若默认收起可据此自行展开。 */
+const SETTINGS_NAV_EVENT = "domainhunter:settings-nav";
+
 export function SettingsPage({
   onUnauthorized,
   onCredentialsChanged,
@@ -242,8 +245,17 @@ function AccountCard({ settings, onChanged }: { settings: SettingsV2; onChanged:
     const onHash = () => {
       if (window.location.hash === "#security") setSecurityOpen(true);
     };
+    const onNav = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === "#security") setSecurityOpen(true);
+    };
+    // 直接带 #security 打开页面走 hashchange；点侧栏导航走自定义事件
+    // （SettingsNav 会 preventDefault，hash 不变）。
     window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    window.addEventListener(SETTINGS_NAV_EVENT, onNav);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener(SETTINGS_NAV_EVENT, onNav);
+    };
   }, []);
 
   async function saveUsername() {
@@ -645,5 +657,5 @@ function Field({
 }
 
 function SettingsNav({ href, label }: { href: string; label: string }) {
-  return <a href={href} className="relative rounded-md px-3 py-2 text-[12px] text-ink-muted hover:bg-surface-muted hover:text-ink lg:block" onClick={(event) => { const target = document.querySelector(href); if (target) { event.preventDefault(); target.scrollIntoView({ behavior: "smooth", block: "start" }); } }}>{label}</a>;
+  return <a href={href} className="relative rounded-md px-3 py-2 text-[12px] text-ink-muted hover:bg-surface-muted hover:text-ink lg:block" onClick={(event) => { const target = document.querySelector(href); if (target) { event.preventDefault(); /* 这里 preventDefault 了，location.hash 不会变，所以折叠区收不到 hashchange —— 用事件显式通知它展开，否则点了导航却什么都没看到。 */ window.dispatchEvent(new CustomEvent(SETTINGS_NAV_EVENT, { detail: href })); target.scrollIntoView({ behavior: "smooth", block: "start" }); } }}>{label}</a>;
 }
