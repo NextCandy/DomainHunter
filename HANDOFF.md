@@ -12,10 +12,10 @@
 | --- | --- |
 | 宿主 | Synology NAS（Tailscale `100.99.27.142`） |
 | 实例目录 | `/volume1/docker/domainhunter`（挂 `/app/data`；**已不再是数据目录**，只放 `.env`、备份与归档，运行时不读写） |
-| 源码/构建目录 | `/volume1/docker/domainhunter-build-b16f1ea`（解包目录，不是 git 仓库） |
+| 源码/构建目录 | `/volume1/docker/domainhunter-src`（**是 git clone**，remote 指向 GitHub，`git pull` 取最新） |
 | Compose 文件 | `docker-compose.yml` |
 | 容器 | `DomainHunter` |
-| 当前镜像 | `domainhunter:v2.13.0-amber-r3`（炭黑 × 琥珀橙设计系统） |
+| 当前镜像 | `domainhunter:v2.17.0-desk`（决策台改版，见 CHANGELOG-desk.md） |
 | 回滚镜像 | `domainhunter:v2.12.0-anthropic-r7`（暖纸张版，上一代设计）／`-r5`、`-r6`；`v2.13.0-amber-r1`、`-r2`（本代中间版） |
 | 服务端口 | `22334 → 8080` |
 | 数据库 | `/volume4/domainhunter-db/domainhunter.db`（NVMe，挂 `/app/db`，见下「数据库位置」） |
@@ -88,9 +88,18 @@ docker compose config -q
 NAS 上没有 Node 也没有本地 Go 工具链，全部通过容器完成。**注意 SSH 会话一断就会杀掉前台的
 `docker build`**，Go 编译必须走 detached 容器再轮询，不要在 SSH 前台直接跑完整多阶段构建。
 
+**源码目录已经是 git clone（2026-09-20 起）**，取代码不再靠 tar/scp：
+
+```bash
+cd /volume1/docker/domainhunter-src && git pull
+```
+
+`web/dist` 随仓库提交，所以**改了前端要先在开发机 `npm run build` 并把 dist 一起提交**；
+NAS 侧只在需要重新生成 dist 时才跑下面第 1 步。
+
 ```bash
 # 1) 前端：在 node 容器内构建（node_modules 放容器层，避免 NAS 挂载卷的小文件开销）
-docker run --rm -v /volume1/docker/domainhunter-build-b16f1ea/web:/src \
+docker run --rm -v /volume1/docker/domainhunter-src/web:/src \
   -e npm_config_registry=https://registry.npmmirror.com node:22-bookworm-slim bash -c '
   mkdir -p /build && cp -a /src/. /build/ && rm -rf /build/dist /build/node_modules && cd /build
   npm ci --no-audit --no-fund && npm run typecheck && npm run lint && npm run build
@@ -98,7 +107,7 @@ docker run --rm -v /volume1/docker/domainhunter-build-b16f1ea/web:/src \
 
 # 2) Go 二进制：detached 容器 + 轮询，参数与 dockerfile 的 builder 阶段一致
 docker run -d --name dh-gobuild \
-  -v /volume1/docker/domainhunter-build-b16f1ea:/build \
+  -v /volume1/docker/domainhunter-src:/build \
   -v /volume1/docker/_backups/gomodcache:/go/pkg/mod -w /build \
   -e GOPROXY=https://goproxy.cn,direct -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 \
   golang:1.26-alpine \
