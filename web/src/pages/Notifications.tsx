@@ -24,7 +24,7 @@ import {
   cx,
   useToast,
 } from "../components/ui";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, formatRelative } from "../lib/format";
 
 type NotificationTab = "inbox" | "channels" | "rules" | "templates";
 
@@ -39,7 +39,6 @@ const EMPTY_RULES: NotificationRule[] = [];
 const EMPTY_TEMPLATES: NotificationTemplate[] = [];
 
 export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => void }) {
-  const toast = useToast();
   const settings = useAsync<SettingsV2>(() => api.get<SettingsV2>("/api/v2/settings"), [], onUnauthorized);
   const history = useAsync<{ notifications: NotificationRecord[] | null }>(
     () => api.get<{ notifications: NotificationRecord[] | null }>("/api/v2/notifications"),
@@ -70,20 +69,8 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
             首次查询不通知；从查询失败恢复不通知；可注册结论证据不足时也不会通知
           </p>
         </div>
-        <button
-          type="button"
-          className="btn h-8"
-          onClick={async () => {
-            try {
-              const result = await api.post<{ message: string; status: string }>("/api/notification/test");
-              toast(result.message, result.status === "error" ? "error" : "success");
-            } catch (err) {
-              toast(err instanceof Error ? err.message : "测试失败", "error");
-            }
-          }}
-        >
-          测试全部已启用渠道
-        </button>
+        {/* 「测试全部已启用渠道」已移到推送渠道页的瓷砖区顶部——它只对那一页有意义，
+            挂在全局标题栏上时，看站内消息的人也会被它占掉一个按钮位。 */}
       </header>
 
       <div className="flex gap-1 overflow-x-auto border-b border-line" role="tablist" aria-label="通知设置分类">
@@ -127,17 +114,8 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
       )}
 
       {tab === "channels" && (
-        <div id="notification-panel-channels" className="space-y-4" role="tabpanel">
-          {settings.data && (
-            <div className="grid gap-4 xl:grid-cols-2">
-              <EmailCard settings={settings.data} onSaved={settings.reload} />
-              <TelegramCard settings={settings.data} onSaved={settings.reload} />
-              <BarkCard settings={settings.data} onSaved={settings.reload} />
-              <FeishuCard settings={settings.data} onSaved={settings.reload} />
-              <WebhookCard settings={settings.data} onSaved={settings.reload} />
-            </div>
-          )}
-
+        <div id="notification-panel-channels" role="tabpanel">
+          {settings.data && <ChannelsPanel settings={settings.data} onSaved={settings.reload} />}
         </div>
       )}
       {tab === "rules" && (
@@ -216,6 +194,185 @@ function ChannelTitle({ label, enabled }: { label: string; enabled: boolean }) {
   );
 }
 
+// ---------- 渠道瓷砖 ----------
+
+/**
+ * 渠道的上次测试结果。存 localStorage 而不是内存：
+ * "上次测试通没通"是刷新页面后最想先看到的东西，只活在内存里等于没有。
+ */
+interface ChannelTestState {
+  status: "success" | "error";
+  message: string;
+  at: number;
+}
+
+const TEST_STORAGE_KEY = "dh-channel-tests";
+const TEST_EVENT = "domainhunter:channel-tested";
+
+function readTestResults(): Record<string, ChannelTestState> {
+  try {
+    const raw = localStorage.getItem(TEST_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, ChannelTestState>) : {};
+  } catch {
+    return {}; // 隐私模式或存储被禁用时，瓷砖上不显示历史即可
+  }
+}
+
+function writeTestResult(channel: string, state: ChannelTestState) {
+  try {
+    const all = readTestResults();
+    all[channel] = state;
+    localStorage.setItem(TEST_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    /* 存不下就只靠 toast 反馈 */
+  }
+  window.dispatchEvent(new CustomEvent(TEST_EVENT));
+}
+
+/**
+ * 一张渠道瓷砖：图标 + 名称 + 启用状态 + 上次测试结果。
+ * 五个渠道的表单同时铺开时一屏全是 input，谁都找不到自己要改的那个；
+ * 改成点瓷砖才展开，默认只看到五个状态。
+ */
+function ChannelTile({
+  label,
+  icon,
+  enabled,
+  open,
+  test,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  enabled: boolean;
+  open: boolean;
+  test?: ChannelTestState;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cx(
+        "card flex min-h-[104px] flex-col items-start gap-2 p-4 text-left transition-colors hover:border-accent",
+        open && "border-accent",
+      )}
+      onClick={onClick}
+      aria-expanded={open}
+      aria-label={`${label}，${enabled ? "已启用" : "未启用"}${open ? "，已展开" : ""}`}
+    >
+      <span className="flex w-full items-center justify-between gap-2">
+        <span className={cx("shrink-0", enabled ? "text-action" : "text-ink-faint")} aria-hidden="true">
+          {icon}
+        </span>
+        <span
+          className={cx("h-1.5 w-1.5 shrink-0 rounded-full", enabled ? "bg-action" : "bg-neutral/40")}
+          aria-hidden="true"
+        />
+      </span>
+      <span className="text-[13px] font-medium text-ink">{label}</span>
+      <span className="mt-auto text-[11px] text-ink-muted">{enabled ? "已启用" : "未启用"}</span>
+      {test && (
+        <span
+          className={cx("text-[11px]", test.status === "success" ? "text-success" : "text-danger")}
+          title={test.message}
+        >
+          {test.status === "success" ? "上次测试通过" : "上次测试失败"} · {formatRelative(new Date(test.at).toISOString())}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function MailIcon() {
+  return <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3.5" width="12" height="9" rx="1.5" /><path d="m2.5 5 5.5 4 5.5-4" /></svg>;
+}
+function TelegramIcon() {
+  return <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3 2 7.5l3.5 1.5L14 3Z" /><path d="M14 3 8.5 13l-1-4L14 3Z" /></svg>;
+}
+function BarkIcon() {
+  return <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2a4 4 0 0 0-4 4v3l-1 2h10l-1-2V6a4 4 0 0 0-4-4Z" /><path d="M6.5 13a1.5 1.5 0 0 0 3 0" /></svg>;
+}
+function FeishuIcon() {
+  return <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 11.5c3-.5 5-2.5 6.5-5.5 1 2 2.5 3 4.5 3.5" /><path d="M2.5 11.5c2 1.5 4.5 2 7 1 2-.8 3.5-2.5 4-4.5" /></svg>;
+}
+function WebhookIcon() {
+  return <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="5" r="2" /><circle cx="11.5" cy="9" r="2" /><circle cx="5" cy="12" r="2" /><path d="M6.6 6.2 10 8.2M9.7 10.3 6.6 11.4" /></svg>;
+}
+
+/** 推送渠道面板：顶部瓷砖区 + 展开的单个渠道表单。 */
+function ChannelsPanel({ settings, onSaved }: { settings: SettingsV2; onSaved: () => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [tests, setTests] = useState<Record<string, ChannelTestState>>(readTestResults);
+  const toast = useToast();
+  const [testingAll, setTestingAll] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setTests(readTestResults());
+    window.addEventListener(TEST_EVENT, sync);
+    return () => window.removeEventListener(TEST_EVENT, sync);
+  }, []);
+
+  const channels = [
+    { key: "email", label: "邮件", icon: <MailIcon />, enabled: settings.smtp.enabled, render: () => <EmailCard settings={settings} onSaved={onSaved} /> },
+    { key: "telegram", label: "Telegram", icon: <TelegramIcon />, enabled: settings.telegram.enabled, render: () => <TelegramCard settings={settings} onSaved={onSaved} /> },
+    { key: "bark", label: "Bark", icon: <BarkIcon />, enabled: settings.bark.enabled, render: () => <BarkCard settings={settings} onSaved={onSaved} /> },
+    { key: "feishu", label: "飞书", icon: <FeishuIcon />, enabled: settings.feishu.enabled, render: () => <FeishuCard settings={settings} onSaved={onSaved} /> },
+    { key: "webhook", label: "Webhook", icon: <WebhookIcon />, enabled: settings.webhook.enabled, render: () => <WebhookCard settings={settings} onSaved={onSaved} /> },
+  ];
+  const current = channels.find((item) => item.key === open);
+  const enabledCount = channels.filter((item) => item.enabled).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] text-ink-muted">
+          {enabledCount > 0 ? `${enabledCount} 个渠道已启用` : "还没有启用任何推送渠道"} · 点击瓷砖配置
+        </p>
+        <button
+          type="button"
+          className="btn h-8"
+          disabled={testingAll || enabledCount === 0}
+          onClick={async () => {
+            setTestingAll(true);
+            try {
+              const result = await api.post<{ message: string; status: string }>("/api/notification/test");
+              toast(result.message, result.status === "error" ? "error" : "success");
+            } catch (err) {
+              toast(err instanceof Error ? err.message : "测试失败", "error");
+            } finally {
+              setTestingAll(false);
+            }
+          }}
+        >
+          {testingAll && <Spinner />}测试全部已启用渠道
+        </button>
+      </div>
+
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-5">
+        {channels.map((item) => (
+          <ChannelTile
+            key={item.key}
+            label={item.label}
+            icon={item.icon}
+            enabled={item.enabled}
+            open={open === item.key}
+            test={tests[item.key]}
+            onClick={() => setOpen(open === item.key ? null : item.key)}
+          />
+        ))}
+      </div>
+
+      {current && (
+        <Card title={<ChannelTitle label={current.label} enabled={current.enabled} />} action={
+          <button type="button" className="btn h-8 px-2 text-[12px]" onClick={() => setOpen(null)}>收起</button>
+        }>
+          {current.render()}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function Field({
   label,
   hint,
@@ -261,9 +418,14 @@ function Actions({
             const result = await api.post<{ status: string; message: string }>(
               `/api/v2/notifications/test/${channel}`,
             );
-            toast(result.message, result.status === "success" ? "success" : "error");
+            const ok = result.status === "success";
+            toast(result.message, ok ? "success" : "error");
+            // 记下结果，渠道瓷砖上要显示"上次测试通过 / 失败"。
+            writeTestResult(channel, { status: ok ? "success" : "error", message: result.message, at: Date.now() });
           } catch (err) {
-            toast(err instanceof Error ? err.message : "测试失败", "error");
+            const message = err instanceof Error ? err.message : "测试失败";
+            toast(message, "error");
+            writeTestResult(channel, { status: "error", message, at: Date.now() });
           } finally {
             setTesting(false);
           }
@@ -309,7 +471,7 @@ function EmailCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () =>
   const { saving, save } = useSave("/api/settings/smtp", onSaved, "SMTP 设置已保存");
 
   return (
-    <Card title={<ChannelTitle label="邮件通知" enabled={settings.smtp.enabled} />}>
+    <>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="SMTP 服务器">
           <input
@@ -365,7 +527,7 @@ function EmailCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () =>
         启用邮件通知
       </label>
       <Actions channel="email" saving={saving} onSave={() => save(form)} />
-    </Card>
+    </>
   );
 }
 
@@ -378,7 +540,7 @@ function TelegramCard({ settings, onSaved }: { settings: SettingsV2; onSaved: ()
   const { saving, save } = useSave("/api/settings/telegram", onSaved, "Telegram 设置已保存");
 
   return (
-    <Card title={<ChannelTitle label="Telegram 通知" enabled={settings.telegram.enabled} />}>
+    <>
       <div className="grid gap-3">
         <Field label={settings.telegram.bot_token_set ? "Bot Token（留空保持不变）" : "Bot Token"}>
           <input
@@ -405,7 +567,7 @@ function TelegramCard({ settings, onSaved }: { settings: SettingsV2; onSaved: ()
         启用 Telegram 通知
       </label>
       <Actions channel="telegram" saving={saving} onSave={() => save(form)} />
-    </Card>
+    </>
   );
 }
 
@@ -421,7 +583,7 @@ function BarkCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () => 
   const { saving, save } = useSave("/api/settings/bark", onSaved, "Bark 设置已保存");
 
   return (
-    <Card title={<ChannelTitle label="Bark（iOS 推送）" enabled={settings.bark.enabled} />}>
+    <>
       <div className="grid gap-3">
         <Field
           label="推送地址"
@@ -482,7 +644,7 @@ function BarkCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () => 
         启用 Bark 通知
       </label>
       <Actions channel="bark" saving={saving} onSave={() => save(form)} />
-    </Card>
+    </>
   );
 }
 
@@ -495,7 +657,7 @@ function FeishuCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () =
   const { saving, save } = useSave("/api/settings/feishu", onSaved, "飞书设置已保存");
 
   return (
-    <Card title={<ChannelTitle label="飞书机器人" enabled={settings.feishu.enabled} />}>
+    <>
       <div className="grid gap-3">
         <Field
           label="Webhook 地址"
@@ -529,7 +691,7 @@ function FeishuCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () =
         启用飞书通知
       </label>
       <Actions channel="feishu" saving={saving} onSave={() => save(form)} />
-    </Card>
+    </>
   );
 }
 
@@ -542,7 +704,7 @@ function WebhookCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
   const { saving, save } = useSave("/api/settings/webhook", onSaved, "Webhook 设置已保存");
 
   return (
-    <Card title={<ChannelTitle label="自定义 Webhook" enabled={settings.webhook.enabled} />}>
+    <>
       <div className="grid gap-3">
         <Field label="接收地址" hint="事件会以 JSON POST 过去，可对接 n8n、企业微信中转、自建脚本">
           <input
@@ -573,7 +735,7 @@ function WebhookCard({ settings, onSaved }: { settings: SettingsV2; onSaved: () 
         启用 Webhook 通知
       </label>
       <Actions channel="webhook" saving={saving} onSave={() => save(form)} />
-    </Card>
+    </>
   );
 }
 
