@@ -73,6 +73,8 @@ export function NotificationsPage({ onUnauthorized }: { onUnauthorized: () => vo
             挂在全局标题栏上时，看站内消息的人也会被它占掉一个按钮位。 */}
       </header>
 
+      <MutedBanner resource={preferences} />
+
       <div className="flex gap-1 overflow-x-auto border-b border-line" role="tablist" aria-label="通知设置分类">
         {([
           ["inbox", "消息中心"],
@@ -140,10 +142,38 @@ const NOTIFICATION_TYPES = [
   ["ai", "AI 完成", "估价任务成功或失败"],
 ] as const;
 
+const typeLabel = (type: string) => NOTIFICATION_TYPES.find(([key]) => key === type)?.[1] ?? type;
+
+// 静音是静默丢弃：聚合器照常写历史、日志照常说「发送通知组」，只有渠道收不到。
+// 所以只要有静音就在页首常驻提示，不管当前在哪个 tab。
+function MutedBanner({ resource }: { resource: AsyncResource<{ muted_types: string[] }> }) {
+  const toast = useToast();
+  const muted = resource.data?.muted_types ?? [];
+  if (muted.length === 0) return null;
+  async function unmuteAll() {
+    try {
+      await api.notifications.preferences.update([]);
+      toast("已恢复全部推送", "success");
+      resource.reload();
+    } catch (err) { toast(err instanceof Error ? err.message : "保存静音设置失败", "error"); }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-card border border-warning/30 bg-warning/10 px-4 py-3 text-[13px]" role="status">
+      <span className="min-w-0 flex-1 text-ink">
+        <span className="font-medium text-warning">{muted.map(typeLabel).join("、")}</span>
+        {" "}通知已静音，只记入站内消息，不会推送到邮件 / Telegram / Bark 等渠道。
+      </span>
+      <button type="button" className="btn h-8 px-3 text-[12px]" onClick={() => void unmuteAll()}>全部恢复推送</button>
+    </div>
+  );
+}
+
 function NotificationPreferences({ resource }: { resource: AsyncResource<{ muted_types: string[] }> }) {
   const toast = useToast();
   const muted = new Set(resource.data?.muted_types ?? []);
-  async function toggle(type: string) {
+  // 整张卡片就是开关，误点一下就会让这类通知从此静默消失——静音要确认，恢复不用。
+  const [pendingMute, setPendingMute] = useState<string | null>(null);
+  async function save(type: string) {
     const next = new Set(muted);
     if (next.has(type)) next.delete(type); else next.add(type);
     try {
@@ -152,7 +182,29 @@ function NotificationPreferences({ resource }: { resource: AsyncResource<{ muted
       resource.reload();
     } catch (err) { toast(err instanceof Error ? err.message : "保存静音设置失败", "error"); }
   }
-  return <Card title="通知分类与静音"><p className="mb-3 text-[12px] text-ink-muted">站内消息保留完整记录；静音只影响后续推送渠道。</p><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{NOTIFICATION_TYPES.map(([type, label, hint]) => <button key={type} type="button" className={cx("min-h-24 rounded-card border p-3 text-left", muted.has(type) ? "border-neutral/20 bg-neutral/12" : "border-accent/20 bg-accent-soft/25")} onClick={() => void toggle(type)}><span className="flex items-center justify-between gap-2 text-[13px] font-medium">{label}<Pill>{muted.has(type) ? "已静音" : "推送中"}</Pill></span><span className="mt-2 block text-[11px] text-ink-muted">{hint}</span></button>)}</div></Card>;
+  function toggle(type: string) {
+    if (muted.has(type)) void save(type);
+    else setPendingMute(type);
+  }
+  return (
+    <Card title="通知分类与静音">
+      <p className="mb-3 text-[12px] text-ink-muted">站内消息保留完整记录；静音只影响后续推送渠道。</p>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{NOTIFICATION_TYPES.map(([type, label, hint]) => <button key={type} type="button" className={cx("min-h-24 rounded-card border p-3 text-left", muted.has(type) ? "border-warning/30 bg-warning/10" : "border-accent/20 bg-accent-soft/25")} onClick={() => toggle(type)}><span className="flex items-center justify-between gap-2 text-[13px] font-medium">{label}<Pill className={muted.has(type) ? "border-warning/20 bg-warning/12 text-warning" : undefined}>{muted.has(type) ? "已静音" : "推送中"}</Pill></span><span className="mt-2 block text-[11px] text-ink-muted">{hint}</span></button>)}</div>
+      <ConfirmDialog
+        open={pendingMute !== null}
+        title={`静音「${pendingMute ? typeLabel(pendingMute) : ""}」通知？`}
+        description="静音后这类通知只记入站内消息，不再推送到任何外部渠道，直到你手动恢复。"
+        confirmText="静音"
+        danger
+        onCancel={() => setPendingMute(null)}
+        onConfirm={() => {
+          const type = pendingMute;
+          setPendingMute(null);
+          if (type) void save(type);
+        }}
+      />
+    </Card>
+  );
 }
 
 function NotificationInbox({ resource }: { resource: AsyncResource<{ notifications: NotificationRecord[] | null }> }) {

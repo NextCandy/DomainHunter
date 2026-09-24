@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,6 +104,14 @@ func (m *Manager) SetMutedTypes(types []string) {
 	m.mu.Lock()
 	m.mutedTypes = next
 	m.mu.Unlock()
+	if len(next) > 0 {
+		names := make([]string, 0, len(next))
+		for item := range next {
+			names = append(names, item)
+		}
+		sort.Strings(names)
+		m.log.Warn(logger.Fields{"types": names}, "以下通知类别已静音，不会推送到外部渠道")
+	}
 }
 
 // ReloadMutedTypes 从持久化设置刷新静音类型。
@@ -325,7 +334,11 @@ func (m *Manager) Allows(event Event) bool {
 func (m *Manager) RecordQuery(name string) { m.aggregator.RecordQuery(name) }
 
 func (m *Manager) enqueue(event Event) {
-	if !m.isEnabled() || m.isMuted(event) {
+	if !m.isEnabled() {
+		return
+	}
+	if m.isMuted(event) {
+		m.logMuted(event)
 		return
 	}
 	event.Subject = formatSubject(event)
@@ -546,11 +559,20 @@ func (m *Manager) filterDeliverableBatch(events []Event) []Event {
 	}
 	result := make([]Event, 0, len(events))
 	for _, event := range events {
-		if !m.isMuted(event) {
-			result = append(result, event)
+		if m.isMuted(event) {
+			m.logMuted(event)
+			continue
 		}
+		result = append(result, event)
 	}
 	return result
+}
+
+// logMuted 记录因分类静音而未推送的通知。静音是静默丢弃，没有这行日志时
+// 「聚合器已发送、历史已写入、渠道却没收到」无从排查。
+func (m *Manager) logMuted(event Event) {
+	m.log.Info(logger.Fields{"domain": event.Domain, "status": event.Status, "category": EventCategory(event)},
+		"通知类别已静音，未推送到外部渠道")
 }
 
 // Stats 返回通知统计

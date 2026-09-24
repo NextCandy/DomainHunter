@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, NOTIFICATION_PREFERENCES_EVENT } from "../lib/api";
 import { useTheme } from "../lib/theme";
 import type { ThemeMode } from "../lib/theme";
 import { Logo } from "./Logo";
@@ -108,6 +108,29 @@ export function Layout({
     // 切到通知页再切走时重新计数，读过的消息不该一直顶着红点。
   }, [location.pathname]);
 
+  // 被静音的通知类别数。静音是静默丢弃——渠道收不到、日志和站内消息却一切如常，
+  // 所以必须在壳层常驻提示，否则只能等到「怎么一直没通知」时才发现。
+  const [mutedTypes, setMutedTypes] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      void api
+        .getOptional<{ muted_types: string[] | null }>("/api/v2/notifications/preferences")
+        .then((payload) => {
+          if (active) setMutedTypes(payload?.muted_types?.length ?? 0);
+        })
+        .catch(() => {
+          if (active) setMutedTypes(0);
+        });
+    };
+    load();
+    window.addEventListener(NOTIFICATION_PREFERENCES_EVENT, load);
+    return () => {
+      active = false;
+      window.removeEventListener(NOTIFICATION_PREFERENCES_EVENT, load);
+    };
+  }, []);
+
   const toggleSidebar = useCallback((collapsed: boolean) => {
     setSidebarCollapsed(collapsed);
     try {
@@ -175,6 +198,7 @@ export function Layout({
                   item={item}
                   iconOnly={sidebarCollapsed}
                   badge={item.to === "/notifications" ? unread : undefined}
+                  muted={item.to === "/notifications" ? mutedTypes : undefined}
                 />
               ))}
             </nav>
@@ -309,11 +333,20 @@ export function Layout({
                         aria-hidden="true"
                       />
                     )}
+                    {item.to === "/notifications" && mutedTypes > 0 && (
+                      <span
+                        className="absolute -bottom-0.5 -right-1.5 h-1.5 w-1.5 rounded-full bg-warning"
+                        aria-hidden="true"
+                      />
+                    )}
                   </span>
                   <span>
                     {t(MOBILE_LABEL_KEYS[item.to], item.label)}
                     {item.to === "/notifications" && unread > 0 && (
                       <span className="sr-only">，{unread} 条未读</span>
+                    )}
+                    {item.to === "/notifications" && mutedTypes > 0 && (
+                      <span className="sr-only">，{mutedTypes} 类通知已静音</span>
                     )}
                   </span>
                 </NavLink>
@@ -405,9 +438,10 @@ function SegmentedControl({ label, value, options, onChange }: { label: string; 
   );
 }
 
-function NavItem({ item, onClick, iconOnly, badge }: { item: (typeof NAV)[number]; onClick?: () => void; iconOnly?: boolean; badge?: number }) {
+function NavItem({ item, onClick, iconOnly, badge, muted }: { item: (typeof NAV)[number]; onClick?: () => void; iconOnly?: boolean; badge?: number; muted?: number }) {
   const { t } = useLocale();
   const label = t(NAV_LABEL_KEYS[item.to], item.label);
+  const mutedHint = muted ? `${muted} 类通知已静音，不会推送到外部渠道` : "";
   return (
     <NavLink
       to={item.to}
@@ -415,7 +449,7 @@ function NavItem({ item, onClick, iconOnly, badge }: { item: (typeof NAV)[number
       onClick={onClick}
       className={({ isActive }) => cx("sidebar-link relative", iconOnly && "justify-center px-0", isActive && "sidebar-link-active")}
       // 折叠成图标条后，名称也得靠 title 才说得清，不能只留 detail。
-      title={iconOnly ? `${label} · ${item.detail}` : item.detail}
+      title={[iconOnly ? `${label} · ${item.detail}` : item.detail, mutedHint].filter(Boolean).join(" · ")}
       aria-label={iconOnly ? label : undefined}
     >
       <NavIcon name={item.icon} />
@@ -433,6 +467,17 @@ function NavItem({ item, onClick, iconOnly, badge }: { item: (typeof NAV)[number
           {badge > 99 ? "99+" : badge}
         </span>
       )}
+      {muted !== undefined && muted > 0 &&
+        (iconOnly ? (
+          <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full bg-warning" aria-label={mutedHint} />
+        ) : (
+          <span
+            className="rounded-full border border-warning/30 px-1.5 text-[10px] leading-4 text-warning"
+            aria-label={mutedHint}
+          >
+            静音
+          </span>
+        ))}
     </NavLink>
   );
 }

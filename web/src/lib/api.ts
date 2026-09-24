@@ -115,6 +115,9 @@ export interface ApiDownload {
   filename: string;
 }
 
+/** 通知静音设置变更后派发，Layout 据此刷新侧栏的静音提示。 */
+export const NOTIFICATION_PREFERENCES_EVENT = "domainhunter:notification-preferences";
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   getOptional: async <T>(path: string): Promise<T | null> => {
@@ -206,10 +209,15 @@ export const api = {
       }),
     preferences: {
       get: () => request<{ muted_types: string[] }>("/api/v2/notifications/preferences"),
-      update: (mutedTypes: string[]) => request<{ status: string; muted_types: string[] }>("/api/v2/notifications/preferences", {
-        method: "PUT",
-        body: JSON.stringify({ muted_types: mutedTypes }),
-      }),
+      update: async (mutedTypes: string[]) => {
+        const result = await request<{ status: string; muted_types: string[] }>("/api/v2/notifications/preferences", {
+          method: "PUT",
+          body: JSON.stringify({ muted_types: mutedTypes }),
+        });
+        // 壳层的「静音」提示靠这个事件刷新，不必等切页。
+        window.dispatchEvent(new Event(NOTIFICATION_PREFERENCES_EVENT));
+        return result;
+      },
     },
     rules: {
       list: () =>
